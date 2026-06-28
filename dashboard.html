@@ -57,7 +57,7 @@
       <a class="sidebar-link" href="#" onclick="openModal('modal-new-campaign'); return false;">
         <div class="sidebar-dot" style="background:rgba(100,58,212,0.3);">🚀</div> New Campaign
       </a>
-      <a class="sidebar-link" href="#" onclick="openModal('modal-join'); return false;">
+      <a class="sidebar-link" href="#" onclick="openJoinModal(); return false;">
         <div class="sidebar-dot" style="background:rgba(58,120,212,0.3);">🔑</div> Join Campaign
       </a>
     </div>
@@ -250,6 +250,13 @@
         <input class="form-input" id="join-code" placeholder="e.g. AB12CD" maxlength="6"
                style="text-transform:uppercase; letter-spacing:0.2em; font-size:20px; text-align:center;">
       </div>
+      <div class="form-group">
+        <label class="form-label">Join As Character</label>
+        <select class="form-input" id="join-character">
+          <option value="">Loading characters…</option>
+        </select>
+        <span style="font-size:11px;color:var(--text-faint);display:block;margin-top:4px;">The character you'll play in this campaign.</span>
+      </div>
       <div class="form-error"   id="join-error"></div>
       <div class="form-success" id="join-success"></div>
     </div>
@@ -302,8 +309,77 @@ const SPECIES_BONUSES = {
   arboran:     { fly:-2, fix:+1, fight:+2, face:-1 },
 };
 
-const PB_COST   = { 8:0, 9:1, 10:2, 11:3, 12:4, 13:5, 14:7, 15:9 };
-const PB_BUDGET = 27;
+const PB_COST   = { 8:0, 9:1, 10:2, 11:3, 12:4, 13:5, 14:6 };
+const PB_MAX    = 14;
+const PB_BUDGET = 20;
+
+const SPECIES_LABELS = { human:'Human', kragol:'Kragol', skitterling:'Skitterling', myxos:'Myxos', arboran:'Arboran' };
+const SPECIES_ICONS  = { human:'assets/NN_Species_Human.png', kragol:'assets/NN_Species_Kragol.png',
+                         skitterling:'assets/NN_Species_Skitterling.png', myxos:'assets/NN_Species_Myxos.png',
+                         arboran:'assets/NN_Species_Arboran.png' };
+const ROLE_ICONS = { pilot:'🚀', gunsmith:'🔫', technician:'⚙️', smuggler:'🗣️' };
+
+const PLACEHOLDER = {
+  human: {
+    backstory: {
+      pilot:      "Grew up on a mid-rim transport freighter, learning the helm before they learned to read. Left home after the family ship was seized by a debt collector. Never quite forgave the Federation for letting it happen.",
+      gunsmith:   "Ex-colonial militia, three tours on the Frontier keeping settlers alive. Mustered out with a commendation, a bad shoulder, and an intimate knowledge of every firearm manufactured in the last forty years.",
+      technician: "Academy dropout who figured out she learned faster pulling things apart than sitting in lectures. Spent eight years as a salvage engineer before deciding derelicts paid better than docks.",
+      smuggler:   "Born talking his way out of trouble. Raised in Port Solace by a traveling merchant who taught him that every person has a price — and that knowing it before they do is the only real advantage.",
+    },
+    personality: { pilot:"Calm under pressure; panics exactly once per session in private.", gunsmith:"Speaks in short sentences. Actions first. Explanations later if anyone's still alive.", technician:"Narrates repairs aloud. Not to you — just to the machine.", smuggler:"Charming, distractingly so. You keep wondering what they're not saying." },
+    bonds:       { pilot:"Would fly into a black hole for their crew. Has nearly done so twice.", gunsmith:"Still owes a life-debt to someone they don't talk about.", technician:"Will not abandon a ship that can still be saved. This has caused problems.", smuggler:"Loyal to contracts, more loyal to people, most loyal to whoever bought the last round." },
+    flaws:       { pilot:"Refuses to ask for help navigating. Famously.", gunsmith:"Has no volume control on 'this situation calls for more firepower.'", technician:"Loses track of time in engine rooms. Entire meals have disappeared this way.", smuggler:"Cannot resist a con, even when the mark doesn't deserve it." },
+  },
+  kragol: {
+    backstory: {
+      pilot:      "Clan Vorath outcasts don't usually end up at helm — that's a Skitterling's work, the elders said. Proved them wrong three times and stopped counting.",
+      gunsmith:   "Came up through the Kragol Belt extraction crews where you learn to fight or you learn to regret not fighting. Chose the former emphatically.",
+      technician: "Kragol minds aren't built for delicate work, the Academy assessor wrote. Built a working warp drive from salvage parts at age 16 just to prove the point.",
+      smuggler:   "Nobody suspects the Kragol of being the talker. Uses this constantly. Has built an entire identity around being underestimated.",
+    },
+    personality: { pilot:"Stubborn about flight paths. Stubborn about everything, actually.", gunsmith:"Enthusiastic. Perhaps too enthusiastic about certain solutions.", technician:"Precise when it matters. Alarmingly casual when it doesn't.", smuggler:"Warmer than expected. Colder than they look when betrayed." },
+    bonds:       { pilot:"Clan loyalty runs deep even across light-years.", gunsmith:"The crew is the clan now. Acts accordingly.", technician:"Owes a technical debt to a mentor they can never fully repay.", smuggler:"Sends a cut of every job back to a sibling on the Belt." },
+    flaws:       { pilot:"Pride about piloting makes it hard to hand off the helm.", gunsmith:"Escalation is a habit. De-escalation is a skill still being developed.", technician:"Breaks things to understand them. Including things that didn't need understanding.", smuggler:"Holds grudges across decades. Kragol memory is exceptionally good." },
+  },
+  skitterling: {
+    backstory: {
+      pilot:      "Six limbs, four eyes, and three near-death experiences in the first year behind a control panel. Every one of them made the flying better.",
+      gunsmith:   "Skitterlings aren't supposed to like heavy weapons. The weight alone. And yet. The physics of ballistics clicked in a way that social interaction never quite has.",
+      technician: "The Queens' network passes technical knowledge like signal — fast and total. Carries the inherited memory of six generations of engineers and still improvises constantly.",
+      smuggler:   "Evolved to blend into background noise. Turns out that translates perfectly to working a crowd.",
+    },
+    personality: { pilot:"Thinks three moves ahead. Sometimes forgets to share move one.", gunsmith:"Thorough. Studies a target before committing. Then commits completely.", technician:"Talkative during repairs. Goes completely silent during critical moments.", smuggler:"Chitinous exterior, surprisingly warm underneath. Takes time to earn." },
+    bonds:       { pilot:"Maintains a private log of every landing. Every single one.", gunsmith:"Protective of anyone smaller. Which is most people.", technician:"Finds ships more intuitive than people. Extends the same loyalty to both.", smuggler:"Has a network of contacts that seems impossible for one person. Uses it sparingly." },
+    flaws:       { pilot:"Claustrophobic in small vessels. Ironic, given the career.", gunsmith:"Overplans. The perfect shot has been missed while calculating it.", technician:"Cannot leave a broken system alone. Even someone else's.", smuggler:"Trust takes forever to build. Distrust arrives instantly." },
+  },
+  myxos: {
+    backstory: {
+      pilot:      "Myxos don't have eyes the same way. What they have is better for spatial reasoning. Spent a decade as a navigation consultant before deciding navigation was more fun when you were the one moving.",
+      gunsmith:   "Unconventional species for combat roles. Made it work through chemistry — literally. Myxos biochemistry processes adrenaline differently, which turns out to be an advantage.",
+      technician: "Grew up in the Caduceus research labs. Left when the ethics review board decided some research shouldn't be published. Still thinks it should be.",
+      smuggler:   "Myxos pheromone communication works on most species. Usually subconsciously. Not technically manipulation. Not technically not.",
+    },
+    personality: { pilot:"Speaks in flow metaphors that are somehow always accurate.", gunsmith:"Methodical. No movement is wasted. No bullet is either.", technician:"Genuinely excited by problems most people would find terrifying.", smuggler:"Hard to read. Harder to refuse." },
+    bonds:       { pilot:"The ship is an extension of self. Treats it accordingly.", gunsmith:"Will not leave wounded. Has the extraction scars to prove it.", technician:"The research matters. Protecting it matters more.", smuggler:"Doesn't explain favors owed. They always get called in at the right moment." },
+    flaws:       { pilot:"Makes decisions that make perfect sense to a Myxos. Forgets to explain them.", gunsmith:"Adapts to violence faster than is strictly comfortable.", technician:"The research should continue. Where others see ethical lines, sees unfinished work.", smuggler:"The pheromone thing isn't always intentional. This is a genuine problem." },
+  },
+  arboran: {
+    backstory: {
+      pilot:      "Arborans aren't built for speed. Learned to think of flight not as velocity but as patience — knowing exactly when to burn and when to drift.",
+      gunsmith:   "The old Arboran saying: a grove defends itself. Spent thirty years being the defense before deciding to bring the grove to the fight.",
+      technician: "Trees communicate through root networks. Spent years building artificial versions — data networks, sensor arrays, ship-to-ship comms. The engineering just made sense.",
+      smuggler:   "Nobody checks the Arboran's cargo. They seem too slow to be sneaky. This is exactly why they're very sneaky.",
+    },
+    personality: { pilot:"Long view of everything. The destination matters; the speed doesn't.", gunsmith:"Quiet until threatened. Then the situation escalates at an alarming rate.", technician:"Patient with machines. Patient with people. Runs out of patience at roughly the same time for both.", smuggler:"Plays the long game to a degree that unsettles other long-game players." },
+    bonds:       { pilot:"The crew grows on you. Like roots. You don't realize until you try to leave.", gunsmith:"Carries the names of those who couldn't defend themselves. Literally — carved into bark.", technician:"The network must survive. Through them if necessary.", smuggler:"Three hundred-year plan. Currently in year forty. On track." },
+    flaws:       { pilot:"Slow to change course in the metaphorical sense as well as the literal.", gunsmith:"Grudges outlive civilizations. Arborans consider this appropriate.", technician:"Gets attached to broken systems. Keeps trying past the point of reason.", smuggler:"Absolutely cannot be rushed. This has cost opportunities." },
+  },
+};
+
+function getPlaceholder(species, role, field) {
+  return PLACEHOLDER[species]?.[field]?.[role] || PLACEHOLDER.human?.[field]?.[role] || '';
+}
 
 // ── Init ────────────────────────────────────────────────────────
 (async () => {
@@ -327,7 +403,7 @@ const PB_BUDGET = 27;
 // ── Point Buy ───────────────────────────────────────────────────
 function pbSpent() {
   return STATS.reduce((sum, s) => {
-    const v = Math.min(15, Math.max(8, parseInt(document.getElementById('stat-' + s.key)?.value) || 8));
+    const v = Math.min(PB_MAX, Math.max(8, parseInt(document.getElementById('stat-' + s.key)?.value) || 8));
     return sum + (PB_COST[v] ?? 0);
   }, 0);
 }
@@ -363,7 +439,7 @@ function updatePointBuy() {
 function adjustStat(key, delta) {
   const input   = document.getElementById('stat-' + key);
   const current = parseInt(input.value) || 8;
-  const next    = Math.min(15, Math.max(8, current + delta));
+  const next    = Math.min(PB_MAX, Math.max(8, current + delta));
   const newSpent = pbSpent() - (PB_COST[current] ?? 0) + (PB_COST[next] ?? 0);
   if (newSpent > PB_BUDGET && delta > 0) return;
   input.value = next;
@@ -378,7 +454,7 @@ function buildStatInputs() {
       <span style="font-size:10px; color:var(--text-faint); overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">${s.desc}</span>
       <button type="button" onclick="adjustStat('${s.key}',-1)"
         style="background:var(--surface3);border:1px solid var(--border);border-radius:5px;color:var(--text);width:26px;height:26px;cursor:pointer;font-size:14px;font-family:inherit;line-height:1;">−</button>
-      <input type="number" id="stat-${s.key}" value="8" min="8" max="15" readonly
+      <input type="number" id="stat-${s.key}" value="8" min="8" max="14" readonly
         style="width:40px;text-align:center;background:var(--surface3);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:4px;font-size:14px;font-weight:700;font-family:inherit;">
       <button type="button" onclick="adjustStat('${s.key}',1)"
         style="background:var(--surface3);border:1px solid var(--border);border-radius:5px;color:var(--text);width:26px;height:26px;cursor:pointer;font-size:14px;font-family:inherit;line-height:1;">+</button>
@@ -414,7 +490,9 @@ async function loadCharacters() {
 
   grid.innerHTML = chars.map(c => `
     <div class="char-card" style="--card-top:${speciesColor(c.species)};cursor:pointer;" onclick="window.location.href='character.html?id=${c.id}'">
-      <div class="char-card-icon">${SPECIES_ICONS[c.species] || '🧑'}</div>
+      <div class="char-card-icon" style="padding:0;overflow:hidden;border-radius:10px;">
+        ${SPECIES_ICONS[c.species] ? `<img src="${SPECIES_ICONS[c.species]}" alt="${c.species}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">` : '🧑'}
+      </div>
       <div class="char-card-name">${esc(c.name)}</div>
       <div class="char-card-meta">
         <span>${c.rank || ''} · ${SPECIES_LABELS[c.species] || c.species}</span>
@@ -536,11 +614,22 @@ document.getElementById('create-char-btn').addEventListener('click', async () =>
     stats[s.key] = base + (bonuses[s.key] || 0);
   });
 
+  const r = role || 'pilot';
+  const background  = getPlaceholder(selectedSpecies, r, 'backstory');
+  const personality = getPlaceholder(selectedSpecies, r, 'personality');
+  const bonds       = getPlaceholder(selectedSpecies, r, 'bonds');
+  const flaws       = getPlaceholder(selectedSpecies, r, 'flaws');
+  const flyMod = Math.floor((stats.fly - 10) / 2);
+  const fightMod = Math.floor((stats.fight - 10) / 2);
+  const hp_max = 8 + fightMod + 1;
+
   setLoading(btn, true);
   const { error } = await db.from('characters').insert({
     user_id: currentUser.id,
-    name, species: selectedSpecies, role: role || null, rank,
-    stats,
+    name, species: selectedSpecies, role: r, rank,
+    stats, background, personality, bonds, flaws,
+    hp_current: hp_max, hp_max, level: 1, xp: 0,
+    armor: 10 + flyMod, speed: 30,
   });
   setLoading(btn, false);
 
@@ -588,13 +677,30 @@ document.getElementById('create-camp-btn').addEventListener('click', async () =>
 });
 
 // ── Join Campaign ───────────────────────────────────────────────
+async function openJoinModal() {
+  openModal('modal-join');
+  const sel = document.getElementById('join-character');
+  sel.innerHTML = '<option value="">Loading…</option>';
+  const { data: chars } = await db.from('characters').select('id,name,species,role')
+    .eq('user_id', currentUser.id).eq('is_active', true).order('created_at',{ascending:false});
+  if (!chars?.length) {
+    sel.innerHTML = '<option value="">No characters — create one first</option>';
+  } else {
+    sel.innerHTML = chars.map(c =>
+      `<option value="${c.id}">${c.name} (${SPECIES_LABELS[c.species]||c.species} · ${c.role||'No role'})</option>`
+    ).join('');
+  }
+}
+
 document.getElementById('join-btn').addEventListener('click', async () => {
-  const code = document.getElementById('join-code').value.trim().toUpperCase();
-  const btn  = document.getElementById('join-btn');
+  const code      = document.getElementById('join-code').value.trim().toUpperCase();
+  const charId    = document.getElementById('join-character').value;
+  const btn       = document.getElementById('join-btn');
 
   showError('join-error', '');
   document.getElementById('join-success').style.display = 'none';
   if (code.length !== 6) return showError('join-error', 'Invite codes are 6 characters.');
+  if (!charId) return showError('join-error', 'Select the character you\'ll play in this campaign.');
 
   setLoading(btn, true);
   const { data: campaign, error: findErr } = await db
@@ -606,7 +712,8 @@ document.getElementById('join-btn').addEventListener('click', async () => {
   }
 
   const { error: joinErr } = await db.from('campaign_members').insert({
-    campaign_id: campaign.id, user_id: currentUser.id, member_role: 'player'
+    campaign_id: campaign.id, user_id: currentUser.id,
+    member_role: 'player', character_id: charId,
   });
   setLoading(btn, false);
 

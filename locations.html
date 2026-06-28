@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Locations & Sectors — Starbound Chronicles</title>
+<link rel="stylesheet" href="css/wiki.css">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<style>
+.sector-band { border-radius:12px; margin-bottom:20px; overflow:hidden; border:1px solid var(--border); }
+.sector-header { padding:16px 20px; display:flex; align-items:center; gap:14px; }
+.sector-label { font-size:22px; font-weight:900; }
+.sector-sub { font-size:12px; font-weight:600; opacity:.7; }
+.sector-badge { margin-left:auto; padding:4px 14px; border-radius:20px; font-size:11px; font-weight:800; }
+.sector-body { background:var(--surface); padding:18px 20px; }
+.sector-desc { font-size:13px; color:var(--text-dim); line-height:1.65; margin-bottom:14px; }
+.loc-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+.loc-card { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px 14px; }
+.loc-name { font-size:13px; font-weight:800; color:#e0ecff; margin-bottom:4px; }
+.loc-desc { font-size:11px; color:var(--text-faint); line-height:1.5; }
+.sec5 { --sc:#4acc7a; } .sec4 { --sc:#d4af37; } .sec3 { --sc:#3a78d4; } .sec2 { --sc:#c87820; } .sec1 { --sc:#c84040; } .sec0 { --sc:#8040c8; }
+.sector-header { background: rgba(0,0,0,0.25); border-bottom:1px solid var(--border); }
+.sector-label { color: var(--sc); }
+.sector-badge { background:rgba(255,255,255,0.06); color:var(--sc); border:1px solid var(--sc); }
+.wip-banner { background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.25);border-radius:10px;padding:14px 18px;margin-bottom:28px;font-size:13px;color:#d4af37;display:flex;align-items:center;gap:10px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="topbar-brand" href="index.html">
+    <div class="brand-icon">✦</div>
+    <div class="brand-text"><div class="brand-name">Starbound Chronicles</div><div class="brand-tagline">Tabletop Wiki</div></div>
+  </a>
+  <nav class="topbar-nav">
+    <a class="topbar-link" href="index.html">Home</a>
+    <a class="topbar-link" href="species.html">Species</a>
+    <a class="topbar-link" href="roles.html">Roles</a>
+    <a class="topbar-link" href="ships.html">Ships</a>
+    <a class="topbar-link" href="equipment.html">Equipment</a>
+    <a class="topbar-link active" href="locations.html">Locations</a>
+    <a class="topbar-link" href="rules.html">Rules</a>
+  </nav>
+  <div class="topbar-right" style="border-left:none;"><div id="nav-auth"></div></div>
+</header>
+
+<div class="page-layout">
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Sectors by Security</div>
+      <a class="sidebar-link" href="#sec5"><div class="sidebar-dot" style="background:rgba(74,204,122,0.5);">🟢</div>Sec-5 Core Worlds</a>
+      <a class="sidebar-link" href="#sec4"><div class="sidebar-dot" style="background:rgba(212,175,55,0.5);">🟡</div>Sec-4 Outer Systems</a>
+      <a class="sidebar-link" href="#sec3"><div class="sidebar-dot" style="background:rgba(58,120,212,0.5);">🔵</div>Sec-3 Border Space</a>
+      <a class="sidebar-link" href="#sec2"><div class="sidebar-dot" style="background:rgba(200,120,32,0.5);">🟠</div>Sec-2 Frontier</a>
+      <a class="sidebar-link" href="#sec1"><div class="sidebar-dot" style="background:rgba(200,64,64,0.5);">🔴</div>Sec-1 Contested</a>
+      <a class="sidebar-link" href="#sec0"><div class="sidebar-dot" style="background:rgba(128,64,200,0.5);">🟣</div>Sec-0 Null Space</a>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Special Zones</div>
+      <a class="sidebar-link" href="#anomalies">Deep Space Anomalies</a>
+      <a class="sidebar-link" href="#stations">Major Stations</a>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Wiki</div>
+      <a class="sidebar-link" href="index.html">← Back to Home</a>
+      <a class="sidebar-link" href="rules.html">Core Rulebook ↗</a>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-hero">
+      <div class="page-category">Galaxy Map</div>
+      <h1 class="page-title">Locations &amp; Sectors</h1>
+      <p class="page-subtitle">The known galaxy is divided into Security Sectors — from the iron-law Core Worlds of Sec-5 to the lawless void of Sec-0. Everything in between is up for grabs.</p>
+      <div class="page-tags">
+        <span class="tag highlight">6 Security Tiers</span>
+        <span class="tag">Named Systems</span>
+        <span class="tag">Factions</span>
+        <span class="tag">Alpha v1.0</span>
+      </div>
+    </div>
+
+    <div class="wip-banner">⚠️ System maps, faction territory overlays, and full location dossiers are planned for Beta. Named locations below are canonical for Alpha v1.0.</div>
+
+    <!-- SEC-5 -->
+    <div class="sector-band sec5" id="sec5">
+      <div class="sector-header">
+        <div>
+          <div class="sector-label">Sec-5 — Core Worlds</div>
+          <div class="sector-sub">High security · Federation law enforced · Contraband illegal · Safest travel</div>
+        </div>
+        <div class="sector-badge">HIGH-SEC</div>
+      </div>
+      <div class="sector-body">
+        <p class="sector-desc">The heart of the Galactic Federation. Sec-5 worlds operate under full Patrol Fleet coverage, biometric docking registries, and zero tolerance for unlicensed weapons above civilian grade. Prices are highest here, opportunities are fewest, and if you're crew with a record, every port checkpoint is a liability. That said — Federation citizen protections are real. Contracts hold. Murder has consequences. For most spacers, Sec-5 is where you go to spend your winnings, not where you make them.</p>
+        <div class="loc-grid">
+          <div class="loc-card"><div class="loc-name">🏛️ Aethon Prime</div><div class="loc-desc">Federation capital. Home of the Grand Assembly and the Patrol Fleet Academy. Heavily surveilled. Tourist traffic is enormous; smuggling traffic is suicidal.</div></div>
+          <div class="loc-card"><div class="loc-name">🌿 Verdannis Station</div><div class="loc-desc">Arboran-majority agricultural hub. Provides 40% of Core World food supply. Heavily tariffed. The Arboran Growers Collective has more political pull than most navies.</div></div>
+          <div class="loc-card"><div class="loc-name">⚕️ Caduceus Orbital</div><div class="loc-desc">Galaxy's premier medical research station. Myxos-operated. Controlled access — not open to walk-ins, but will treat anyone for the right price (astronomical).</div></div>
+          <div class="loc-card"><div class="loc-name">🔬 The Atheneum</div><div class="loc-desc">Archive station. Petabytes of recorded galactic history, deep-scan data, and pre-Federation records. Free public access. Certain archives are restricted by Federation decree.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEC-4 -->
+    <div class="sector-band sec4" id="sec4">
+      <div class="sector-header">
+        <div>
+          <div class="sector-label">Sec-4 — Outer Systems</div>
+          <div class="sector-sub">Patrol presence · Corporate law zones · Moderate risk</div>
+        </div>
+        <div class="sector-badge">HIGH-SEC</div>
+      </div>
+      <div class="sector-body">
+        <p class="sector-desc">Federation law still applies here, but enforcement is patchier. Corporate Security Forces fill the gaps — which means their law applies, not the Federation's, in many zones. Sec-4 is where the real economy happens: mining consortiums, mid-tier trade routes, and the kind of side jobs that aren't technically illegal but absolutely won't be put in writing.</p>
+        <div class="loc-grid">
+          <div class="loc-card"><div class="loc-name">⛏️ The Kragol Belt</div><div class="loc-desc">Dense asteroid mining corridor. Kragol Clan-run. Three major families control extraction rights; outsiders can contract work or buy freight. Don't short a Kragol on weighing rights.</div></div>
+          <div class="loc-card"><div class="loc-name">🏙️ Port Solace</div><div class="loc-desc">Human-built trade nexus. Has all major faction embassies. Every major corporation has an office here. If you need a legal contract notarized, Port Solace is your stop.</div></div>
+          <div class="loc-card"><div class="loc-name">📡 Relay-19</div><div class="loc-desc">Communication relay station and waypoint stop. Owned by the Comms Authority. Cheap docking, fast resupply, no questions about cargo — unless it beeps on the scanners.</div></div>
+          <div class="loc-card"><div class="loc-name">🕸️ Skitter Market</div><div class="loc-desc">Skitterling-operated bazaar station. Labyrinthine. If it exists, someone is selling it here. Caveat: if someone is selling it, someone else is stealing it.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEC-3 -->
+    <div class="sector-band sec3" id="sec3">
+      <div class="sector-header">
+        <div>
+          <div class="sector-label">Sec-3 — Border Space</div>
+          <div class="sector-sub">Mixed jurisdiction · Freelancer friendly · Moderate contraband tolerance</div>
+        </div>
+        <div class="sector-badge">MID-SEC</div>
+      </div>
+      <div class="sector-body">
+        <p class="sector-desc">The sweet spot for independent operators. Federation patrols exist but are infrequent. Local law is set by whoever bought the station. Most freelance contracts originate from Sec-3 posting boards. Also where you'll start hearing stories about Sec-1 and Sec-0 from people who survived them.</p>
+        <div class="loc-grid">
+          <div class="loc-card"><div class="loc-name">⚙️ Irongate Station</div><div class="loc-desc">Former military drydock, now a civilian repair hub. The best ship upgrades outside Sec-5. Run by a ex-Patrol Fleet admiral who asks no questions and charges accordingly.</div></div>
+          <div class="loc-card"><div class="loc-name">🍺 The Coronal Tap</div><div class="loc-desc">Notorious spacer cantina and information exchange. Everyone passes through eventually. The barkeeper knows twelve ways to say "I didn't hear that."</div></div>
+          <div class="loc-card"><div class="loc-name">🌌 Deepwatch Outpost</div><div class="loc-desc">Independent science station monitoring deep space anomalies. Pays good credits for sensor data. Has a standing wanted list for "items of research interest."</div></div>
+          <div class="loc-card"><div class="loc-name">📦 Waystation Delta</div><div class="loc-desc">Generic-name cargo depot. Currently under three separate claims of ownership. Nobody has resolved this legally. Meanwhile, the cargo keeps flowing.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEC-2 -->
+    <div class="sector-band sec2" id="sec2">
+      <div class="sector-header">
+        <div>
+          <div class="sector-label">Sec-2 — Frontier Space</div>
+          <div class="sector-sub">No Federation patrol · Local enforcement only · Dangerous</div>
+        </div>
+        <div class="sector-badge">LOW-SEC</div>
+      </div>
+      <div class="sector-body">
+        <p class="sector-desc">Frontier space is where the galaxy thins out. Supply chains stretch. Prices swing wildly. The local law is whoever's armed. Colonists, hermit operations, resource extraction camps, and cult compounds are all you'll find out here — and they all have reasons they moved to the edge.</p>
+        <div class="loc-grid">
+          <div class="loc-card"><div class="loc-name">🏚️ Dustfall Colony</div><div class="loc-desc">Human frontier settlement. 3,000 people trying to make a planet livable. Desperate for medical supplies, spare parts, and protection they can't afford.</div></div>
+          <div class="loc-card"><div class="loc-name">🦠 The Rot Fields</div><div class="loc-desc">Myxos biome world, partially terraformed and then abandoned mid-process. The resulting ecosystems are genuinely unknown. Researchers go in. They don't always come back.</div></div>
+          <div class="loc-card"><div class="loc-name">⚠️ Freehold Pax</div><div class="loc-desc">Explicitly anarchist station. No rules by design. Surprisingly stable. Run by consensus committee of sixty people who argue constantly and somehow agree on emergencies.</div></div>
+          <div class="loc-card"><div class="loc-name">🔒 The Vault</div><div class="loc-desc">Rumored high-security storage facility. Nobody knows who owns it. Ships have gone looking. Some come back. The ones that don't are filed as "navigation loss."</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEC-1 -->
+    <div class="sector-band sec1" id="sec1">
+      <div class="sector-header">
+        <div>
+          <div class="sector-label">Sec-1 — Contested Space</div>
+          <div class="sector-sub">Active conflict · No safe ports · Travel at own risk</div>
+        </div>
+        <div class="sector-badge">LOW-SEC</div>
+      </div>
+      <div class="sector-body">
+        <p class="sector-desc">Contested space means what it says. At least two armed factions are actively fighting over this territory. Supply routes are targets. Stations change hands. The only law is firepower, and the only economy is war profiteering. The rewards are astronomical. So is the body count.</p>
+        <div class="loc-grid">
+          <div class="loc-card"><div class="loc-name">💀 The Graveyard</div><div class="loc-desc">Site of the Battle of Kerrith Crossing. Six wrecked capital ships drift in mutual orbit. Salvagers work it constantly. Pirates hunt the salvagers. It's a whole ecosystem.</div></div>
+          <div class="loc-card"><div class="loc-name">🔴 Redline Station</div><div class="loc-desc">Nominally neutral resupply point. Both factions use it. Neither attacks it — yet. The moment that calculus changes, everyone on board is collateral.</div></div>
+          <div class="loc-card"><div class="loc-name">⚡ The Bleedzone</div><div class="loc-desc">A 40-lightyear corridor where the Syndicate and the Federation have been skirmishing for eleven years. Nothing built here lasts long enough to get a proper name.</div></div>
+          <div class="loc-card"><div class="loc-name">🧨 Boneyard Cache</div><div class="loc-desc">Hidden weapons depot, origin unknown. Coordinates are worth a fortune. Three different crews claim to have the real coordinates. Two of them are lying. One of them is wrong.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEC-0 -->
+    <div class="sector-band sec0" id="sec0">
+      <div class="sector-header">
+        <div>
+          <div class="sector-label">Sec-0 — Null Space</div>
+          <div class="sector-sub">Beyond mapped galaxy · No rescue · No record · No law</div>
+        </div>
+        <div class="sector-badge">NULL-SEC</div>
+      </div>
+      <div class="sector-body">
+        <p class="sector-desc">Null Space begins where the maps end. No faction claims it. No patrol reaches it. Navigation hazards are uncharted, warp drift is extreme without Warp Stabilizers, and anything that lives out here has had no reason to be friendly to outsiders. The only people who go to Null Space on purpose are the ones who can't go anywhere else — and the ones looking for whatever those people are hiding.</p>
+        <div class="loc-grid">
+          <div class="loc-card"><div class="loc-name">👁️ The Aperture</div><div class="loc-desc">Stable wormhole of unknown origin. Leads somewhere. Nobody who's come back has been able to describe it coherently. Three ships haven't come back at all.</div></div>
+          <div class="loc-card"><div class="loc-name">🌑 The Silence</div><div class="loc-desc">A 12-lightyear region where all communication signals die. Ships enter. Ships exit. What happens inside is reported differently by every crew. The reports share one detail: nothing follows you out.</div></div>
+          <div class="loc-card"><div class="loc-name">🏴‍☠️ Exodus Point</div><div class="loc-desc">Rumored permanent settlement of exiles, war criminals, and anyone for whom Sec-1 wasn't remote enough. If it exists, it's self-sufficient and very unwelcoming.</div></div>
+          <div class="loc-card"><div class="loc-name">⭐ The Old Signal</div><div class="loc-desc">A repeating transmission from deep Null Space, origin estimated at 800 years old. No faction claims to have sent it. Several factions are racing to find the source.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANOMALIES -->
+    <div class="sector-band" id="anomalies" style="border-color:rgba(212,175,55,0.3);">
+      <div class="sector-header" style="--sc:#d4af37;">
+        <div>
+          <div class="sector-label" style="color:#d4af37;">Deep Space Anomalies</div>
+          <div class="sector-sub">Unexplained phenomena · Research opportunities · Extreme risk</div>
+        </div>
+        <div class="sector-badge" style="color:#d4af37;border-color:#d4af37;">ANOMALOUS</div>
+      </div>
+      <div class="sector-body">
+        <p class="sector-desc">Not every location is on a map or under a flag. The galaxy produces phenomena that defy current physics and reward the brave — or punish the foolish.</p>
+        <div class="loc-grid">
+          <div class="loc-card"><div class="loc-name">🌀 Tide Rift</div><div class="loc-desc">Gravitational shear zone. Ships that pass through at the wrong angle get torn apart. Ships that pass through at the right angle arrive somewhere else entirely. Nobody's mapped the exits.</div></div>
+          <div class="loc-card"><div class="loc-name">🌈 The Prism</div><div class="loc-desc">Radiation cloud that interferes with all electronic systems — but inside the dead zone, ancient tech from before the Federation somehow still functions.</div></div>
+          <div class="loc-card"><div class="loc-name">🕳️ The Drain</div><div class="loc-desc">A gravity sink with no central mass. Pulls ships in. Three have escaped so far, all with stories that contradict each other. All three crews retired immediately after.</div></div>
+          <div class="loc-card"><div class="loc-name">🔮 Null-Echo Site</div><div class="loc-desc">A derelict structure of non-human construction, origin unknown, age unknown. Completely intact. Every sensor pass shows it empty. Everyone who's docked reports not being alone.</div></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+<script>
+(async () => {
+  const { data: { session } } = await db.auth.getSession();
+  const el = document.getElementById('nav-auth');
+  if (session) {
+    const { data: p } = await db.from('profiles').select('username,display_name,avatar_color').eq('id', session.user.id).single();
+    const name = p?.display_name || p?.username || 'Crew'; const color = p?.avatar_color || '#3a78d4';
+    const initials = name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+    el.innerHTML = `<a href="dashboard.html" class="topbar-link" style="margin-right:4px;">Dashboard</a>
+      <div class="user-menu" onclick="this.querySelector('.user-dropdown').classList.toggle('open')" style="cursor:pointer;">
+        <div class="user-avatar" style="background:${color};width:32px;height:32px;font-size:12px;">${initials}</div>
+        <div class="user-info"><span class="user-name" style="font-size:12px;">${name}</span></div>
+        <div class="user-dropdown" id="nav-drop">
+          <a href="dashboard.html" class="dropdown-item">🏠 Dashboard</a>
+          <div class="dropdown-divider"></div>
+          <button class="dropdown-item danger" onclick="db.auth.signOut().then(()=>location.href='auth.html')">→ Sign Out</button>
+        </div>
+      </div>`;
+    document.addEventListener('click', e => { if (!e.target.closest('.user-menu')) document.getElementById('nav-drop')?.classList.remove('open'); });
+  } else { el.innerHTML = `<a href="auth.html" class="btn-primary" style="padding:8px 18px;font-size:12px;border-radius:6px;text-decoration:none;display:inline-block;">Sign In →</a>`; }
+})();
+</script>
+</body>
+</html>

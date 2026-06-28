@@ -394,7 +394,9 @@
 <script src="js/config.js"></script>
 <script src="js/auth.js"></script>
 <script>
-const SPECIES_ICONS = { human:'🧑', kragol:'🪨', skitterling:'🐾', myxos:'🫧', arboran:'🌿', kaelen:'💠' };
+const SPECIES_ICONS = { human:'assets/NN_Species_Human.png', kragol:'assets/NN_Species_Kragol.png',
+                        skitterling:'assets/NN_Species_Skitterling.png', myxos:'assets/NN_Species_Myxos.png',
+                        arboran:'assets/NN_Species_Arboran.png' };
 const ROOM_COLORS   = ['','#1a3a6b','#4a1a0a','#1a3a2a','#0a2a3a','#2a2a1a','#3a1a1a','#1a2a0a','#1a1a3a','#1a2430'];
 
 const params = new URLSearchParams(location.search);
@@ -427,7 +429,16 @@ if (!campaignId) location.href = 'dashboard.html';
   document.getElementById('stat-round').textContent  = c.round_num || 0;
 
   drawPreview(c.ship_layout);
-  await Promise.all([loadCrew(), loadInitiative(), loadQuests(), loadNPCs(), loadLog(), loadDiceHistory()]);
+  try {
+    await Promise.all([loadCrew(), loadInitiative(), loadQuests(), loadNPCs(), loadLog(), loadDiceHistory()]);
+  } catch (err) {
+    console.error('Campaign load error:', err);
+    const errBanner = document.createElement('div');
+    errBanner.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#c84040;color:#fff;padding:12px 18px;border-radius:8px;font-size:13px;z-index:9999;max-width:340px;';
+    errBanner.textContent = 'Some sections failed to load. Try refreshing, or run schema-v3.sql in Supabase if you haven\'t.';
+    document.body.appendChild(errBanner);
+    setTimeout(() => errBanner.remove(), 8000);
+  }
 
   // Realtime
   db.channel('camp-' + campaignId)
@@ -474,7 +485,7 @@ async function loadCrew() {
       <div class="crew-avatar" style="background:${m.profiles?.avatar_color||'#3a78d4'}">${getInitials(name)}</div>
       <div>
         <div class="crew-name">${esc(name)} ${m.member_role==='gm'?'<span class="gm-pip">GM</span>':''}</div>
-        <div class="crew-meta">${char?`${SPECIES_ICONS[char.species]||''} ${esc(char.name)}`:''}</div>
+        <div class="crew-meta">${char ? (SPECIES_ICONS[char.species] ? `<img src="${SPECIES_ICONS[char.species]}" style="width:14px;height:14px;border-radius:2px;object-fit:cover;vertical-align:middle;margin-right:3px;" alt="${char.species}">` : '') + esc(char.name) : ''}</div>
       </div>
     </div>`;
   }).join('');

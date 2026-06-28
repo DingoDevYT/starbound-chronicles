@@ -736,7 +736,8 @@ async function saveCharacter() {
 
 async function deleteCharacter() {
   if (!confirm(`Permanently delete ${char.name}? This cannot be undone.`)) return;
-  await db.from('characters').delete().eq('id', charId);
+  const { error } = await db.from('characters').delete().eq('id', charId).eq('user_id', (await db.auth.getUser()).data.user?.id);
+  if (error) { alert('Delete failed: ' + error.message); return; }
   window.location.href = 'dashboard.html';
 }
 

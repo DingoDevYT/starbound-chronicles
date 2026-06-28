@@ -415,7 +415,7 @@ if(!campaignId)location.href='dashboard.html';
     initGridBlank(gridW,gridH);
     fitToView();
   }
-  await loadTokens();
+  try { await loadTokens(); } catch(e) { console.warn('Tokens table not available:', e.message); }
   subscribeRealtime();
   requestAnimationFrame(animLoop);
 })();

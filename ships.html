@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Starships — Starbound Chronicles</title>
+<link rel="stylesheet" href="css/wiki.css">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<style>
+.hull-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 24px; margin-bottom: 20px; position: relative; overflow: hidden;
+}
+.hull-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--hull-color,var(--accent)); }
+.hull-header { display:flex; align-items:center; gap:16px; margin-bottom:14px; }
+.hull-icon { font-size:36px; }
+.hull-name { font-size:20px; font-weight:900; color:#e0ecff; }
+.hull-sub  { font-size:12px; color:var(--text-faint); margin-top:2px; }
+.hull-stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:14px 0; }
+.hs-cell { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px; text-align:center; }
+.hs-label { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:4px; }
+.hs-val   { font-size:20px; font-weight:900; color:#e0ecff; }
+.hull-desc { font-size:13px; color:var(--text-dim); line-height:1.65; }
+.wip-banner { background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.25);border-radius:10px;padding:14px 18px;margin-bottom:28px;font-size:13px;color:#d4af37;display:flex;align-items:center;gap:10px; }
+.upgrade-list { display:flex; flex-direction:column; gap:6px; margin-top:12px; }
+.upgrade-item { background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:9px 13px; display:flex; gap:12px; align-items:flex-start; }
+.upg-name { font-size:12px; font-weight:700; color:#e0ecff; min-width:140px; }
+.upg-desc { font-size:12px; color:var(--text-faint); line-height:1.5; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="topbar-brand" href="index.html">
+    <div class="brand-icon">✦</div>
+    <div class="brand-text"><div class="brand-name">Starbound Chronicles</div><div class="brand-tagline">Tabletop Wiki</div></div>
+  </a>
+  <nav class="topbar-nav">
+    <a class="topbar-link" href="index.html">Home</a>
+    <a class="topbar-link" href="species.html">Species</a>
+    <a class="topbar-link" href="roles.html">Roles</a>
+    <a class="topbar-link active" href="ships.html">Ships</a>
+    <a class="topbar-link" href="equipment.html">Equipment</a>
+    <a class="topbar-link" href="locations.html">Locations</a>
+    <a class="topbar-link" href="rules.html">Rules</a>
+  </nav>
+  <div class="topbar-right" style="border-left:none;"><div id="nav-auth"></div></div>
+</header>
+
+<div class="page-layout">
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Hull Classes</div>
+      <a class="sidebar-link" href="#scout"><div class="sidebar-dot" style="background:rgba(64,200,200,0.5);">🛸</div>Scout</a>
+      <a class="sidebar-link" href="#frigate"><div class="sidebar-dot" style="background:rgba(58,120,212,0.5);">🚀</div>Frigate</a>
+      <a class="sidebar-link" href="#cruiser"><div class="sidebar-dot" style="background:rgba(200,128,32,0.5);">🛳️</div>Cruiser</a>
+      <a class="sidebar-link" href="#dreadnought"><div class="sidebar-dot" style="background:rgba(200,64,64,0.5);">⚓</div>Dreadnought</a>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Ship Systems</div>
+      <a class="sidebar-link" href="#upgrades">Upgrade Tree</a>
+      <a class="sidebar-link" href="#reactors">Reactor Tiers</a>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Wiki</div>
+      <a class="sidebar-link" href="index.html">← Back to Home</a>
+      <a class="sidebar-link" href="rules.html">Core Rulebook ↗</a>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-hero">
+      <div class="page-category">Starships</div>
+      <h1 class="page-title">Hull Classes &amp; Ship Systems</h1>
+      <p class="page-subtitle">Your ship isn't just a vehicle — it's your home, your weapon, and the only thing standing between your crew and the void. Choose your hull. Know its limits.</p>
+      <div class="page-tags">
+        <span class="tag highlight">4 Hull Classes</span>
+        <span class="tag">Upgrade Trees</span>
+        <span class="tag">Reactor Tiers</span>
+        <span class="tag">Alpha v1.0</span>
+      </div>
+    </div>
+
+    <div class="wip-banner">⚠️ Full loadout tables, weapon hardpoint counts, and the upgrade tree are in development. Base stats and hull descriptions are final for Alpha v1.0.</div>
+
+    <div class="hull-card" id="scout" style="--hull-color:#40c8c8;">
+      <div class="hull-header">
+        <div class="hull-icon">🛸</div>
+        <div><div class="hull-name">Scout-Class</div><div class="hull-sub">Fast · Fragile · Independent</div></div>
+      </div>
+      <div class="hull-stats-grid">
+        <div class="hs-cell"><div class="hs-label">Hull Points</div><div class="hs-val" style="color:#ff8888;">40</div></div>
+        <div class="hs-cell"><div class="hs-label">Shield Points</div><div class="hs-val" style="color:#4acc7a;">30</div></div>
+        <div class="hs-cell"><div class="hs-label">Base Power</div><div class="hs-val" style="color:#d4af37;">4</div></div>
+        <div class="hs-cell"><div class="hs-label">Weapon Slots</div><div class="hs-val">2</div></div>
+      </div>
+      <p class="hull-desc">Built for speed and stealth over survivability. Scout-class vessels are the preferred hull for solo operators, advance recon units, and crews who survive by never being where the enemy expects. Limited weapon hardpoints means engagements must be decisive — you won't win a slugfest in one of these. What you will do is run circles around anything heavier.</p>
+    </div>
+
+    <div class="hull-card" id="frigate" style="--hull-color:#3a78d4;">
+      <div class="hull-header">
+        <div class="hull-icon">🚀</div>
+        <div><div class="hull-name">Frigate-Class</div><div class="hull-sub">Balanced · Versatile · Standard Crew</div></div>
+      </div>
+      <div class="hull-stats-grid">
+        <div class="hs-cell"><div class="hs-label">Hull Points</div><div class="hs-val" style="color:#ff8888;">80</div></div>
+        <div class="hs-cell"><div class="hs-label">Shield Points</div><div class="hs-val" style="color:#4acc7a;">50</div></div>
+        <div class="hs-cell"><div class="hs-label">Base Power</div><div class="hs-val" style="color:#d4af37;">6</div></div>
+        <div class="hs-cell"><div class="hs-label">Weapon Slots</div><div class="hs-val">4</div></div>
+      </div>
+      <p class="hull-desc">The default starting hull for most crews. The Frigate-class is the backbone of independent spaceflight — enough room for a full four-person crew, enough weapons to handle a fight, and enough speed to flee one. No faction controls frigate production; they're built everywhere, serviced everywhere, and parts are available at every port above Sec-2.</p>
+    </div>
+
+    <div class="hull-card" id="cruiser" style="--hull-color:#c87820;">
+      <div class="hull-header">
+        <div class="hull-icon">🛳️</div>
+        <div><div class="hull-name">Cruiser-Class</div><div class="hull-sub">Heavy · Powerful · Slow Turns</div></div>
+      </div>
+      <div class="hull-stats-grid">
+        <div class="hs-cell"><div class="hs-label">Hull Points</div><div class="hs-val" style="color:#ff8888;">150</div></div>
+        <div class="hs-cell"><div class="hs-label">Shield Points</div><div class="hs-val" style="color:#4acc7a;">90</div></div>
+        <div class="hs-cell"><div class="hs-label">Base Power</div><div class="hs-val" style="color:#d4af37;">9</div></div>
+        <div class="hs-cell"><div class="hs-label">Weapon Slots</div><div class="hs-val">7</div></div>
+      </div>
+      <p class="hull-desc">Cruisers are warships dressed as cargo haulers, or cargo haulers that got into too many fights and kept bolting on guns. They hit hard, take punishment, and have the cargo space to make serious trade runs — at the cost of maneuverability. A skilled Pilot is non-negotiable in a Cruiser; without one, you'll spend half of combat turning to face your enemy.</p>
+    </div>
+
+    <div class="hull-card" id="dreadnought" style="--hull-color:#c84040;">
+      <div class="hull-header">
+        <div class="hull-icon">⚓</div>
+        <div><div class="hull-name">Dreadnought-Class</div><div class="hull-sub">Massive · Near-Indestructible · Crew of 8+</div></div>
+      </div>
+      <div class="hull-stats-grid">
+        <div class="hs-cell"><div class="hs-label">Hull Points</div><div class="hs-val" style="color:#ff8888;">300</div></div>
+        <div class="hs-cell"><div class="hs-label">Shield Points</div><div class="hs-val" style="color:#4acc7a;">180</div></div>
+        <div class="hs-cell"><div class="hs-label">Base Power</div><div class="hs-val" style="color:#d4af37;">14</div></div>
+        <div class="hs-cell"><div class="hs-label">Weapon Slots</div><div class="hs-val">12</div></div>
+      </div>
+      <p class="hull-desc">Dreadnoughts are not acquired — they are seized, inherited, or built by people with too much money and a grudge. Operating one requires a minimum crew of eight to fully staff all stations. In the hands of a coordinated team, a Dreadnought can hold a sector. In the hands of an under-crewed party, it's a very expensive flying coffin with excellent interior lighting.</p>
+    </div>
+
+    <div class="hull-card" id="upgrades" style="--hull-color:#20a880;">
+      <div class="hull-header"><div class="hull-icon">🔧</div><div><div class="hull-name">Common Ship Upgrades</div><div class="hull-sub">Available at Sec-3+ ports · Prices vary by faction</div></div></div>
+      <div class="upgrade-list">
+        <div class="upgrade-item"><div class="upg-name">🛡️ Ablative Plating</div><div class="upg-desc">+20 Hull Points. Increases ship mass, reducing top speed by 10%. Stackable twice.</div></div>
+        <div class="upgrade-item"><div class="upg-name">⚡ Overclocked Reactor</div><div class="upg-desc">+2 Power per round. Increases base Heat generation by 1 per round. Requires a Tier 2 reactor slot.</div></div>
+        <div class="upgrade-item"><div class="upg-name">📡 ECM Suite</div><div class="upg-desc">Smuggler's Signal Jam ability affects an additional target. Requires Comms station upgrade.</div></div>
+        <div class="upgrade-item"><div class="upg-name">🔭 Deep Scan Array</div><div class="upg-desc">Reveals all ship contacts in a full sector radius. Passive; active scan costs 1 Power.</div></div>
+        <div class="upgrade-item"><div class="upg-name">🚀 Warp Stabilizers</div><div class="upg-desc">Reduces FLY DC for emergency warp jumps by 3. Prevents warp drift in Sec-0 zones.</div></div>
+        <div class="upgrade-item"><div class="upg-name">🧪 Med-Bay Module</div><div class="upg-desc">Crew members can recover 1d6 HP per long rest while aboard. Requires a dedicated ship room.</div></div>
+      </div>
+    </div>
+
+    <div class="hull-card" id="reactors" style="--hull-color:#8040c8;">
+      <div class="hull-header"><div class="hull-icon">⚡</div><div><div class="hull-name">Reactor Tiers</div><div class="hull-sub">Power output determines action economy</div></div></div>
+      <div class="hull-stats-grid" style="grid-template-columns:repeat(3,1fr);">
+        <div class="hs-cell"><div class="hs-label">Tier 1</div><div class="hs-val" style="color:#d4af37;">4–6 PC</div></div>
+        <div class="hs-cell"><div class="hs-label">Tier 2</div><div class="hs-val" style="color:#d4af37;">8–10 PC</div></div>
+        <div class="hs-cell"><div class="hs-label">Tier 3</div><div class="hs-val" style="color:#d4af37;">12–16 PC</div></div>
+      </div>
+      <p class="hull-desc" style="margin-top:12px;">Reactor tier determines how many Power Points are available each round. Higher tier reactors also increase Heat threshold before systems start failing. Reactor upgrades are the most expensive single purchase in the game and are typically found only at major drydocks.</p>
+    </div>
+
+  </main>
+</div>
+<script>
+(async () => {
+  const { data: { session } } = await db.auth.getSession();
+  const el = document.getElementById('nav-auth');
+  if (session) {
+    const { data: p } = await db.from('profiles').select('username,display_name,avatar_color').eq('id', session.user.id).single();
+    const name = p?.display_name || p?.username || 'Crew'; const color = p?.avatar_color || '#3a78d4';
+    const initials = name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+    el.innerHTML = `<a href="dashboard.html" class="topbar-link" style="margin-right:4px;">Dashboard</a>
+      <div class="user-menu" onclick="this.querySelector('.user-dropdown').classList.toggle('open')" style="cursor:pointer;">
+        <div class="user-avatar" style="background:${color};width:32px;height:32px;font-size:12px;">${initials}</div>
+        <div class="user-info"><span class="user-name" style="font-size:12px;">${name}</span></div>
+        <div class="user-dropdown" id="nav-drop">
+          <a href="dashboard.html" class="dropdown-item">🏠 Dashboard</a>
+          <div class="dropdown-divider"></div>
+          <button class="dropdown-item danger" onclick="db.auth.signOut().then(()=>location.href='auth.html')">→ Sign Out</button>
+        </div>
+      </div>`;
+    document.addEventListener('click', e => { if (!e.target.closest('.user-menu')) document.getElementById('nav-drop')?.classList.remove('open'); });
+  } else { el.innerHTML = `<a href="auth.html" class="btn-primary" style="padding:8px 18px;font-size:12px;border-radius:6px;text-decoration:none;display:inline-block;">Sign In →</a>`; }
+})();
+</script>
+</body>
+</html>
