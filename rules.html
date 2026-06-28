@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Core Rulebook — Starbound Chronicles</title>
+<link rel="stylesheet" href="css/wiki.css">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<style>
+/* Rules-specific additions */
+.rules-section { margin-bottom: 52px; }
+.rules-section:last-child { margin-bottom: 0; }
+
+.rules-h2 {
+  font-size: 22px; font-weight: 900; color: #e0ecff;
+  margin: 0 0 6px 0; letter-spacing: -0.02em;
+}
+.rules-number {
+  display: inline-block; background: rgba(58,120,212,0.2); border: 1px solid rgba(58,120,212,0.4);
+  color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .1em;
+  padding: 2px 9px; border-radius: 20px; margin-bottom: 10px;
+}
+.rules-intro {
+  font-size: 14px; color: var(--text-dim); line-height: 1.7; margin-bottom: 24px;
+  border-left: 3px solid rgba(58,120,212,0.4); padding-left: 16px;
+}
+
+/* The Four Fs stat cards */
+.four-f-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 28px;
+}
+@media (min-width: 760px) { .four-f-grid { grid-template-columns: repeat(4, 1fr); } }
+.f-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px 16px; position: relative; overflow: hidden;
+}
+.f-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--f-color);
+}
+.f-letter { font-size: 36px; font-weight: 900; color: var(--f-color); line-height: 1; margin-bottom: 4px; }
+.f-name   { font-size: 13px; font-weight: 800; color: #e0ecff; margin-bottom: 6px; }
+.f-desc   { font-size: 11px; color: var(--text-faint); line-height: 1.55; }
+
+/* Resolution table */
+.rules-table {
+  width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 24px;
+  border-radius: 10px; overflow: hidden;
+}
+.rules-table th {
+  background: var(--surface2); color: var(--text-dim); font-size: 10px;
+  letter-spacing: .1em; text-transform: uppercase; padding: 10px 14px; text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.rules-table td {
+  padding: 11px 14px; border-bottom: 1px solid var(--border); color: var(--text-dim);
+  vertical-align: top;
+}
+.rules-table tr:last-child td { border-bottom: none; }
+.rules-table tr:hover td { background: var(--surface); }
+.dc-easy   { color: #4acc7a; font-weight: 700; }
+.dc-mod    { color: #d4af37; font-weight: 700; }
+.dc-hard   { color: #ff8888; font-weight: 700; }
+
+/* Class table */
+.class-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 24px; border-radius: 10px; overflow: hidden; }
+.class-table th { background: var(--surface2); color: var(--text-dim); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+.class-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); color: var(--text-dim); vertical-align: top; line-height: 1.5; }
+.class-table tr:last-child td { border-bottom: none; }
+.class-table tr:hover td { background: var(--surface); }
+.class-name { font-weight: 800; color: #e0ecff; font-size: 14px; }
+.class-feature { font-style: italic; color: var(--accent); }
+
+/* Ship resources */
+.resource-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+.resource-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px; text-align: center;
+}
+.resource-icon { font-size: 28px; margin-bottom: 6px; }
+.resource-abbr { font-size: 18px; font-weight: 900; color: var(--r-color, var(--accent)); }
+.resource-name { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; font-weight: 700; }
+.resource-desc { font-size: 11px; color: var(--text-faint); line-height: 1.5; }
+
+/* Round loop */
+.round-steps { display: flex; flex-direction: column; gap: 0; margin-bottom: 24px; }
+.round-step {
+  display: flex; gap: 14px; align-items: flex-start; padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.round-step:last-child { border-bottom: none; }
+.step-num {
+  width: 28px; height: 28px; border-radius: 50%; background: rgba(58,120,212,0.2);
+  border: 1px solid rgba(58,120,212,0.4); color: var(--accent); font-size: 12px;
+  font-weight: 900; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px;
+}
+.step-title { font-size: 13px; font-weight: 800; color: #e0ecff; margin-bottom: 4px; }
+.step-desc  { font-size: 12px; color: var(--text-faint); line-height: 1.55; }
+
+/* Sector table */
+.sec-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 24px; border-radius: 10px; overflow: hidden; }
+.sec-table th { background: var(--surface2); color: var(--text-dim); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+.sec-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); color: var(--text-dim); vertical-align: top; }
+.sec-table tr:last-child td { border-bottom: none; }
+.sec-table tr:hover td { background: var(--surface); }
+.sec-high  { color: #4acc7a; font-weight: 700; }
+.sec-low   { color: #d4af37; font-weight: 700; }
+.sec-null  { color: #ff8888; font-weight: 700; }
+
+.callout-rules {
+  background: rgba(212,175,55,0.08); border: 1px solid rgba(212,175,55,0.3);
+  border-radius: 10px; padding: 16px 20px; margin-bottom: 24px;
+}
+.callout-rules-title { font-size: 12px; font-weight: 800; color: #d4af37; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
+.callout-rules p { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin: 0; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="topbar-brand" href="index.html">
+    <div class="brand-icon">✦</div>
+    <div class="brand-text">
+      <div class="brand-name">Starbound Chronicles</div>
+      <div class="brand-tagline">Tabletop Wiki</div>
+    </div>
+  </a>
+  <nav class="topbar-nav">
+    <a class="topbar-link" href="index.html">Home</a>
+    <a class="topbar-link" href="species.html">Species</a>
+    <a class="topbar-link" href="#">Roles</a>
+    <a class="topbar-link" href="#">Ships</a>
+    <a class="topbar-link" href="#">Equipment</a>
+    <a class="topbar-link" href="#">Locations</a>
+    <a class="topbar-link active" href="rules.html">Rules</a>
+  </nav>
+  <div class="topbar-right" style="border-left:none;">
+    <div id="nav-auth"></div>
+  </div>
+</header>
+
+<div class="page-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-heading">In This Rulebook</div>
+      <a class="sidebar-link" href="#overview">
+        <div class="sidebar-dot" style="background:rgba(58,120,212,0.5);">📖</div>
+        Overview
+      </a>
+      <a class="sidebar-link" href="#four-fs">
+        <div class="sidebar-dot" style="background:rgba(64,160,200,0.5);">🎯</div>
+        The Four Fs
+      </a>
+      <a class="sidebar-link" href="#resolution">
+        <div class="sidebar-dot" style="background:rgba(212,175,55,0.5);">🎲</div>
+        Resolution & DC
+      </a>
+      <a class="sidebar-link" href="#classes">
+        <div class="sidebar-dot" style="background:rgba(122,68,180,0.5);">⚔️</div>
+        Classes & Roles
+      </a>
+      <a class="sidebar-link" href="#ship-combat">
+        <div class="sidebar-dot" style="background:rgba(200,64,64,0.5);">🚀</div>
+        Ship Combat
+      </a>
+      <a class="sidebar-link" href="#factions">
+        <div class="sidebar-dot" style="background:rgba(74,200,122,0.5);">🗺️</div>
+        Factions & Sectors
+      </a>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Quick Reference</div>
+      <a class="sidebar-link" href="#resolution">
+        <span style="color:#4acc7a; font-size:12px;">●</span> DC 10 — Easy
+      </a>
+      <a class="sidebar-link" href="#resolution">
+        <span style="color:#d4af37; font-size:12px;">●</span> DC 15 — Moderate
+      </a>
+      <a class="sidebar-link" href="#resolution">
+        <span style="color:#ff8888; font-size:12px;">●</span> DC 20 — Hard
+      </a>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Wiki</div>
+      <a class="sidebar-link" href="index.html">← Back to Home</a>
+      <a class="sidebar-link" href="species.html">Species ↗</a>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <div class="page-hero">
+      <div class="page-category">Core Rulebook</div>
+      <h1 class="page-title">Infinite Stars: Core Rulebook</h1>
+      <p class="page-subtitle">
+        Alpha v1.0 — The foundational mechanical framework for players and Directors alike.
+        Fast-paced action, cooperative crew dynamics, and an unrestrictive open-world structure.
+      </p>
+      <div class="page-tags">
+        <span class="tag highlight">Alpha v1.0</span>
+        <span class="tag">d20 System</span>
+        <span class="tag">Cooperative Ship Combat</span>
+        <span class="tag">Open Sandbox</span>
+      </div>
+    </div>
+
+    <!-- ─── SECTION 1: OVERVIEW ─── -->
+    <div class="rules-section" id="overview">
+      <div class="rules-number">Section 01</div>
+      <h2 class="rules-h2">Game Overview & Philosophy</h2>
+      <p class="rules-intro">
+        <em>Infinite Stars</em> is designed to prioritize fast-paced action, collaborative crew dynamics, and an
+        unrestrictive, open-world structure. Unlike traditional campaign-driven RPGs, Infinite Stars utilizes a
+        modular design built to interact seamlessly with an evolving digital sector map. The core philosophy
+        centers on a shared asset: <strong>your crew's starship.</strong>
+      </p>
+      <div class="callout-rules">
+        <div class="callout-rules-title">Director's Note</div>
+        <p>
+          The Director (DM equivalent) sets the scene, plays the factions, and controls the living galaxy. Players
+          are the crew — each commanding their station, pooling resources, and making decisions that ripple across
+          the open map. No railroading. No predetermined story. Just the void and whatever trouble you fly into.
+        </p>
+      </div>
+    </div>
+
+    <div class="species-divider"></div>
+
+    <!-- ─── SECTION 2: FOUR FS ─── -->
+    <div class="rules-section" id="four-fs">
+      <div class="rules-number">Section 02</div>
+      <h2 class="rules-h2">The Core Engine — The Four "F"s</h2>
+      <p class="rules-intro">
+        All actions in Infinite Stars — whether traversing a lawless space station on foot or exchanging laser fire
+        with a pirate cruiser — are resolved using a d20 system governed by four primary statistics. Ditch
+        traditional metrics of physical or mental attributes; here, your capabilities are defined by
+        <strong>operational functions.</strong>
+      </p>
+
+      <div class="four-f-grid">
+        <div class="f-card" style="--f-color:#40a0c8;">
+          <div class="f-letter">FLY</div>
+          <div class="f-name">Manual &amp; Movement</div>
+          <div class="f-desc">Governs manual dexterity, piloting maneuvers, evasion, reflexes, and physical stealth.</div>
+        </div>
+        <div class="f-card" style="--f-color:#20a880;">
+          <div class="f-letter">FIX</div>
+          <div class="f-name">Technical &amp; Scientific</div>
+          <div class="f-desc">Governs mechanical engineering, software hacking, weapon modifications, and scientific scanning.</div>
+        </div>
+        <div class="f-card" style="--f-color:#c84040;">
+          <div class="f-letter">FIGHT</div>
+          <div class="f-name">Combat &amp; Force</div>
+          <div class="f-desc">Governs physical force, personal firearms proficiency, and targeting heavy ship-mounted turrets.</div>
+        </div>
+        <div class="f-card" style="--f-color:#8040c8;">
+          <div class="f-letter">FACE</div>
+          <div class="f-name">Social &amp; Electronic</div>
+          <div class="f-desc">Governs social manipulation, deception, intimidation, trading, and electronic communication warfare.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="species-divider"></div>
+
+    <!-- ─── SECTION 2b: RESOLUTION ─── -->
+    <div class="rules-section" id="resolution">
+      <div class="rules-number">Section 02 — Resolution</div>
+      <h2 class="rules-h2">Resolution Mechanics</h2>
+      <p class="rules-intro">
+        When a character attempts an action with a risk of failure, they roll a 20-sided die (d20) and add the
+        relevant stat modifier. If the total meets or exceeds the <strong>Difficulty Class (DC)</strong> set by
+        the Director, the action succeeds. Modifiers are calculated as <code>(stat − 10) ÷ 2</code>, rounded down.
+      </p>
+
+      <table class="rules-table">
+        <thead>
+          <tr>
+            <th>DC</th>
+            <th>Classification</th>
+            <th>Example Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="dc-easy">10</span></td>
+            <td>Easy</td>
+            <td>Bypassing a standard civilian lock · Landing a ship in clear weather · Bribing a low-tier guard</td>
+          </tr>
+          <tr>
+            <td><span class="dc-mod">15</span></td>
+            <td>Moderate</td>
+            <td>Slicing into a secure corporate network · Executing a combat barrel roll · Negotiating with a rival captain</td>
+          </tr>
+          <tr>
+            <td><span class="dc-hard">20</span></td>
+            <td>Hard</td>
+            <td>Disabling a military-grade tracking array mid-combat · Haggling with a corrupt sector warlord · Hot-landing on a moving platform</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-rules">
+        <div class="callout-rules-title">Advantage & Disadvantage</div>
+        <p>
+          When circumstances strongly favor success, the Director may grant <strong>Advantage</strong> — roll 2d20 and
+          take the higher result. When circumstances work against the character, they roll at
+          <strong>Disadvantage</strong> — roll 2d20 and take the lower result. Advantage and Disadvantage cancel
+          each other out regardless of how many sources are stacked.
+        </p>
+      </div>
+    </div>
+
+    <div class="species-divider"></div>
+
+    <!-- ─── SECTION 3: CLASSES ─── -->
+    <div class="rules-section" id="classes">
+      <div class="rules-number">Section 03</div>
+      <h2 class="rules-h2">Classes &amp; Crew Roles</h2>
+      <p class="rules-intro">
+        Your class defines your specialization on foot and dictates your primary station when operating the crew's
+        collective starship. Each class focuses on one of the Four Fs and unlocks a <strong>Core Feature</strong>
+        — a unique ability that changes how your ship station operates.
+      </p>
+
+      <table class="class-table">
+        <thead>
+          <tr>
+            <th>Class</th>
+            <th>Stat Focus</th>
+            <th>Ship Station</th>
+            <th>Core Feature</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="class-name">🚀 The Pilot</span></td>
+            <td>FLY</td>
+            <td>The Helm</td>
+            <td><span class="class-feature">Evasive Maneuvers:</span> Expend ship power to instantly dodge incoming missiles.</td>
+          </tr>
+          <tr>
+            <td><span class="class-name">🔫 The Gunsmith</span></td>
+            <td>FIGHT</td>
+            <td>Weapons Array</td>
+            <td><span class="class-feature">Overcharge:</span> Increases weapon damage at the cost of generating high system heat.</td>
+          </tr>
+          <tr>
+            <td><span class="class-name">⚙️ The Technician</span></td>
+            <td>FIX</td>
+            <td>Engineering Delta</td>
+            <td><span class="class-feature">System Reboot:</span> Rapidly cycles energy to bring depleted shields back online.</td>
+          </tr>
+          <tr>
+            <td><span class="class-name">🗣️ The Smuggler</span></td>
+            <td>FACE</td>
+            <td>Comms &amp; Sensors</td>
+            <td><span class="class-feature">Signal Jam:</span> Disrupts enemy targeting matrices, lowering their attack accuracy.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-rules">
+        <div class="callout-rules-title">Multiclassing Note</div>
+        <p>
+          At Director discretion, crew members may train secondary station roles over the course of a campaign.
+          A Gunsmith who spends downtime at the helm under a Pilot's instruction may unlock limited access to
+          Helm maneuvers — at a reduced power cost efficiency.
+        </p>
+      </div>
+    </div>
+
+    <div class="species-divider"></div>
+
+    <!-- ─── SECTION 4: SHIP COMBAT ─── -->
+    <div class="rules-section" id="ship-combat">
+      <div class="rules-number">Section 04</div>
+      <h2 class="rules-h2">Cooperative Ship Combat</h2>
+      <p class="rules-intro">
+        Ship combat is the mechanical heart of Infinite Stars. Instead of controlling independent vessels, the
+        entire party operates a <strong>singular ship asset</strong>, pooling resources and taking tactical turns
+        simultaneously. Every crew member has a role — and the ship dies if anyone neglects theirs.
+      </p>
+
+      <h3 style="font-size:15px; font-weight:800; color:#e0ecff; margin:0 0 14px 0;">Ship Resources</h3>
+      <div class="resource-grid">
+        <div class="resource-card" style="--r-color:#4acc7a;">
+          <div class="resource-icon">🛡️</div>
+          <div class="resource-abbr">SP</div>
+          <div class="resource-name">Shield Points</div>
+          <div class="resource-desc">First line of defense. Regenerates dynamically when power is routed to shields.</div>
+        </div>
+        <div class="resource-card" style="--r-color:#ff8888;">
+          <div class="resource-icon">🚢</div>
+          <div class="resource-abbr">HP</div>
+          <div class="resource-name">Hull Points</div>
+          <div class="resource-desc">Physical structural integrity. At zero, the ship is disabled or destroyed. Requires drydock to repair.</div>
+        </div>
+        <div class="resource-card" style="--r-color:#d4af37;">
+          <div class="resource-icon">⚡</div>
+          <div class="resource-abbr">PC</div>
+          <div class="resource-name">Power Core</div>
+          <div class="resource-desc">The primary engine pool. Generates a static Power Point pool each round based on reactor tier.</div>
+        </div>
+      </div>
+
+      <h3 style="font-size:15px; font-weight:800; color:#e0ecff; margin:0 0 14px 0;">The Round Loop</h3>
+      <div class="round-steps">
+        <div class="round-step">
+          <div class="step-num">1</div>
+          <div>
+            <div class="step-title">Power Generation Phase</div>
+            <div class="step-desc">The ship reactor refreshes its maximum Power Points for the round. A Tier 1 reactor generates 6 Power, scaling with upgrade level.</div>
+          </div>
+        </div>
+        <div class="round-step">
+          <div class="step-num">2</div>
+          <div>
+            <div class="step-title">Crew Consultation Phase</div>
+            <div class="step-desc">Players discuss and distribute Power Points among stations. A crew member cannot act at their station without assigned Power Points.</div>
+          </div>
+        </div>
+        <div class="round-step">
+          <div class="step-num">3</div>
+          <div>
+            <div class="step-title">Action Phase</div>
+            <div class="step-desc">All station actions execute simultaneously. The Pilot moves the ship; the Smuggler scans or jams; the Gunsmith fires; the Technician mitigates incoming damage.</div>
+          </div>
+        </div>
+        <div class="round-step">
+          <div class="step-num">4</div>
+          <div>
+            <div class="step-title">Enemy Response Phase</div>
+            <div class="step-desc">Enemy vessels execute their designated tactical actions. The Director resolves all hostile moves and applies damage to the crew's ship.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout-rules">
+        <div class="callout-rules-title">Heat & Overload</div>
+        <p>
+          Certain actions — particularly <em>Overcharge</em> and emergency power redistribution — generate
+          <strong>System Heat</strong>. If Heat exceeds the ship's threshold, the overloaded system goes offline
+          until the Technician performs an Engineering check to cool it down. Managing heat is the Technician's
+          primary off-combat responsibility.
+        </p>
+      </div>
+    </div>
+
+    <div class="species-divider"></div>
+
+    <!-- ─── SECTION 5: FACTIONS & MAP ─── -->
+    <div class="rules-section" id="factions">
+      <div class="rules-number">Section 05</div>
+      <h2 class="rules-h2">Open-World Living Map &amp; Factions</h2>
+      <p class="rules-intro">
+        Infinite Stars relies on a decentralized sandboxed map. Sectors are assigned
+        <strong>Security Ratings</strong> and <strong>Faction Influence Maps</strong>, altering encounter rates
+        and economic values dynamically. Where you fly determines what you risk — and what you stand to gain.
+      </p>
+
+      <table class="sec-table">
+        <thead>
+          <tr>
+            <th>Security Level</th>
+            <th>Classification</th>
+            <th>Economic Modifier</th>
+            <th>Risk Assessment</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="sec-high">Sec-5 to Sec-4</span></td>
+            <td>High-Sec<br><small style="color:var(--text-faint)">Imperial / Military Core</small></td>
+            <td>Standard legal market rates; heavy contraband fine multiplier.</td>
+            <td>Minimal piracy. High local police intervention if laws are breached.</td>
+          </tr>
+          <tr>
+            <td><span class="sec-low">Sec-3 to Sec-1</span></td>
+            <td>Low-Sec<br><small style="color:var(--text-faint)">The Borderlands / Fringe</small></td>
+            <td>Increased value for rare minerals and black-market items.</td>
+            <td>Moderate pirate activity; law enforcement arrival delayed by 1d4 rounds.</td>
+          </tr>
+          <tr>
+            <td><span class="sec-null">Sec-0</span></td>
+            <td>Null-Sec<br><small style="color:var(--text-faint)">The Wild Expanse</small></td>
+            <td>Maximum credit payouts; lawless trading parameters.</td>
+            <td>Total anarchy. Extreme hazard zones. Unknown alien threats.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-rules">
+        <div class="callout-rules-title">Faction Influence</div>
+        <p>
+          Beyond security ratings, sectors are contested by major factions — the Imperial Compact, the Free
+          Traders' Union, the Syndicate, and the Void Collective. Faction influence affects prices, quest
+          availability, and which ports will grant you docking rights. Completing faction jobs shifts the
+          influence map, and the results persist across all sessions in the living world.
+        </p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  const entries = document.querySelectorAll('.rules-section');
+  const links   = document.querySelectorAll('.sidebar-link[href^="#"]');
+  const observer = new IntersectionObserver(es => {
+    es.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const m = document.querySelector(`.sidebar-link[href="#${e.target.id}"]`);
+        if (m) m.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  entries.forEach(el => observer.observe(el));
+</script>
+
+<script>
+(async () => {
+  const { data: { session } } = await db.auth.getSession();
+  const el = document.getElementById('nav-auth');
+  if (session) {
+    const { data: p } = await db.from('profiles').select('username,display_name,avatar_color').eq('id', session.user.id).single();
+    const name = p?.display_name || p?.username || 'Crew';
+    const color = p?.avatar_color || '#3a78d4';
+    const initials = name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+    el.innerHTML = `
+      <a href="dashboard.html" class="topbar-link" style="margin-right:4px;">Dashboard</a>
+      <div class="user-menu" onclick="this.querySelector('.user-dropdown').classList.toggle('open')" style="cursor:pointer;">
+        <div class="user-avatar" style="background:${color};width:32px;height:32px;font-size:12px;">${initials}</div>
+        <div class="user-info"><span class="user-name" style="font-size:12px;">${name}</span></div>
+        <div class="user-dropdown" id="nav-drop">
+          <a href="dashboard.html" class="dropdown-item">🏠 Dashboard</a>
+          <div class="dropdown-divider"></div>
+          <button class="dropdown-item danger" onclick="db.auth.signOut().then(()=>location.href='auth.html')">→ Sign Out</button>
+        </div>
+      </div>`;
+    document.addEventListener('click', e => { if (!e.target.closest('.user-menu')) document.getElementById('nav-drop')?.classList.remove('open'); });
+  } else {
+    el.innerHTML = `<a href="auth.html" class="btn-primary" style="padding:8px 18px;font-size:12px;border-radius:6px;text-decoration:none;display:inline-block;">Sign In →</a>`;
+  }
+})();
+</script>
+</body>
+</html>

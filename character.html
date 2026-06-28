@@ -368,52 +368,49 @@ body.edit-mode .edit-hint  { display:block; }
 <script src="js/auth.js"></script>
 <script>
 const STAT_DEFS = [
-  { key:'strength',  label:'Strength',  color:'#c84040', abbr:'STR' },
-  { key:'agility',   label:'Agility',   color:'#40a040', abbr:'AGI' },
-  { key:'intellect', label:'Intellect', color:'#4080c8', abbr:'INT' },
-  { key:'tenacity',  label:'Tenacity',  color:'#c87820', abbr:'TEN' },
-  { key:'social',    label:'Social',    color:'#8040c8', abbr:'SOC' },
-  { key:'tech',      label:'Tech',      color:'#20a8a8', abbr:'TEC' },
+  { key:'fly',   label:'FLY',   color:'#40a0c8', abbr:'FLY' },
+  { key:'fix',   label:'FIX',   color:'#20a880', abbr:'FIX' },
+  { key:'fight', label:'FIGHT', color:'#c84040', abbr:'FGT' },
+  { key:'face',  label:'FACE',  color:'#8040c8', abbr:'FCE' },
 ];
 
 const SKILLS = [
-  { name:'Athletics',    stat:'strength',   key:'athletics'   },
-  { name:'Melee Combat', stat:'strength',   key:'melee'       },
-  { name:'Intimidate',   stat:'strength',   key:'intimidate'  },
-  { name:'Brawn',        stat:'strength',   key:'brawn'       },
-  { name:'Piloting',     stat:'agility',    key:'piloting'    },
-  { name:'Stealth',      stat:'agility',    key:'stealth'     },
-  { name:'Ranged Combat',stat:'agility',    key:'ranged'      },
-  { name:'Acrobatics',   stat:'agility',    key:'acrobatics'  },
-  { name:'Technology',   stat:'intellect',  key:'technology'  },
-  { name:'Science',      stat:'intellect',  key:'science'     },
-  { name:'Medicine',     stat:'intellect',  key:'medicine'    },
-  { name:'Lore',         stat:'intellect',  key:'lore'        },
-  { name:'Endurance',    stat:'tenacity',   key:'endurance'   },
-  { name:'Survival',     stat:'tenacity',   key:'survival'    },
-  { name:'Willpower',    stat:'tenacity',   key:'willpower'   },
-  { name:'Resistance',   stat:'tenacity',   key:'resistance'  },
-  { name:'Persuasion',   stat:'social',     key:'persuasion'  },
-  { name:'Deception',    stat:'social',     key:'deception'   },
-  { name:'Insight',      stat:'social',     key:'insight'     },
-  { name:'Performance',  stat:'social',     key:'performance' },
-  { name:'Hacking',      stat:'tech',       key:'hacking'     },
-  { name:'Engineering',  stat:'tech',       key:'engineering' },
-  { name:'Electronics',  stat:'tech',       key:'electronics' },
-  { name:'Mechanics',    stat:'tech',       key:'mechanics'   },
+  { name:'Piloting',      stat:'fly',   key:'piloting'    },
+  { name:'Evasion',       stat:'fly',   key:'evasion'     },
+  { name:'Stealth',       stat:'fly',   key:'stealth'     },
+  { name:'Athletics',     stat:'fly',   key:'athletics'   },
+  { name:'Acrobatics',    stat:'fly',   key:'acrobatics'  },
+  { name:'Engineering',   stat:'fix',   key:'engineering' },
+  { name:'Hacking',       stat:'fix',   key:'hacking'     },
+  { name:'Medicine',      stat:'fix',   key:'medicine'    },
+  { name:'Science',       stat:'fix',   key:'science'     },
+  { name:'Mechanics',     stat:'fix',   key:'mechanics'   },
+  { name:'Ranged Combat', stat:'fight', key:'ranged'      },
+  { name:'Melee Combat',  stat:'fight', key:'melee'       },
+  { name:'Intimidation',  stat:'fight', key:'intimidate'  },
+  { name:'Heavy Weapons', stat:'fight', key:'heavy'       },
+  { name:'Persuasion',    stat:'face',  key:'persuasion'  },
+  { name:'Deception',     stat:'face',  key:'deception'   },
+  { name:'Insight',       stat:'face',  key:'insight'     },
+  { name:'Trade',         stat:'face',  key:'trade'       },
+  { name:'Comms Warfare', stat:'face',  key:'comms'       },
 ];
 
 const SPECIES_REF = {
-  human:       { bonuses:['+1 to any two stats'], traits:['Adaptable','Resourceful','Resilient'], diet:'Omnivore' },
-  kragol:      { bonuses:['+3 STR','+1 TEN','−2 SOC'], traits:['Stone Skin (natural armor)','Mineral Senses','Lithivore'], diet:'Lithivore' },
-  skitterling: { bonuses:['+3 AGI','+2 TEC','−2 STR'], traits:['Hyper-Metabolism','Multi-Limbed','Can ingest anything'], diet:'Hyper-Omnivore' },
-  myxos:       { bonuses:['+2 TEC','+2 INT'], traits:['Gelatinous Form (squeeze through gaps)','Bio-Acid Digestion','Dissolvent'], diet:'Dissolvent' },
-  arboran:     { bonuses:['+2 INT','+2 TEN'], traits:['Photosynthetic (no food needed)','Bark Skin','Colour-Shifting Patterns'], diet:'Photosynthetic' },
-  kaelen:      { bonuses:['+2 SOC','+2 AGI','+1 TEN'], traits:['Mineral-Infused Skeleton','Horn-Crests (pressure sense)','Strict Herbivore'], diet:'Strict Herbivore' },
+  human:       { bonuses:['+1 FLY','+1 FACE'], traits:['Adaptable — reroll one failed check per session','Resourceful','Resilient'], diet:'Omnivore',       passive:'Once per session, reroll any failed d20 check.' },
+  kragol:      { bonuses:['+2 FIGHT','+1 FIX','−1 FLY','−2 FACE'], traits:['Stone Skin (DR 1 vs physical)','Mineral Senses','Eats raw ore & minerals'],  diet:'Lithivore',      passive:'Natural armor reduces physical damage received by 1.' },
+  skitterling: { bonuses:['+2 FLY','+1 FIX','−2 FIGHT','−1 FACE'], traits:['Hyper-Metabolism','Multi-Limbed (extra reach)','Can ingest anything organic'], diet:'Hyper-Omnivore', passive:'Can consume any organic matter as emergency rations.' },
+  myxos:       { bonuses:['+2 FIX','+1 FACE','−2 FIGHT','−1 FLY'], traits:['Shape Shift — squeeze through 6" openings','Bio-Acid Digestion','Absorbs hazardous waste'], diet:'Dissolvent', passive:'Body compresses to fit through gaps as small as 6 inches.' },
+  arboran:     { bonuses:['+2 FIGHT','+1 FIX','−2 FLY','−1 FACE'], traits:['Photosynthetic — no rations required','Bark Skin','Slow but resilient'], diet:'Photosynthetic',  passive:'Requires only a light source — no food rations needed.' },
 };
 
 const ROLE_ICONS = { pilot:'🚀', engineer:'⚙️', gunsmith:'🔧', face:'🗣️', medic:'💊', navigator:'🧭', science:'🔭', heavy:'🛡️' };
-const SPECIES_ICONS_MAP = { human:'🧑', kragol:'🪨', skitterling:'🐾', myxos:'🫧', arboran:'🌿', kaelen:'💠' };
+const SPECIES_ICONS_MAP = { human:'🧑', kragol:'🪨', skitterling:'🐾', myxos:'🫧', arboran:'🌿' };
+const SPECIES_IMGS = {
+  human:'assets/NN_Species_Human.png', kragol:'assets/NN_Species_Kragol.png',
+  skitterling:'assets/NN_Species_Skitterling.png', myxos:'assets/NN_Species_Myxos.png',
+  arboran:'assets/NN_Species_Arboran.png',
+};
 
 const params = new URLSearchParams(location.search);
 const charId = params.get('id');
@@ -458,7 +455,13 @@ function populateSidebar() {
   document.title = `${char.name} — Starbound Chronicles`;
   document.getElementById('bio-name').textContent   = char.name;
   document.getElementById('bio-sub').textContent    = `${cap(spec)} · ${char.rank || 'Ensign'}`;
-  document.getElementById('portrait-icon').textContent    = SPECIES_ICONS_MAP[spec] || '🧑';
+  const imgSrc = SPECIES_IMGS[spec];
+  const iconEl = document.getElementById('portrait-icon');
+  if (imgSrc) {
+    iconEl.innerHTML = `<img src="${imgSrc}" style="width:80px;height:80px;object-fit:contain;border-radius:10px;" alt="">`;
+  } else {
+    iconEl.textContent = SPECIES_ICONS_MAP[spec] || '🧑';
+  }
   document.getElementById('portrait-species').textContent = '';
   document.getElementById('char-portrait').style.background =
     `linear-gradient(135deg, ${speciesGrad(spec)})`;
@@ -513,8 +516,8 @@ function populateCombat() {
 
 function updateCombatStats() {
   const stats = char.stats || {};
-  const initiative = mod(stats.agility  ?? 10);
-  const maxHP      = 8 + mod(stats.tenacity ?? 10) + ((char.level||1) - 1) * (1 + mod(stats.tenacity ?? 10));
+  const initiative = mod(stats.fly   ?? 10);
+  const maxHP      = 8 + mod(stats.fight ?? 10) + ((char.level||1) - 1) * (1 + mod(stats.fight ?? 10));
   const armor      = char.armor || 10;
   const speed      = char.speed || 30;
 

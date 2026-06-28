@@ -126,24 +126,21 @@
       </div>
       <div class="form-group">
         <label class="form-label">Species</label>
-        <div class="species-picker" id="species-picker">
+        <div class="species-picker" id="species-picker" style="grid-template-columns:repeat(5,1fr);">
           <button class="species-opt active" data-species="human">
-            <span class="species-opt-icon">🧑</span>Human
+            <img src="assets/NN_Species_Human.png" class="species-opt-icon" style="width:44px;height:44px;object-fit:contain;border-radius:6px;" alt="">Human
           </button>
           <button class="species-opt" data-species="kragol">
-            <span class="species-opt-icon">🪨</span>Kragol
+            <img src="assets/NN_Species_Kragol.png" class="species-opt-icon" style="width:44px;height:44px;object-fit:contain;border-radius:6px;" alt="">Kragol
           </button>
           <button class="species-opt" data-species="skitterling">
-            <span class="species-opt-icon">🐾</span>Skitterling
+            <img src="assets/NN_Species_Skitterling.png" class="species-opt-icon" style="width:44px;height:44px;object-fit:contain;border-radius:6px;" alt="">Skitterling
           </button>
           <button class="species-opt" data-species="myxos">
-            <span class="species-opt-icon">🫧</span>Myxos
+            <img src="assets/NN_Species_Myxos.png" class="species-opt-icon" style="width:44px;height:44px;object-fit:contain;border-radius:6px;" alt="">Myxos
           </button>
           <button class="species-opt" data-species="arboran">
-            <span class="species-opt-icon">🌿</span>Arboran
-          </button>
-          <button class="species-opt" data-species="kaelen">
-            <span class="species-opt-icon">💠</span>Kaelen
+            <img src="assets/NN_Species_Arboran.png" class="species-opt-icon" style="width:44px;height:44px;object-fit:contain;border-radius:6px;" alt="">Arboran
           </button>
         </div>
       </div>
@@ -175,10 +172,14 @@
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Base Stats <span style="font-weight:400; letter-spacing:0; text-transform:none; color:var(--text-faint)">(1–20)</span></label>
-        <div style="display:flex; flex-direction:column; gap:10px;" id="stat-inputs">
-          <!-- Rendered by JS -->
-        </div>
+        <label class="form-label" style="display:flex;justify-content:space-between;align-items:center;">
+          Base Stats — Point Buy
+          <span style="font-weight:500; letter-spacing:0; text-transform:none; font-size:11px; color:var(--text-faint);">
+            Points left: <strong id="pb-remaining" style="color:var(--text);">27</strong> / 27
+          </span>
+        </label>
+        <div id="stat-inputs" style="display:flex; flex-direction:column; gap:8px;"></div>
+        <div id="species-bonus-line" style="font-size:11px; color:var(--text-faint); margin-top:6px; min-height:16px;"></div>
       </div>
       <div class="form-error" id="new-char-error"></div>
     </div>
@@ -287,13 +288,22 @@ let currentProfile = null;
 let selectedSpecies = 'human';
 
 const STATS = [
-  { key: 'strength',  label: 'Strength' },
-  { key: 'agility',   label: 'Agility' },
-  { key: 'intellect', label: 'Intellect' },
-  { key: 'tenacity',  label: 'Tenacity' },
-  { key: 'social',    label: 'Social' },
-  { key: 'tech',      label: 'Tech' },
+  { key:'fly',   label:'FLY',   desc:'Piloting · Evasion · Stealth',      color:'#40a0c8' },
+  { key:'fix',   label:'FIX',   desc:'Engineering · Hacking · Medicine',  color:'#20a880' },
+  { key:'fight', label:'FIGHT', desc:'Combat · Heavy Weapons · Intimidate',color:'#c84040' },
+  { key:'face',  label:'FACE',  desc:'Persuasion · Deception · Trade',    color:'#8040c8' },
 ];
+
+const SPECIES_BONUSES = {
+  human:       { fly:+1, fix: 0, fight: 0, face:+1 },
+  kragol:      { fly:-1, fix:+1, fight:+2, face:-2 },
+  skitterling: { fly:+2, fix:+1, fight:-2, face:-1 },
+  myxos:       { fly:-1, fix:+2, fight:-2, face:+1 },
+  arboran:     { fly:-2, fix:+1, fight:+2, face:-1 },
+};
+
+const PB_COST   = { 8:0, 9:1, 10:2, 11:3, 12:4, 13:5, 14:7, 15:9 };
+const PB_BUDGET = 27;
 
 // ── Init ────────────────────────────────────────────────────────
 (async () => {
@@ -314,23 +324,68 @@ const STATS = [
   await loadCampaigns();
 })();
 
-// ── Stat inputs ─────────────────────────────────────────────────
+// ── Point Buy ───────────────────────────────────────────────────
+function pbSpent() {
+  return STATS.reduce((sum, s) => {
+    const v = Math.min(15, Math.max(8, parseInt(document.getElementById('stat-' + s.key)?.value) || 8));
+    return sum + (PB_COST[v] ?? 0);
+  }, 0);
+}
+
+function updatePointBuy() {
+  const rem = PB_BUDGET - pbSpent();
+  const remEl = document.getElementById('pb-remaining');
+  if (remEl) {
+    remEl.textContent = rem;
+    remEl.style.color = rem < 0 ? '#ff8888' : rem === 0 ? '#4acc7a' : 'var(--text)';
+  }
+  STATS.forEach(s => {
+    const base  = parseInt(document.getElementById('stat-' + s.key)?.value) || 8;
+    const bonus = (SPECIES_BONUSES[selectedSpecies] || {})[s.key] || 0;
+    const final = base + bonus;
+    const el    = document.getElementById('stat-final-' + s.key);
+    if (el) {
+      el.textContent = bonus === 0 ? `= ${final}` : bonus > 0 ? `= ${final} (+${bonus})` : `= ${final} (${bonus})`;
+      el.style.color = bonus > 0 ? '#4acc7a' : bonus < 0 ? '#ff8888' : 'var(--text-faint)';
+    }
+  });
+  const bonusLine = document.getElementById('species-bonus-line');
+  if (bonusLine) {
+    const b = SPECIES_BONUSES[selectedSpecies] || {};
+    const parts = STATS.filter(s => b[s.key] !== 0)
+      .map(s => `${b[s.key] > 0 ? '+' : ''}${b[s.key]} ${s.label}`);
+    bonusLine.textContent = parts.length
+      ? `${selectedSpecies[0].toUpperCase() + selectedSpecies.slice(1)} racial: ${parts.join('  ·  ')}`
+      : `${selectedSpecies[0].toUpperCase() + selectedSpecies.slice(1)}: no stat adjustments`;
+  }
+}
+
+function adjustStat(key, delta) {
+  const input   = document.getElementById('stat-' + key);
+  const current = parseInt(input.value) || 8;
+  const next    = Math.min(15, Math.max(8, current + delta));
+  const newSpent = pbSpent() - (PB_COST[current] ?? 0) + (PB_COST[next] ?? 0);
+  if (newSpent > PB_BUDGET && delta > 0) return;
+  input.value = next;
+  updatePointBuy();
+}
+
 function buildStatInputs() {
   const container = document.getElementById('stat-inputs');
   container.innerHTML = STATS.map(s => `
-    <div class="stat-row">
-      <label>${s.label}</label>
-      <div class="stat-bar-wrap">
-        <div class="stat-bar" id="bar-${s.key}" style="width:50%"></div>
-      </div>
-      <input type="number" id="stat-${s.key}" value="10" min="1" max="20"
-             oninput="updateBar('${s.key}', this.value)">
+    <div style="display:grid; grid-template-columns:56px 1fr auto auto auto auto; align-items:center; gap:8px;">
+      <label style="font-size:12px; font-weight:800; color:${s.color}; letter-spacing:.04em;">${s.label}</label>
+      <span style="font-size:10px; color:var(--text-faint); overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">${s.desc}</span>
+      <button type="button" onclick="adjustStat('${s.key}',-1)"
+        style="background:var(--surface3);border:1px solid var(--border);border-radius:5px;color:var(--text);width:26px;height:26px;cursor:pointer;font-size:14px;font-family:inherit;line-height:1;">−</button>
+      <input type="number" id="stat-${s.key}" value="8" min="8" max="15" readonly
+        style="width:40px;text-align:center;background:var(--surface3);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:4px;font-size:14px;font-weight:700;font-family:inherit;">
+      <button type="button" onclick="adjustStat('${s.key}',1)"
+        style="background:var(--surface3);border:1px solid var(--border);border-radius:5px;color:var(--text);width:26px;height:26px;cursor:pointer;font-size:14px;font-family:inherit;line-height:1;">+</button>
+      <span id="stat-final-${s.key}" style="font-size:11px;width:70px;text-align:right;color:var(--text-faint);"></span>
     </div>
   `).join('');
-}
-function updateBar(key, val) {
-  const pct = Math.min(20, Math.max(1, +val)) / 20 * 100;
-  document.getElementById('bar-' + key).style.width = pct + '%';
+  updatePointBuy();
 }
 
 // ── Load Characters ─────────────────────────────────────────────
@@ -366,9 +421,10 @@ async function loadCharacters() {
         <span>${c.role ? (ROLE_ICONS[c.role] || '') + ' ' + cap(c.role) : 'No role set'}</span>
       </div>
       <div class="char-card-chips">
-        <span class="chip">STR ${c.stats?.strength ?? 10}</span>
-        <span class="chip">AGI ${c.stats?.agility ?? 10}</span>
-        <span class="chip">INT ${c.stats?.intellect ?? 10}</span>
+        <span class="chip">FLY ${c.stats?.fly ?? 8}</span>
+        <span class="chip">FIX ${c.stats?.fix ?? 8}</span>
+        <span class="chip">FGT ${c.stats?.fight ?? 8}</span>
+        <span class="chip">FCE ${c.stats?.face ?? 8}</span>
       </div>
     </div>
   `).join('') + newCharCard();
@@ -459,6 +515,7 @@ document.getElementById('species-picker').addEventListener('click', e => {
   document.querySelectorAll('.species-opt').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   selectedSpecies = btn.dataset.species;
+  updatePointBuy();
 });
 
 // ── Create Character ────────────────────────────────────────────
@@ -471,8 +528,13 @@ document.getElementById('create-char-btn').addEventListener('click', async () =>
   showError('new-char-error', '');
   if (!name) return showError('new-char-error', 'Please give your character a name.');
 
+  if (pbSpent() > PB_BUDGET) return showError('new-char-error', 'You have spent too many point-buy points.');
+  const bonuses = SPECIES_BONUSES[selectedSpecies] || {};
   const stats = {};
-  STATS.forEach(s => { stats[s.key] = parseInt(document.getElementById('stat-' + s.key).value) || 10; });
+  STATS.forEach(s => {
+    const base = parseInt(document.getElementById('stat-' + s.key).value) || 8;
+    stats[s.key] = base + (bonuses[s.key] || 0);
+  });
 
   setLoading(btn, true);
   const { error } = await db.from('characters').insert({
