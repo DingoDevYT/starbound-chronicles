@@ -145,6 +145,9 @@ DROP POLICY IF EXISTS "Campaigns viewable by members"                  ON campai
 DROP POLICY IF EXISTS "Log visible to campaign members"                ON ship_log;
 DROP POLICY IF EXISTS "Members create log entries"                     ON ship_log;
 DROP POLICY IF EXISTS "Inventory visible to owner and campaign mates"  ON character_inventory;
+DROP POLICY IF EXISTS "Owners manage inventory"                        ON character_inventory;
+DROP POLICY IF EXISTS "Owners update inventory"                        ON character_inventory;
+DROP POLICY IF EXISTS "Owners delete inventory"                        ON character_inventory;
 DROP POLICY IF EXISTS "Tokens visible to campaign members"             ON ship_tokens;
 DROP POLICY IF EXISTS "Members place tokens"                           ON ship_tokens;
 DROP POLICY IF EXISTS "Members move tokens"                            ON ship_tokens;
@@ -152,6 +155,7 @@ DROP POLICY IF EXISTS "Members remove tokens"                          ON ship_t
 DROP POLICY IF EXISTS "Quests visible to members"                      ON campaign_quests;
 DROP POLICY IF EXISTS "Members create quests"                          ON campaign_quests;
 DROP POLICY IF EXISTS "Members update quests"                          ON campaign_quests;
+DROP POLICY IF EXISTS "Owners delete quests"                           ON campaign_quests;
 DROP POLICY IF EXISTS "NPCs visible to members"                        ON campaign_npcs;
 DROP POLICY IF EXISTS "GM manages NPCs"                                ON campaign_npcs;
 DROP POLICY IF EXISTS "Initiative visible to members"                  ON initiative_tracker;
