@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Starbound Chronicles</title>
+<link rel="stylesheet" href="css/wiki.css">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<header class="app-topbar">
+  <a class="topbar-brand" href="index.html">
+    <div class="brand-icon">✦</div>
+    <div class="brand-text">
+      <div class="brand-name">Starbound Chronicles</div>
+      <div class="brand-tagline">Tabletop Wiki</div>
+    </div>
+  </a>
+  <nav class="topbar-nav">
+    <a class="topbar-link active" href="dashboard.html">Dashboard</a>
+    <a class="topbar-link" href="species.html">Wiki</a>
+  </nav>
+  <div style="flex:1"></div>
+  <div class="user-menu" id="user-menu" onclick="toggleDropdown()">
+    <div class="user-avatar" id="user-avatar" style="background:#3a78d4">?</div>
+    <div class="user-info">
+      <span class="user-name" id="user-name">Loading…</span>
+      <span class="user-role">Crew Member</span>
+    </div>
+    <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style="margin-left:4px;opacity:.5">
+      <path d="M1 1l4 4 4-4" stroke="#6a8aaa" stroke-width="1.5"/>
+    </svg>
+    <div class="user-dropdown" id="user-dropdown">
+      <button class="dropdown-item">⚙️ Account Settings</button>
+      <div class="dropdown-divider"></div>
+      <button class="dropdown-item danger" onclick="Auth.signOut()">→ Sign Out</button>
+    </div>
+  </div>
+</header>
+
+<!-- LAYOUT -->
+<div class="dash-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="dash-sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-heading">My Stuff</div>
+      <a class="sidebar-link active" href="dashboard.html">
+        <div class="sidebar-dot" style="background:rgba(58,120,212,0.3);">🏠</div> Dashboard
+      </a>
+      <a class="sidebar-link" href="#" onclick="openModal('modal-new-char'); return false;">
+        <div class="sidebar-dot" style="background:rgba(58,120,212,0.3);">🧬</div> New Character
+      </a>
+      <a class="sidebar-link" href="#" onclick="openModal('modal-new-campaign'); return false;">
+        <div class="sidebar-dot" style="background:rgba(100,58,212,0.3);">🚀</div> New Campaign
+      </a>
+      <a class="sidebar-link" href="#" onclick="openModal('modal-join'); return false;">
+        <div class="sidebar-dot" style="background:rgba(58,120,212,0.3);">🔑</div> Join Campaign
+      </a>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Wiki</div>
+      <a class="sidebar-link" href="species.html">
+        <div class="sidebar-dot" style="background:rgba(40,120,80,0.3);">🧬</div> Species
+      </a>
+      <a class="sidebar-link" style="opacity:.4; pointer-events:none;">
+        <div class="sidebar-dot">⚔️</div> Roles
+      </a>
+      <a class="sidebar-link" style="opacity:.4; pointer-events:none;">
+        <div class="sidebar-dot">🚀</div> Ships
+      </a>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="dash-main">
+
+    <!-- Welcome -->
+    <div class="dash-welcome">
+      <h1>Welcome back, <span id="welcome-name">Commander</span></h1>
+      <p>Manage your characters, campaigns, and starships.</p>
+    </div>
+
+    <!-- CHARACTERS -->
+    <section class="dash-section">
+      <div class="dash-section-header">
+        <span class="dash-section-title">Your Characters</span>
+        <span class="dash-section-count" id="char-count">—</span>
+      </div>
+      <div class="card-grid" id="char-grid">
+        <div style="color:var(--text-faint); font-size:13px; padding:12px;">Loading…</div>
+      </div>
+    </section>
+
+    <!-- CAMPAIGNS -->
+    <section class="dash-section">
+      <div class="dash-section-header">
+        <span class="dash-section-title">Your Campaigns</span>
+        <span class="dash-section-count" id="campaign-count">—</span>
+      </div>
+      <div class="card-grid" id="campaign-grid">
+        <div style="color:var(--text-faint); font-size:13px; padding:12px;">Loading…</div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MODAL: NEW CHARACTER
+═══════════════════════════════════════════ -->
+<div class="modal-backdrop" id="modal-new-char">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Create Character</span>
+      <button class="modal-close" onclick="closeModal('modal-new-char')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Character Name</label>
+        <input class="form-input" id="new-char-name" placeholder="e.g. Zara Voss" maxlength="40">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Species</label>
+        <div class="species-picker" id="species-picker">
+          <button class="species-opt active" data-species="human">
+            <span class="species-opt-icon">🧑</span>Human
+          </button>
+          <button class="species-opt" data-species="kragol">
+            <span class="species-opt-icon">🪨</span>Kragol
+          </button>
+          <button class="species-opt" data-species="skitterling">
+            <span class="species-opt-icon">🐾</span>Skitterling
+          </button>
+          <button class="species-opt" data-species="myxos">
+            <span class="species-opt-icon">🫧</span>Myxos
+          </button>
+          <button class="species-opt" data-species="arboran">
+            <span class="species-opt-icon">🌿</span>Arboran
+          </button>
+          <button class="species-opt" data-species="kaelen">
+            <span class="species-opt-icon">💠</span>Kaelen
+          </button>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Crew Role</label>
+          <select class="form-select" id="new-char-role">
+            <option value="">— Choose Role —</option>
+            <option value="pilot">🚀 Pilot</option>
+            <option value="engineer">⚙️ Engineer</option>
+            <option value="gunsmith">🔧 Gunsmith</option>
+            <option value="face">🗣️ Face</option>
+            <option value="medic">💊 Medic</option>
+            <option value="navigator">🧭 Navigator</option>
+            <option value="science">🔭 Science Officer</option>
+            <option value="heavy">🛡️ Heavy</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Rank</label>
+          <select class="form-select" id="new-char-rank">
+            <option value="Ensign">Ensign</option>
+            <option value="Lieutenant">Lieutenant</option>
+            <option value="Commander" selected>Commander</option>
+            <option value="Captain">Captain</option>
+            <option value="Admiral">Admiral</option>
+            <option value="Civilian">Civilian</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Base Stats <span style="font-weight:400; letter-spacing:0; text-transform:none; color:var(--text-faint)">(1–20)</span></label>
+        <div style="display:flex; flex-direction:column; gap:10px;" id="stat-inputs">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+      <div class="form-error" id="new-char-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('modal-new-char')">Cancel</button>
+      <button class="btn-primary" id="create-char-btn" style="width:auto; padding:10px 24px;">Create Character</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MODAL: NEW CAMPAIGN
+═══════════════════════════════════════════ -->
+<div class="modal-backdrop" id="modal-new-campaign">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Create Campaign</span>
+      <button class="modal-close" onclick="closeModal('modal-new-campaign')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Campaign Name</label>
+        <input class="form-input" id="new-camp-name" placeholder="e.g. The Keelhaul Run" maxlength="60">
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Ship Name</label>
+          <input class="form-input" id="new-camp-ship" placeholder="e.g. ISV Relentless" maxlength="60">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ship Class</label>
+          <select class="form-select" id="new-camp-class">
+            <option value="Scout">Scout</option>
+            <option value="Frigate" selected>Frigate</option>
+            <option value="Cruiser">Cruiser</option>
+            <option value="Destroyer">Destroyer</option>
+            <option value="Carrier">Carrier</option>
+            <option value="Dreadnought">Dreadnought</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-faint)">(optional)</span></label>
+        <textarea class="form-textarea" id="new-camp-desc" placeholder="Brief description of the campaign premise…"></textarea>
+      </div>
+      <div class="form-error" id="new-camp-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('modal-new-campaign')">Cancel</button>
+      <button class="btn-primary" id="create-camp-btn" style="width:auto; padding:10px 24px;">Create Campaign</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MODAL: JOIN CAMPAIGN
+═══════════════════════════════════════════ -->
+<div class="modal-backdrop" id="modal-join">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <span class="modal-title">Join a Campaign</span>
+      <button class="modal-close" onclick="closeModal('modal-join')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px; color:var(--text-dim);">Ask your Game Master for the 6-character invite code, then enter it below.</p>
+      <div class="form-group">
+        <label class="form-label">Invite Code</label>
+        <input class="form-input" id="join-code" placeholder="e.g. AB12CD" maxlength="6"
+               style="text-transform:uppercase; letter-spacing:0.2em; font-size:20px; text-align:center;">
+      </div>
+      <div class="form-error"   id="join-error"></div>
+      <div class="form-success" id="join-success"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('modal-join')">Cancel</button>
+      <button class="btn-primary" id="join-btn" style="width:auto; padding:10px 24px;">Join</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MODAL: CAMPAIGN CREATED (shows invite code)
+═══════════════════════════════════════════ -->
+<div class="modal-backdrop" id="modal-camp-created">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <span class="modal-title">Campaign Created! 🎉</span>
+      <button class="modal-close" onclick="closeModal('modal-camp-created')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px; color:var(--text-dim);">Share this invite code with your crew so they can join:</p>
+      <div class="invite-code-display" id="created-invite-code" onclick="copyInviteCode()">——————</div>
+      <p class="invite-hint">Click to copy · Code never expires</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="closeModal('modal-camp-created')" style="width:auto; padding:10px 24px;">Done</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+let currentUser = null;
+let currentProfile = null;
+let selectedSpecies = 'human';
+
+const STATS = [
+  { key: 'strength',  label: 'Strength' },
+  { key: 'agility',   label: 'Agility' },
+  { key: 'intellect', label: 'Intellect' },
+  { key: 'tenacity',  label: 'Tenacity' },
+  { key: 'social',    label: 'Social' },
+  { key: 'tech',      label: 'Tech' },
+];
+
+// ── Init ────────────────────────────────────────────────────────
+(async () => {
+  const session = await Auth.requireAuth();
+  if (!session) return;
+
+  currentUser    = session.user;
+  currentProfile = await Auth.getProfile(currentUser.id);
+
+  const name = currentProfile?.display_name || currentProfile?.username || 'Commander';
+  document.getElementById('welcome-name').textContent = name;
+  document.getElementById('user-name').textContent    = name;
+  document.getElementById('user-avatar').textContent  = getInitials(name);
+  document.getElementById('user-avatar').style.background = currentProfile?.avatar_color || '#3a78d4';
+
+  buildStatInputs();
+  await loadCharacters();
+  await loadCampaigns();
+})();
+
+// ── Stat inputs ─────────────────────────────────────────────────
+function buildStatInputs() {
+  const container = document.getElementById('stat-inputs');
+  container.innerHTML = STATS.map(s => `
+    <div class="stat-row">
+      <label>${s.label}</label>
+      <div class="stat-bar-wrap">
+        <div class="stat-bar" id="bar-${s.key}" style="width:50%"></div>
+      </div>
+      <input type="number" id="stat-${s.key}" value="10" min="1" max="20"
+             oninput="updateBar('${s.key}', this.value)">
+    </div>
+  `).join('');
+}
+function updateBar(key, val) {
+  const pct = Math.min(20, Math.max(1, +val)) / 20 * 100;
+  document.getElementById('bar-' + key).style.width = pct + '%';
+}
+
+// ── Load Characters ─────────────────────────────────────────────
+async function loadCharacters() {
+  const { data: chars, error } = await db
+    .from('characters')
+    .select('*')
+    .eq('user_id', currentUser.id)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false });
+
+  const grid = document.getElementById('char-grid');
+  document.getElementById('char-count').textContent = chars?.length ?? 0;
+
+  if (error || !chars?.length) {
+    grid.innerHTML = `
+      <div class="empty-state" style="grid-column:1/-1;">
+        <div class="empty-icon">🧬</div>
+        <div class="empty-title">No characters yet</div>
+        <p>Create your first crew member to get started.</p>
+      </div>
+      ${newCharCard()}
+    `;
+    return;
+  }
+
+  grid.innerHTML = chars.map(c => `
+    <div class="char-card" style="--card-top:${speciesColor(c.species)};cursor:pointer;" onclick="window.location.href='character.html?id=${c.id}'">
+      <div class="char-card-icon">${SPECIES_ICONS[c.species] || '🧑'}</div>
+      <div class="char-card-name">${esc(c.name)}</div>
+      <div class="char-card-meta">
+        <span>${c.rank || ''} · ${SPECIES_LABELS[c.species] || c.species}</span>
+        <span>${c.role ? (ROLE_ICONS[c.role] || '') + ' ' + cap(c.role) : 'No role set'}</span>
+      </div>
+      <div class="char-card-chips">
+        <span class="chip">STR ${c.stats?.strength ?? 10}</span>
+        <span class="chip">AGI ${c.stats?.agility ?? 10}</span>
+        <span class="chip">INT ${c.stats?.intellect ?? 10}</span>
+      </div>
+    </div>
+  `).join('') + newCharCard();
+}
+
+function newCharCard() {
+  return `
+    <button class="card-new" onclick="openModal('modal-new-char')">
+      <div class="card-new-icon">＋</div>
+      New Character
+    </button>`;
+}
+
+// ── Load Campaigns ──────────────────────────────────────────────
+async function loadCampaigns() {
+  // Get campaigns user is a member of OR owns
+  const { data: memberships } = await db
+    .from('campaign_members')
+    .select('campaign_id, member_role')
+    .eq('user_id', currentUser.id);
+
+  const memberIds = memberships?.map(m => m.campaign_id) || [];
+
+  const { data: owned } = await db
+    .from('campaigns')
+    .select('*')
+    .eq('owner_id', currentUser.id)
+    .eq('is_active', true);
+
+  const { data: joined } = memberIds.length ? await db
+    .from('campaigns')
+    .select('*')
+    .in('id', memberIds)
+    .neq('owner_id', currentUser.id)
+    .eq('is_active', true)
+    : { data: [] };
+
+  const all = [...(owned || []), ...(joined || [])];
+  const memberMap = Object.fromEntries((memberships || []).map(m => [m.campaign_id, m.member_role]));
+
+  const grid = document.getElementById('campaign-grid');
+  document.getElementById('campaign-count').textContent = all.length;
+
+  if (!all.length) {
+    grid.innerHTML = `
+      <div class="empty-state" style="grid-column:1/-1;">
+        <div class="empty-icon">🚀</div>
+        <div class="empty-title">No campaigns yet</div>
+        <p>Create a campaign to start your adventure, or join one with an invite code.</p>
+      </div>
+      ${newCampCard()}
+    `;
+    return;
+  }
+
+  grid.innerHTML = all.map(c => {
+    const isGM = c.owner_id === currentUser.id;
+    return `
+      <div class="campaign-card" onclick="openCampaign('${c.id}')">
+        <div class="campaign-card-header">
+          <div class="campaign-icon">🚀</div>
+          <div>
+            <div class="campaign-name">${esc(c.name)}</div>
+            <div class="campaign-ship">${esc(c.ship_name || 'Unnamed Vessel')} · ${esc(c.ship_class)}</div>
+          </div>
+        </div>
+        <div class="campaign-meta">
+          <span>Invite: <strong style="color:var(--text); letter-spacing:.08em">${c.invite_code}</strong></span>
+        </div>
+        ${isGM ? '<div class="gm-badge">GM</div>' : ''}
+      </div>
+    `;
+  }).join('') + newCampCard();
+}
+
+function newCampCard() {
+  return `
+    <button class="card-new" onclick="openModal('modal-new-campaign')">
+      <div class="card-new-icon">＋</div>
+      New Campaign
+    </button>`;
+}
+
+// ── Species picker ──────────────────────────────────────────────
+document.getElementById('species-picker').addEventListener('click', e => {
+  const btn = e.target.closest('.species-opt');
+  if (!btn) return;
+  document.querySelectorAll('.species-opt').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedSpecies = btn.dataset.species;
+});
+
+// ── Create Character ────────────────────────────────────────────
+document.getElementById('create-char-btn').addEventListener('click', async () => {
+  const name = document.getElementById('new-char-name').value.trim();
+  const role = document.getElementById('new-char-role').value;
+  const rank = document.getElementById('new-char-rank').value;
+  const btn  = document.getElementById('create-char-btn');
+
+  showError('new-char-error', '');
+  if (!name) return showError('new-char-error', 'Please give your character a name.');
+
+  const stats = {};
+  STATS.forEach(s => { stats[s.key] = parseInt(document.getElementById('stat-' + s.key).value) || 10; });
+
+  setLoading(btn, true);
+  const { error } = await db.from('characters').insert({
+    user_id: currentUser.id,
+    name, species: selectedSpecies, role: role || null, rank,
+    stats,
+  });
+  setLoading(btn, false);
+
+  if (error) return showError('new-char-error', error.message);
+
+  closeModal('modal-new-char');
+  document.getElementById('new-char-name').value = '';
+  await loadCharacters();
+});
+
+// ── Create Campaign ─────────────────────────────────────────────
+document.getElementById('create-camp-btn').addEventListener('click', async () => {
+  const name      = document.getElementById('new-camp-name').value.trim();
+  const ship_name = document.getElementById('new-camp-ship').value.trim();
+  const ship_class= document.getElementById('new-camp-class').value;
+  const desc      = document.getElementById('new-camp-desc').value.trim();
+  const btn       = document.getElementById('create-camp-btn');
+
+  showError('new-camp-error', '');
+  if (!name) return showError('new-camp-error', 'Please enter a campaign name.');
+
+  setLoading(btn, true);
+  const { data, error } = await db.from('campaigns').insert({
+    owner_id: currentUser.id,
+    name, ship_name, ship_class, description: desc,
+  }).select().single();
+  setLoading(btn, false);
+
+  if (error) return showError('new-camp-error', error.message);
+
+  // Add owner as GM member
+  await db.from('campaign_members').insert({
+    campaign_id: data.id, user_id: currentUser.id, member_role: 'gm'
+  });
+
+  closeModal('modal-new-campaign');
+  document.getElementById('new-camp-name').value = '';
+  document.getElementById('new-camp-ship').value = '';
+  document.getElementById('new-camp-desc').value = '';
+
+  // Show invite code
+  document.getElementById('created-invite-code').textContent = data.invite_code;
+  openModal('modal-camp-created');
+  await loadCampaigns();
+});
+
+// ── Join Campaign ───────────────────────────────────────────────
+document.getElementById('join-btn').addEventListener('click', async () => {
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  const btn  = document.getElementById('join-btn');
+
+  showError('join-error', '');
+  document.getElementById('join-success').style.display = 'none';
+  if (code.length !== 6) return showError('join-error', 'Invite codes are 6 characters.');
+
+  setLoading(btn, true);
+  const { data: campaign, error: findErr } = await db
+    .from('campaigns').select('id, name').eq('invite_code', code).single();
+
+  if (findErr || !campaign) {
+    setLoading(btn, false);
+    return showError('join-error', 'No campaign found with that code.');
+  }
+
+  const { error: joinErr } = await db.from('campaign_members').insert({
+    campaign_id: campaign.id, user_id: currentUser.id, member_role: 'player'
+  });
+  setLoading(btn, false);
+
+  if (joinErr?.code === '23505') return showError('join-error', 'You\'re already in this campaign.');
+  if (joinErr) return showError('join-error', joinErr.message);
+
+  const el = document.getElementById('join-success');
+  el.textContent = `Joined "${campaign.name}"! Welcome aboard.`;
+  el.style.display = 'block';
+  document.getElementById('join-code').value = '';
+  await loadCampaigns();
+  setTimeout(() => closeModal('modal-join'), 1500);
+});
+
+// ── Helpers ─────────────────────────────────────────────────────
+function openCampaign(id) {
+  window.location.href = `campaign.html?id=${id}`;
+}
+
+function copyInviteCode() {
+  const code = document.getElementById('created-invite-code').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    document.querySelector('.invite-hint').textContent = 'Copied!';
+    setTimeout(() => document.querySelector('.invite-hint').textContent = 'Click to copy · Code never expires', 2000);
+  });
+}
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Close on backdrop click
+document.querySelectorAll('.modal-backdrop').forEach(bd => {
+  bd.addEventListener('click', e => { if (e.target === bd) bd.classList.remove('open'); });
+});
+
+function toggleDropdown() {
+  document.getElementById('user-dropdown').classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#user-menu')) {
+    document.getElementById('user-dropdown')?.classList.remove('open');
+  }
+});
+
+function speciesColor(s) {
+  const map = { human:'#2a5080', kragol:'#7a4a1a', skitterling:'#aa5010',
+                myxos:'#6a20b0', arboran:'#1a7040', kaelen:'#10607a' };
+  return map[s] || '#3a78d4';
+}
+function esc(s) { return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function cap(s) { return s ? s[0].toUpperCase() + s.slice(1) : ''; }
+</script>
+</body>
+</html>

@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sci-Fi Character Creator</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --skin: #c8a882;
+  --skin-dark: #a07850;
+  --skin-light: #dfc09a;
+  --hair: #5c3317;
+  --eye: #2e6dba;
+  --outfit: #1a3a6b;
+  --outfit-light: #2a5499;
+  --outfit-trim: #0f2340;
+  --badge: #d4af37;
+  --bg-card: #1a1a2e;
+}
+
+body {
+  background: #080c14;
+  color: #c8d4e8;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  background: linear-gradient(90deg, #0d1520, #0a1f3a, #0d1520);
+  border-bottom: 1px solid #1a3060;
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  color: #7aaeff;
+  text-transform: uppercase;
+}
+header span {
+  font-size: 12px;
+  color: #4a6080;
+  letter-spacing: 0.1em;
+}
+.header-dot { width: 6px; height: 6px; border-radius: 50%; background: #2a6fff; box-shadow: 0 0 8px #2a6fff; }
+
+.app {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ===== PORTRAIT AREA ===== */
+.portrait-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, #0d1a2e 0%, #080c14 70%);
+  padding: 40px;
+  gap: 20px;
+}
+
+.character-card {
+  width: 280px;
+  height: 360px;
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px #1e3a6a,
+    0 0 30px rgba(40,100,220,0.15),
+    0 20px 60px rgba(0,0,0,0.6);
+}
+
+.card-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, #141e30 0%, #1c2a44 40%, #111826 100%);
+}
+.card-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 110%, rgba(30,80,160,0.25) 0%, transparent 65%),
+    repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.015) 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.015) 40px);
+}
+
+.card-frame {
+  position: absolute;
+  inset: 8px;
+  border: 1px solid rgba(80,130,220,0.2);
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 10;
+}
+.card-frame::before {
+  content: '';
+  position: absolute;
+  top: -1px; left: 20px; right: 20px; height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(80,140,255,0.6), transparent);
+}
+
+/* ===== CSS CHARACTER ===== */
+.character-scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+/* BODY / UNIFORM */
+.char-body {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 260px;
+  height: 185px;
+}
+
+.char-shoulders {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 185px;
+  background: var(--outfit);
+  clip-path: polygon(10% 100%, 0% 55%, 8% 38%, 28% 18%, 72% 18%, 92% 38%, 100% 55%, 90% 100%);
+  transition: background 0.3s;
+}
+.char-shoulders::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--outfit-light);
+  clip-path: polygon(10% 100%, 0% 55%, 8% 38%, 28% 18%, 72% 18%, 92% 38%, 100% 55%, 90% 100%);
+  mask-image: linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 50%);
+  -webkit-mask-image: linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 50%);
+}
+
+/* Shoulder panels */
+.char-shoulder-panel {
+  position: absolute;
+  width: 60px; height: 20px;
+  background: var(--outfit-trim);
+  border-radius: 4px;
+  top: 55px;
+  transition: background 0.3s;
+}
+.char-shoulder-panel.left { left: 22px; transform: rotate(-5deg); }
+.char-shoulder-panel.right { right: 22px; transform: rotate(5deg); }
+
+/* Collar */
+.char-collar {
+  position: absolute;
+  top: 17px;
+  left: 50%; transform: translateX(-50%);
+  width: 70px; height: 28px;
+  overflow: hidden;
+}
+.char-collar::before,
+.char-collar::after {
+  content: '';
+  position: absolute;
+  width: 40px; height: 40px;
+  background: var(--outfit-trim);
+  top: 0;
+  transition: background 0.3s;
+}
+.char-collar::before { left: -5px; clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.char-collar::after  { right: -5px; clip-path: polygon(0 0, 100% 0, 50% 100%); }
+
+/* Badge */
+.char-badge {
+  position: absolute;
+  width: 22px; height: 22px;
+  left: 50%; transform: translateX(-50%) translateX(22px);
+  top: 50px;
+  background: var(--badge);
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  filter: drop-shadow(0 0 4px rgba(212,175,55,0.6));
+  transition: opacity 0.3s;
+}
+
+/* NECK */
+.char-neck {
+  position: absolute;
+  bottom: 176px;
+  left: 50%; transform: translateX(-50%);
+  width: 42px; height: 36px;
+  background: var(--skin);
+  border-radius: 4px 4px 14px 14px;
+  transition: background 0.3s;
+}
+.char-neck::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 8px; right: 8px; height: 60%;
+  background: var(--skin-dark);
+  border-radius: 0 0 10px 10px;
+  opacity: 0.4;
+}
+
+/* HEAD */
+.char-head {
+  position: absolute;
+  width: 124px; height: 138px;
+  background: var(--skin);
+  bottom: 196px;
+  left: 50%; transform: translateX(-50%);
+  border-radius: 50% 50% 44% 44% / 54% 54% 46% 46%;
+  transition: background 0.3s;
+  overflow: visible;
+}
+
+/* Head shadow / shading */
+.char-head::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at 65% 40%, transparent 50%, rgba(0,0,0,0.18) 100%);
+}
+
+/* EARS */
+.char-ear {
+  position: absolute;
+  width: 16px; height: 26px;
+  background: var(--skin);
+  border-radius: 50%;
+  top: 46px;
+  transition: background 0.3s, clip-path 0.3s;
+}
+.char-ear.left  { left: -8px; }
+.char-ear.right { right: -8px; }
+.char-ear::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  background: var(--skin-dark);
+  border-radius: 50%;
+  opacity: 0.3;
+}
+
+/* Pointed ears (Vulcan / alien) */
+.species-vulcan .char-ear,
+.species-alien .char-ear {
+  clip-path: polygon(50% 0%, 100% 60%, 90% 100%, 10% 100%, 0% 60%);
+  border-radius: 0;
+  height: 32px;
+}
+
+/* Andorian antennae */
+.char-antenna {
+  position: absolute;
+  display: none;
+  width: 6px; height: 40px;
+  background: var(--skin);
+  border-radius: 3px 3px 0 0;
+  top: -36px;
+}
+.char-antenna::after {
+  content: '';
+  position: absolute;
+  top: -8px; left: -5px;
+  width: 16px; height: 12px;
+  background: inherit;
+  border-radius: 50%;
+}
+.char-antenna.left { left: 22px; transform: rotate(-12deg); }
+.char-antenna.right { right: 22px; transform: rotate(12deg); }
+.species-andorian .char-antenna { display: block; }
+
+/* Alien forehead ridge */
+.char-ridge {
+  position: absolute;
+  display: none;
+  top: 0; left: 15px; right: 15px;
+  height: 30px;
+  background: var(--skin-dark);
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  opacity: 0.7;
+}
+.species-alien .char-ridge { display: block; }
+
+/* Synthetic face lines */
+.char-syn-lines {
+  position: absolute;
+  display: none;
+  inset: 0;
+}
+.char-syn-lines::before {
+  content: '';
+  position: absolute;
+  top: 20px; left: 50%; transform: translateX(-50%);
+  width: 2px; height: 80px;
+  background: rgba(80,180,255,0.4);
+  box-shadow: -30px 0 0 rgba(80,180,255,0.3), 30px 0 0 rgba(80,180,255,0.3);
+}
+.species-synthetic .char-syn-lines { display: block; }
+
+/* FACE FEATURES */
+.char-face {
+  position: absolute;
+  inset: 0;
+}
+
+/* Eyebrows */
+.char-brow {
+  position: absolute;
+  width: 28px; height: 5px;
+  background: var(--hair);
+  border-radius: 3px;
+  top: 42px;
+  transition: background 0.3s, transform 0.3s;
+}
+.char-brow.left  { left: 18px; transform: rotate(-4deg); }
+.char-brow.right { right: 18px; transform: rotate(4deg); }
+
+/* Stern brows */
+.expression-stern .char-brow.left  { transform: rotate(-10deg); top: 46px; }
+.expression-stern .char-brow.right { transform: rotate(10deg); top: 46px; }
+
+/* Eyes */
+.char-eye {
+  position: absolute;
+  width: 26px; height: 18px;
+  background: white;
+  border-radius: 50%;
+  top: 54px;
+  overflow: hidden;
+  transition: background 0.3s;
+}
+.char-eye.left  { left: 16px; }
+.char-eye.right { right: 16px; }
+
+.char-iris {
+  position: absolute;
+  width: 14px; height: 14px;
+  background: var(--eye);
+  border-radius: 50%;
+  top: 2px; left: 6px;
+  transition: background 0.3s;
+}
+.char-iris::after {
+  content: '';
+  position: absolute;
+  width: 7px; height: 7px;
+  background: #111;
+  border-radius: 50%;
+  top: 3px; left: 3px;
+}
+.char-iris::before {
+  content: '';
+  position: absolute;
+  width: 4px; height: 4px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 50%;
+  top: 1px; right: 1px;
+  z-index: 1;
+}
+
+/* Glowing eyes for synthetic */
+.species-synthetic .char-eye { background: #001a2e; }
+.species-synthetic .char-iris { background: #00aaff; box-shadow: 0 0 8px #00aaff; }
+
+/* Black eyes for Betazoid */
+.species-betazoid .char-iris { background: #111; }
+.species-betazoid .char-iris::after { background: #222; }
+
+/* Nose */
+.char-nose {
+  position: absolute;
+  width: 14px; height: 12px;
+  top: 76px;
+  left: 50%; transform: translateX(-50%);
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-bottom: 4px solid var(--skin-dark);
+  opacity: 0.55;
+}
+
+/* Mouth */
+.char-mouth {
+  position: absolute;
+  width: 30px; height: 10px;
+  bottom: 20px;
+  left: 50%; transform: translateX(-50%);
+  border-bottom: 3px solid var(--skin-dark);
+  border-radius: 0 0 50% 50%;
+  opacity: 0.55;
+  transition: border-radius 0.3s, border-top 0.3s;
+}
+
+/* Stern mouth */
+.expression-stern .char-mouth {
+  border-radius: 0;
+  border-bottom: none;
+  border-top: 3px solid var(--skin-dark);
+  bottom: 22px;
+}
+
+/* FACIAL HAIR */
+.char-beard {
+  position: absolute;
+  background: var(--hair);
+  border-radius: 0 0 50% 50%;
+  transition: background 0.3s, opacity 0.3s;
+  opacity: 0;
+}
+
+/* Stubble */
+.facial-stubble .char-beard {
+  opacity: 0.55;
+  bottom: 12px; left: 14px; right: 14px;
+  height: 22px;
+  border-radius: 0 0 40% 40%;
+  filter: blur(2px);
+}
+
+/* Short beard */
+.facial-beard .char-beard {
+  opacity: 1;
+  bottom: 8px; left: 10px; right: 10px;
+  height: 36px;
+  border-radius: 0 0 45% 45%;
+}
+
+/* Full beard */
+.facial-fullbeard .char-beard {
+  opacity: 1;
+  bottom: 4px; left: 6px; right: 6px;
+  height: 50px;
+  border-radius: 0 0 50% 50%;
+}
+
+/* Mustache */
+.facial-mustache .char-beard {
+  opacity: 1;
+  bottom: 32px; left: 22px; right: 22px;
+  height: 12px;
+  border-radius: 4px;
+}
+
+/* HAIR */
+.char-hair { position: absolute; inset: 0; overflow: visible; }
+
+/* Short/default */
+.hair-short .char-hair-top {
+  position: absolute;
+  top: -12px; left: -4px; right: -4px;
+  height: 52px;
+  background: var(--hair);
+  border-radius: 50% 50% 0 0 / 80% 80% 0 0;
+  transition: background 0.3s;
+}
+.hair-short .char-hair-side {
+  position: absolute;
+  width: 20px; height: 50px;
+  background: var(--hair);
+  top: 0px;
+  transition: background 0.3s;
+}
+.hair-short .char-hair-side.left  { left: -2px; border-radius: 8px 0 0 30%; }
+.hair-short .char-hair-side.right { right: -2px; border-radius: 0 8px 30% 0; }
+
+/* Buzz */
+.hair-buzz .char-hair-top {
+  position: absolute;
+  top: -6px; left: -2px; right: -2px;
+  height: 28px;
+  background: var(--hair);
+  border-radius: 50% 50% 0 0 / 80% 80% 0 0;
+  opacity: 0.7;
+  transition: background 0.3s;
+}
+
+/* Long */
+.hair-long .char-hair-top {
+  position: absolute;
+  top: -14px; left: -6px; right: -6px;
+  height: 60px;
+  background: var(--hair);
+  border-radius: 50% 50% 0 0 / 80% 80% 0 0;
+  transition: background 0.3s;
+}
+.hair-long .char-hair-side {
+  position: absolute;
+  width: 26px;
+  background: var(--hair);
+  top: 0;
+  bottom: -80px;
+  transition: background 0.3s;
+}
+.hair-long .char-hair-side.left  { left: -4px; border-radius: 10px 0 10px 10px; }
+.hair-long .char-hair-side.right { right: -4px; border-radius: 0 10px 10px 10px; }
+
+/* Ponytail */
+.hair-ponytail .char-hair-top {
+  position: absolute;
+  top: -14px; left: -4px; right: -4px;
+  height: 55px;
+  background: var(--hair);
+  border-radius: 50% 50% 0 0 / 80% 80% 0 0;
+  transition: background 0.3s;
+}
+.hair-ponytail .char-hair-side {
+  position: absolute;
+  width: 18px; height: 40px;
+  background: var(--hair);
+  top: 2px;
+  transition: background 0.3s;
+}
+.hair-ponytail .char-hair-side.left  { left: -1px; border-radius: 8px 0 0 10px; }
+.hair-ponytail .char-hair-side.right { right: -1px; border-radius: 0 8px 10px 0; }
+.hair-ponytail .char-hair-pony {
+  position: absolute;
+  width: 16px;
+  background: var(--hair);
+  top: 10px; right: -14px;
+  height: 60px;
+  border-radius: 2px 8px 12px 2px;
+  transition: background 0.3s;
+}
+
+/* Bald - no elements shown */
+.hair-bald .char-hair-top,
+.hair-bald .char-hair-side,
+.hair-bald .char-hair-pony { display: none; }
+
+/* ===== CHARACTER NAME ===== */
+.character-name-display {
+  text-align: center;
+}
+.character-name-display .name {
+  font-size: 22px;
+  font-weight: 700;
+  color: #8ab8ff;
+  letter-spacing: 0.05em;
+  min-height: 30px;
+}
+.character-name-display .rank {
+  font-size: 12px;
+  color: #4a6888;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+/* Export button */
+.btn-export {
+  background: linear-gradient(135deg, #1a3a6b, #2a5499);
+  border: 1px solid #3a70cc;
+  color: #8ab8ff;
+  padding: 10px 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: all 0.2s;
+}
+.btn-export:hover {
+  background: linear-gradient(135deg, #2a5499, #3a70cc);
+  box-shadow: 0 0 16px rgba(58,112,204,0.4);
+}
+
+/* ===== CONTROLS PANEL ===== */
+.controls-panel {
+  background: #0c1220;
+  border-left: 1px solid #1a2a44;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 16px 20px 0;
+  border-bottom: 1px solid #1a2a44;
+}
+.panel-header h2 {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: #4a6888;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+}
+.tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: #4a6888;
+  padding: 8px 4px;
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  font-family: inherit;
+  letter-spacing: 0.08em;
+  transition: all 0.2s;
+}
+.tab-btn:hover { color: #7aaeff; }
+.tab-btn.active {
+  color: #7aaeff;
+  border-bottom-color: #3a70cc;
+}
+
+.tab-contents {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  scrollbar-width: thin;
+  scrollbar-color: #1a3060 transparent;
+}
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Control groups */
+.ctrl-group {
+  margin-bottom: 22px;
+}
+.ctrl-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #4a6888;
+  margin-bottom: 8px;
+  display: block;
+}
+
+/* Button grid for options */
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 6px;
+}
+.opt-btn {
+  background: #111a2e;
+  border: 1px solid #1e3050;
+  color: #7a9acc;
+  padding: 8px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  text-align: center;
+  transition: all 0.15s;
+  line-height: 1.3;
+}
+.opt-btn:hover {
+  background: #162040;
+  border-color: #2a4a80;
+  color: #a0c0ff;
+}
+.opt-btn.active {
+  background: #1a3a6b;
+  border-color: #3a70cc;
+  color: #8ab8ff;
+  box-shadow: 0 0 8px rgba(58,112,204,0.3);
+}
+
+/* Color swatches */
+.swatch-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.swatch {
+  width: 32px; height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.15s;
+  position: relative;
+}
+.swatch:hover { transform: scale(1.1); }
+.swatch.active {
+  border-color: #fff;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.3), 0 0 10px rgba(255,255,255,0.2);
+}
+
+/* Custom color input */
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.color-row input[type=color] {
+  width: 36px; height: 36px;
+  border: 1px solid #1e3050;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 2px;
+}
+.color-row span { font-size: 12px; color: #4a6888; }
+
+/* Text input */
+.ctrl-input {
+  width: 100%;
+  background: #111a2e;
+  border: 1px solid #1e3050;
+  color: #a0c0ff;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.ctrl-input:focus { border-color: #3a70cc; }
+.ctrl-input::placeholder { color: #2a4060; }
+
+/* Toggle */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+.toggle-label { font-size: 13px; color: #7a9acc; }
+.toggle {
+  width: 42px; height: 24px;
+  background: #111a2e;
+  border: 1px solid #1e3050;
+  border-radius: 12px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s;
+}
+.toggle.on { background: #1a3a6b; border-color: #3a70cc; }
+.toggle::after {
+  content: '';
+  position: absolute;
+  width: 18px; height: 18px;
+  background: #2a4060;
+  border-radius: 50%;
+  top: 2px; left: 2px;
+  transition: all 0.2s;
+}
+.toggle.on::after {
+  left: 20px;
+  background: #7aaeff;
+  box-shadow: 0 0 6px rgba(122,174,255,0.5);
+}
+
+/* Divider */
+.ctrl-divider {
+  height: 1px;
+  background: #1a2a44;
+  margin: 16px 0;
+}
+
+/* Info section */
+.info-stat {
+  background: #111a2e;
+  border: 1px solid #1a2a44;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+.info-stat-label { font-size: 10px; color: #3a5878; letter-spacing: 0.1em; text-transform: uppercase; }
+.info-stat-value { font-size: 14px; color: #7aaeff; margin-top: 4px; }
+
+/* Badge preview */
+.badge-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.badge-preview {
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.badge-preview.active { opacity: 1; transform: scale(1.15); }
+.badge-shape {
+  width: 24px; height: 24px;
+  background: var(--badge);
+}
+.badge-star { clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+.badge-delta { clip-path: polygon(50% 0%, 100% 100%, 0% 100%); }
+.badge-circle { border-radius: 50%; }
+.badge-cross { clip-path: polygon(35% 0%, 65% 0%, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0% 65%, 0% 35%, 35% 35%); }
+.badge-none { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-dot"></div>
+  <h1>Character Creator</h1>
+  <span>// SCI-FI TABLETOP SYSTEM</span>
+</header>
+
+<div class="app">
+
+  <!-- PORTRAIT -->
+  <div class="portrait-area">
+    <div class="character-card">
+      <div class="card-bg"></div>
+      <div class="card-frame"></div>
+
+      <div class="character-scene">
+        <!-- Body -->
+        <div class="char-body">
+          <div class="char-shoulders"></div>
+          <div class="char-shoulder-panel left"></div>
+          <div class="char-shoulder-panel right"></div>
+          <div class="char-collar"></div>
+          <div class="char-badge" id="char-badge"></div>
+        </div>
+
+        <!-- Neck -->
+        <div class="char-neck"></div>
+
+        <!-- Head -->
+        <div class="char-head" id="char-head">
+          <!-- Species features -->
+          <div class="char-ridge"></div>
+          <div class="char-syn-lines"></div>
+          <div class="char-antenna left"></div>
+          <div class="char-antenna right"></div>
+
+          <!-- Ears -->
+          <div class="char-ear left"></div>
+          <div class="char-ear right"></div>
+
+          <!-- Hair layer -->
+          <div class="char-hair" id="char-hair">
+            <div class="char-hair-top"></div>
+            <div class="char-hair-side left"></div>
+            <div class="char-hair-side right"></div>
+            <div class="char-hair-pony"></div>
+          </div>
+
+          <!-- Face -->
+          <div class="char-face">
+            <div class="char-brow left"></div>
+            <div class="char-brow right"></div>
+            <div class="char-eye left"><div class="char-iris"></div></div>
+            <div class="char-eye right"><div class="char-iris"></div></div>
+            <div class="char-nose"></div>
+            <div class="char-beard"></div>
+            <div class="char-mouth"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="character-name-display">
+      <div class="name" id="display-name">Commander Unknown</div>
+      <div class="rank" id="display-rank">Rank · Ship</div>
+    </div>
+
+    <button class="btn-export" onclick="exportCharacter()">Export Character</button>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls-panel">
+    <div class="panel-header">
+      <h2>Customize</h2>
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="basics">Species</button>
+        <button class="tab-btn" data-tab="appearance">Look</button>
+        <button class="tab-btn" data-tab="outfit">Outfit</button>
+        <button class="tab-btn" data-tab="info">Info</button>
+      </div>
+    </div>
+
+    <div class="tab-contents">
+
+      <!-- BASICS TAB -->
+      <div class="tab-content active" id="tab-basics">
+        <div class="ctrl-group">
+          <span class="ctrl-label">Species</span>
+          <div class="option-grid">
+            <button class="opt-btn active" data-ctrl="species" data-val="human">Human</button>
+            <button class="opt-btn" data-ctrl="species" data-val="vulcan">Vulcan</button>
+            <button class="opt-btn" data-ctrl="species" data-val="andorian">Andorian</button>
+            <button class="opt-btn" data-ctrl="species" data-val="betazoid">Betazoid</button>
+            <button class="opt-btn" data-ctrl="species" data-val="alien">Alien</button>
+            <button class="opt-btn" data-ctrl="species" data-val="synthetic">Synthetic</button>
+          </div>
+        </div>
+
+        <div class="ctrl-divider"></div>
+
+        <div class="ctrl-group">
+          <span class="ctrl-label">Gender / Build</span>
+          <div class="option-grid">
+            <button class="opt-btn active" data-ctrl="gender" data-val="male">Male</button>
+            <button class="opt-btn" data-ctrl="gender" data-val="female">Female</button>
+            <button class="opt-btn" data-ctrl="gender" data-val="nonbinary">Non-Binary</button>
+          </div>
+        </div>
+
+        <div class="ctrl-divider"></div>
+
+        <div class="ctrl-group">
+          <span class="ctrl-label">Expression</span>
+          <div class="option-grid">
+            <button class="opt-btn active" data-ctrl="expression" data-val="neutral">Neutral</button>
+            <button class="opt-btn" data-ctrl="expression" data-val="stern">Stern</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- APPEARANCE TAB -->
+      <div class="tab-content" id="tab-appearance">
+        <div class="ctrl-group">
+          <span class="ctrl-label">Skin Tone</span>
+          <div class="swatch-grid">
+            <div class="swatch active" data-ctrl="skin" data-val="#f5dfc0" style="background:#f5dfc0"></div>
+            <div class="swatch" data-ctrl="skin" data-val="#c8a882" style="background:#c8a882"></div>
+            <div class="swatch" data-ctrl="skin" data-val="#a07850" style="background:#a07850"></div>
+            <div class="swatch" data-ctrl="skin" data-val="#7a5030" style="background:#7a5030"></div>
+            <div class="swatch" data-ctrl="skin" data-val="#4a2e1a" style="background:#4a2e1a"></div>
+            <div class="swatch" data-ctrl="skin" data-val="#d4e8c8" style="background:#d4e8c8"></div>
+            <div class="swatch" data-ctrl="skin" data-val="#88c0b0" style="background:#88c0b0"></div>
+            <div class="swatch" data-ctrl="skin" data-val="#6aa0d0" style="background:#6aa0d0"></div>
+            <div class="swatch" data-ctrl="skin" data-val="#8870b0" style="background:#8870b0"></div>
+            <div class="swatch" data-ctrl="skin" data-val="#c0c8d8" style="background:#c0c8d8"></div>
+            <div class="swatch" data-ctrl="skin" data-val="#a0b0a0" style="background:#a0b0a0"></div>
+            <div class="swatch" data-ctrl="skin" data-val="#c8b840" style="background:#c8b840"></div>
+          </div>
+          <div class="color-row">
+            <input type="color" id="custom-skin" value="#c8a882">
+            <span>Custom skin</span>
+          </div>
+        </div>
+
+        <div class="ctrl-divider"></div>
+
+        <div class="ctrl-group">
+          <span class="ctrl-label">Hair Style</span>
+          <div class="option-grid">
+            <button class="opt-btn active" data-ctrl="hair" data-val="short">Short</button>
+            <button class="opt-btn" data-ctrl="hair" data-val="buzz">Buzz</button>
+            <button class="opt-btn" data-ctrl="hair" data-val="long">Long</button>
+            <button class="opt-btn" data-ctrl="hair" data-val="ponytail">Ponytail</button>
+            <button class="opt-btn" data-ctrl="hair" data-val="bald">Bald</button>
+          </div>
+        </div>
+
+        <div class="ctrl-group">
+          <span class="ctrl-label">Hair Color</span>
+          <div class="swatch-grid">
+            <div class="swatch" data-ctrl="hair-color" data-val="#1a1008" style="background:#1a1008"></div>
+            <div class="swatch active" data-ctrl="hair-color" data-val="#5c3317" style="background:#5c3317"></div>
+            <div class="swatch" data-ctrl="hair-color" data-val="#8b4513" style="background:#8b4513"></div>
+            <div class="swatch" data-ctrl="hair-color" data-val="#c8801a" style="background:#c8801a"></div>
+            <div class="swatch" data-ctrl="hair-color" data-val="#c8b870" style="background:#c8b870"></div>
+            <div class="swatch" data-ctrl="hair-color" data-val="#e8e0d0" style="background:#e8e0d0"></div>
+            <div class="swatch" data-ctrl="hair-color" data-val="#808080" style="background:#808080"></div>
+            <div class="swatch" data-ctrl="hair-color" data-val="#f04020" style="background:#f04020"></div>
+            <div class="swatch" data-ctrl="hair-color" data-val="#4040c0" style="background:#4040c0"></div>
+            <div class="swatch" data-ctrl="hair-color" data-val="#20a040" style="background:#20a040"></div>
+          </div>
+          <div class="color-row">
+            <input type="color" id="custom-hair" value="#5c3317">
+            <span>Custom hair</span>
+          </div>
+        </div>
+
+        <div class="ctrl-divider"></div>
+
+        <div class="ctrl-group">
+          <span class="ctrl-label">Eye Color</span>
+          <div class="swatch-grid">
+            <div class="swatch" data-ctrl="eye" data-val="#3a5a8a" style="background:#3a5a8a"></div>
+            <div class="swatch active" data-ctrl="eye" data-val="#2e6dba" style="background:#2e6dba"></div>
+            <div class="swatch" data-ctrl="eye" data-val="#48a860" style="background:#48a860"></div>
+            <div class="swatch" data-ctrl="eye" data-val="#886030" style="background:#886030"></div>
+            <div class="swatch" data-ctrl="eye" data-val="#606060" style="background:#606060"></div>
+            <div class="swatch" data-ctrl="eye" data-val="#b04040" style="background:#b04040"></div>
+            <div class="swatch" data-ctrl="eye" data-val="#c080c0" style="background:#c080c0"></div>
+            <div class="swatch" data-ctrl="eye" data-val="#20c8e0" style="background:#20c8e0"></div>
+            <div class="swatch" data-ctrl="eye" data-val="#e0c820" style="background:#e0c820"></div>
+            <div class="swatch" data-ctrl="eye" data-val="#ff4000" style="background:#ff4000"></div>
+          </div>
+        </div>
+
+        <div class="ctrl-divider"></div>
+
+        <div class="ctrl-group">
+          <span class="ctrl-label">Facial Hair</span>
+          <div class="option-grid">
+            <button class="opt-btn active" data-ctrl="facial" data-val="none">None</button>
+            <button class="opt-btn" data-ctrl="facial" data-val="stubble">Stubble</button>
+            <button class="opt-btn" data-ctrl="facial" data-val="beard">Beard</button>
+            <button class="opt-btn" data-ctrl="facial" data-val="fullbeard">Full</button>
+            <button class="opt-btn" data-ctrl="facial" data-val="mustache">Mustache</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- OUTFIT TAB -->
+      <div class="tab-content" id="tab-outfit">
+        <div class="ctrl-group">
+          <span class="ctrl-label">Uniform Style</span>
+          <div class="option-grid">
+            <button class="opt-btn active" data-ctrl="outfit-style" data-val="command">Command</button>
+            <button class="opt-btn" data-ctrl="outfit-style" data-val="ops">Ops</button>
+            <button class="opt-btn" data-ctrl="outfit-style" data-val="science">Science</button>
+            <button class="opt-btn" data-ctrl="outfit-style" data-val="tactical">Tactical</button>
+            <button class="opt-btn" data-ctrl="outfit-style" data-val="civilian">Civilian</button>
+          </div>
+        </div>
+
+        <div class="ctrl-group">
+          <span class="ctrl-label">Primary Color</span>
+          <div class="swatch-grid">
+            <div class="swatch active" data-ctrl="outfit" data-val="#1a3a6b" style="background:#1a3a6b"></div>
+            <div class="swatch" data-ctrl="outfit" data-val="#6b1a1a" style="background:#6b1a1a"></div>
+            <div class="swatch" data-ctrl="outfit" data-val="#5a6b1a" style="background:#5a6b1a"></div>
+            <div class="swatch" data-ctrl="outfit" data-val="#6b4a1a" style="background:#6b4a1a"></div>
+            <div class="swatch" data-ctrl="outfit" data-val="#1a1a1a" style="background:#1a1a1a"></div>
+            <div class="swatch" data-ctrl="outfit" data-val="#3a1a6b" style="background:#3a1a6b"></div>
+            <div class="swatch" data-ctrl="outfit" data-val="#1a5a4a" style="background:#1a5a4a"></div>
+            <div class="swatch" data-ctrl="outfit" data-val="#5a5a1a" style="background:#5a5a1a"></div>
+            <div class="swatch" data-ctrl="outfit" data-val="#4a4a4a" style="background:#4a4a4a"></div>
+            <div class="swatch" data-ctrl="outfit" data-val="#6b1a4a" style="background:#6b1a4a"></div>
+          </div>
+          <div class="color-row">
+            <input type="color" id="custom-outfit" value="#1a3a6b">
+            <span>Custom color</span>
+          </div>
+        </div>
+
+        <div class="ctrl-divider"></div>
+
+        <div class="ctrl-group">
+          <span class="ctrl-label">Badge / Insignia</span>
+          <div class="badge-row">
+            <div class="badge-preview active" data-ctrl="badge" data-val="star">
+              <div class="badge-shape badge-star"></div>
+            </div>
+            <div class="badge-preview" data-ctrl="badge" data-val="delta">
+              <div class="badge-shape badge-delta"></div>
+            </div>
+            <div class="badge-preview" data-ctrl="badge" data-val="circle">
+              <div class="badge-shape badge-circle"></div>
+            </div>
+            <div class="badge-preview" data-ctrl="badge" data-val="cross">
+              <div class="badge-shape badge-cross"></div>
+            </div>
+            <div class="badge-preview" data-ctrl="badge" data-val="none" style="opacity:0.6">
+              <span style="font-size:18px;color:#4a6888">✕</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="ctrl-group">
+          <span class="ctrl-label">Badge Color</span>
+          <div class="swatch-grid">
+            <div class="swatch active" data-ctrl="badge-color" data-val="#d4af37" style="background:#d4af37"></div>
+            <div class="swatch" data-ctrl="badge-color" data-val="#c0c0c0" style="background:#c0c0c0"></div>
+            <div class="swatch" data-ctrl="badge-color" data-val="#e8e8e8" style="background:#e8e8e8"></div>
+            <div class="swatch" data-ctrl="badge-color" data-val="#80c0ff" style="background:#80c0ff"></div>
+            <div class="swatch" data-ctrl="badge-color" data-val="#ff6040" style="background:#ff6040"></div>
+            <div class="swatch" data-ctrl="badge-color" data-val="#40ff80" style="background:#40ff80"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- INFO TAB -->
+      <div class="tab-content" id="tab-info">
+        <div class="ctrl-group">
+          <span class="ctrl-label">Character Name</span>
+          <input type="text" class="ctrl-input" id="char-name" placeholder="Enter name..." maxlength="30">
+        </div>
+
+        <div class="ctrl-group">
+          <span class="ctrl-label">Rank</span>
+          <div class="option-grid">
+            <button class="opt-btn" data-ctrl="rank" data-val="Ensign">Ensign</button>
+            <button class="opt-btn" data-ctrl="rank" data-val="Lieutenant">Lt.</button>
+            <button class="opt-btn active" data-ctrl="rank" data-val="Commander">Cmdr.</button>
+            <button class="opt-btn" data-ctrl="rank" data-val="Captain">Captain</button>
+            <button class="opt-btn" data-ctrl="rank" data-val="Admiral">Admiral</button>
+            <button class="opt-btn" data-ctrl="rank" data-val="Civilian">Civilian</button>
+          </div>
+        </div>
+
+        <div class="ctrl-group">
+          <span class="ctrl-label">Ship / Post</span>
+          <input type="text" class="ctrl-input" id="char-ship" placeholder="USS..." maxlength="30">
+        </div>
+
+        <div class="ctrl-divider"></div>
+
+        <div class="info-stat">
+          <div class="info-stat-label">Species</div>
+          <div class="info-stat-value" id="stat-species">Human</div>
+        </div>
+        <div class="info-stat">
+          <div class="info-stat-label">Rank</div>
+          <div class="info-stat-value" id="stat-rank">Commander</div>
+        </div>
+        <div class="info-stat">
+          <div class="info-stat-label">Outfit</div>
+          <div class="info-stat-value" id="stat-outfit">Command</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const state = {
+  species: 'human',
+  gender: 'male',
+  expression: 'neutral',
+  skin: '#c8a882',
+  hair: 'short',
+  hairColor: '#5c3317',
+  eye: '#2e6dba',
+  facial: 'none',
+  outfit: '#1a3a6b',
+  outfitStyle: 'command',
+  badge: 'star',
+  badgeColor: '#d4af37',
+  name: '',
+  rank: 'Commander',
+  ship: '',
+};
+
+const head    = document.getElementById('char-head');
+const hair    = document.getElementById('char-hair');
+const badge   = document.getElementById('char-badge');
+const root    = document.documentElement;
+
+function applyState() {
+  // CSS vars
+  root.style.setProperty('--skin',       state.skin);
+  root.style.setProperty('--skin-dark',  shadeColor(state.skin, -25));
+  root.style.setProperty('--skin-light', shadeColor(state.skin, 20));
+  root.style.setProperty('--hair',       state.hairColor);
+  root.style.setProperty('--eye',        state.eye);
+  root.style.setProperty('--outfit',     state.outfit);
+  root.style.setProperty('--outfit-light', shadeColor(state.outfit, 20));
+  root.style.setProperty('--outfit-trim',  shadeColor(state.outfit, -20));
+  root.style.setProperty('--badge',      state.badgeColor);
+
+  // Species class on head
+  head.className = 'char-head species-' + state.species;
+
+  // Hair class on hair div
+  hair.className = 'char-hair hair-' + state.hair;
+
+  // Facial hair class on head
+  const oldFacial = [...head.classList].find(c => c.startsWith('facial-'));
+  if (oldFacial) head.classList.remove(oldFacial);
+  if (state.facial !== 'none') head.classList.add('facial-' + state.facial);
+
+  // Expression class on head
+  const oldExpr = [...head.classList].find(c => c.startsWith('expression-'));
+  if (oldExpr) head.classList.remove(oldExpr);
+  head.classList.add('expression-' + state.expression);
+
+  // Badge shape
+  badge.className = 'char-badge';
+  if (state.badge !== 'none') {
+    badge.classList.add('badge-' + state.badge);
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+
+  // Info display
+  const nameVal = state.name || 'Unknown';
+  const rankStr = state.rank;
+  document.getElementById('display-name').textContent = rankStr + ' ' + nameVal;
+  const ship = document.getElementById('char-ship').value;
+  document.getElementById('display-rank').textContent =
+    state.species.charAt(0).toUpperCase() + state.species.slice(1) +
+    ' · ' + state.outfitStyle.charAt(0).toUpperCase() + state.outfitStyle.slice(1) +
+    (ship ? ' · ' + ship : '');
+
+  document.getElementById('stat-species').textContent =
+    state.species.charAt(0).toUpperCase() + state.species.slice(1);
+  document.getElementById('stat-rank').textContent = state.rank;
+  document.getElementById('stat-outfit').textContent =
+    state.outfitStyle.charAt(0).toUpperCase() + state.outfitStyle.slice(1);
+}
+
+function shadeColor(hex, pct) {
+  const num = parseInt(hex.replace('#',''), 16);
+  const r = Math.min(255, Math.max(0, (num >> 16) + pct * 2));
+  const g = Math.min(255, Math.max(0, ((num >> 8) & 0xff) + pct * 2));
+  const b = Math.min(255, Math.max(0, (num & 0xff) + pct * 2));
+  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+}
+
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// Option buttons
+document.querySelectorAll('.opt-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const ctrl = btn.dataset.ctrl;
+    const val  = btn.dataset.val;
+    document.querySelectorAll(`.opt-btn[data-ctrl="${ctrl}"]`)
+      .forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    const keyMap = {
+      'species': 'species', 'gender': 'gender', 'expression': 'expression',
+      'hair': 'hair', 'facial': 'facial',
+      'outfit-style': 'outfitStyle', 'badge': 'badge', 'rank': 'rank'
+    };
+    if (keyMap[ctrl]) state[keyMap[ctrl]] = val;
+    applyState();
+  });
+});
+
+// Swatches
+document.querySelectorAll('.swatch').forEach(sw => {
+  sw.addEventListener('click', () => {
+    const ctrl = sw.dataset.ctrl;
+    document.querySelectorAll(`.swatch[data-ctrl="${ctrl}"]`)
+      .forEach(s => s.classList.remove('active'));
+    sw.classList.add('active');
+
+    const keyMap = { 'skin': 'skin', 'hair-color': 'hairColor', 'eye': 'eye', 'outfit': 'outfit', 'badge-color': 'badgeColor' };
+    if (keyMap[ctrl]) state[keyMap[ctrl]] = sw.dataset.val;
+    applyState();
+  });
+});
+
+// Badge previews
+document.querySelectorAll('.badge-preview').forEach(bp => {
+  bp.addEventListener('click', () => {
+    document.querySelectorAll('.badge-preview').forEach(b => b.classList.remove('active'));
+    bp.classList.add('active');
+    state.badge = bp.dataset.val;
+    applyState();
+  });
+});
+
+// Custom color inputs
+document.getElementById('custom-skin').addEventListener('input', e => {
+  state.skin = e.target.value;
+  document.querySelectorAll('.swatch[data-ctrl="skin"]').forEach(s => s.classList.remove('active'));
+  applyState();
+});
+document.getElementById('custom-hair').addEventListener('input', e => {
+  state.hairColor = e.target.value;
+  document.querySelectorAll('.swatch[data-ctrl="hair-color"]').forEach(s => s.classList.remove('active'));
+  applyState();
+});
+document.getElementById('custom-outfit').addEventListener('input', e => {
+  state.outfit = e.target.value;
+  document.querySelectorAll('.swatch[data-ctrl="outfit"]').forEach(s => s.classList.remove('active'));
+  applyState();
+});
+
+// Text inputs
+document.getElementById('char-name').addEventListener('input', e => {
+  state.name = e.target.value;
+  applyState();
+});
+document.getElementById('char-ship').addEventListener('input', e => {
+  applyState();
+});
+
+// Export
+function exportCharacter() {
+  const data = { ...state };
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (state.name || 'character') + '.json';
+  a.click();
+}
+
+// Init
+applyState();
+</script>
+</body>
+</html>

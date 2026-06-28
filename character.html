@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Character Sheet — Starbound Chronicles</title>
+<link rel="stylesheet" href="css/wiki.css">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+.sheet-layout { display:grid; grid-template-columns:260px 1fr; margin-top:58px; min-height:calc(100vh - 58px); }
+
+/* Sidebar */
+.sheet-sidebar {
+  background:var(--surface); border-right:1px solid var(--border);
+  padding:20px 16px; display:flex; flex-direction:column; gap:16px;
+  position:sticky; top:58px; height:calc(100vh - 58px); overflow-y:auto;
+}
+.char-portrait {
+  width:100%; aspect-ratio:1; border-radius:14px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:48px; font-weight:700; color:#fff;
+  background: linear-gradient(135deg, #1e4a9a, #3a78d4);
+  border:1px solid var(--border); position:relative; overflow:hidden;
+}
+.char-portrait-icon { font-size:60px; }
+.char-portrait-species { position:absolute; bottom:8px; right:10px; font-size:22px; }
+.char-bio-name { font-size:20px; font-weight:800; color:#e0ecff; text-align:center; }
+.char-bio-sub  { font-size:12px; color:var(--text-faint); text-align:center; margin-top:2px; }
+.char-badges   { display:flex; flex-wrap:wrap; gap:5px; justify-content:center; }
+.char-badge    { background:var(--surface3); border:1px solid var(--border); color:var(--text-dim); font-size:10px; padding:3px 8px; border-radius:20px; }
+.char-badge.rank { border-color:#d4af37; color:#d4af37; background:rgba(212,175,55,.1); }
+
+.hp-block {
+  background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px;
+}
+.hp-label { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:8px; }
+.hp-row { display:flex; align-items:center; gap:8px; }
+.hp-input { background:var(--surface3); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:6px; font-size:18px; font-weight:700; text-align:center; width:60px; outline:none; font-family:inherit; }
+.hp-input:focus { border-color:var(--accent); }
+.hp-sep   { color:var(--text-faint); font-size:18px; }
+.hp-bar-wrap { height:6px; background:var(--surface3); border-radius:3px; overflow:hidden; margin-top:8px; }
+.hp-bar { height:100%; border-radius:3px; transition:width .3s, background .3s; }
+
+.xp-block { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px; }
+.xp-label { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:6px; }
+.xp-row   { display:flex; align-items:center; gap:8px; }
+.xp-level { font-size:24px; font-weight:800; color:#7aaeff; min-width:32px; }
+.level-btn { background:var(--surface3); border:1px solid var(--border); border-radius:5px; color:var(--text-dim); width:24px; height:24px; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; transition:all .12s; font-family:inherit; }
+.level-btn:hover { border-color:var(--accent); color:#7aaeff; }
+
+/* Main */
+.sheet-main { background:var(--bg); padding:32px 40px; }
+
+/* Tab bar */
+.tab-bar { display:flex; gap:2px; margin-bottom:28px; border-bottom:1px solid var(--border); }
+.tab-pill { background:none; border:none; color:var(--text-faint); padding:9px 16px; cursor:pointer; font-size:13px; font-weight:600; font-family:inherit; border-bottom:2px solid transparent; transition:all .15s; }
+.tab-pill:hover { color:var(--text); }
+.tab-pill.active { color:#7aaeff; border-bottom-color:var(--accent); }
+.tab-pane { display:none; }
+.tab-pane.active { display:block; }
+
+/* Stats grid */
+.stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:28px; }
+.stat-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:12px;
+  padding:16px; text-align:center; position:relative; overflow:hidden;
+}
+.stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--stat-color,var(--accent)); }
+.stat-name { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:8px; }
+.stat-val  { font-size:36px; font-weight:900; color:#e0ecff; line-height:1; }
+.stat-mod  { font-size:14px; color:var(--text-dim); margin-top:4px; }
+.stat-mod.pos { color:#4acc7a; }
+.stat-mod.neg { color:#ff8888; }
+.stat-input {
+  background:var(--surface2); border:1px solid var(--border); border-radius:6px;
+  color:var(--text); padding:4px; font-size:14px; text-align:center; width:56px;
+  outline:none; font-family:inherit; font-weight:700; display:none;
+}
+
+/* Combat stats */
+.combat-row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:28px; }
+.combat-stat { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px; text-align:center; }
+.combat-stat-label { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
+.combat-stat-val   { font-size:22px; font-weight:800; color:#c8d8f0; margin-top:4px; }
+
+/* Skills */
+.skills-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.skill-group { margin-bottom:20px; }
+.skill-group-title { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:8px; padding-bottom:4px; border-bottom:1px solid var(--border); }
+.skill-row { display:flex; align-items:center; gap:8px; padding:5px 6px; border-radius:6px; transition:background .12s; cursor:pointer; }
+.skill-row:hover { background:var(--surface2); }
+.skill-prof { width:14px; height:14px; border-radius:50%; border:2px solid var(--border2); cursor:pointer; flex-shrink:0; transition:all .12s; }
+.skill-prof.active { background:var(--accent); border-color:var(--accent); box-shadow:0 0 6px rgba(58,120,212,.4); }
+.skill-name  { flex:1; font-size:13px; color:var(--text-dim); }
+.skill-bonus { font-size:13px; font-weight:700; min-width:28px; text-align:right; }
+.skill-bonus.pos { color:#4acc7a; }
+.skill-bonus.neg { color:#ff8888; }
+.skill-stat-tag { font-size:10px; color:var(--text-faint); min-width:28px; }
+
+/* Inventory */
+.inv-table { width:100%; border-collapse:collapse; }
+.inv-table th { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); }
+.inv-table td { padding:9px 10px; font-size:13px; color:var(--text-dim); border-bottom:1px solid rgba(255,255,255,.04); vertical-align:middle; }
+.inv-table tr:hover td { background:var(--surface2); }
+.inv-equipped { width:12px; height:12px; border-radius:3px; border:2px solid var(--border2); cursor:pointer; }
+.inv-equipped.active { background:var(--accent); border-color:var(--accent); }
+.inv-type-badge { font-size:10px; padding:2px 7px; border-radius:3px; letter-spacing:.05em; }
+.type-weapon   { background:rgba(180,40,40,.2); color:#ff8888; }
+.type-armor    { background:rgba(58,120,212,.2); color:#7aaeff; }
+.type-tool     { background:rgba(80,160,80,.2);  color:#80cc80; }
+.type-consumable { background:rgba(180,130,20,.2); color:#d4af37; }
+.type-misc     { background:var(--surface3); color:var(--text-faint); }
+.inv-delete-btn { background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:14px; padding:2px 6px; border-radius:4px; transition:all .12s; }
+.inv-delete-btn:hover { color:#ff8888; background:rgba(180,40,40,.15); }
+
+/* Background textareas */
+.bg-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.bg-field label { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; display:block; margin-bottom:6px; }
+.bg-field textarea { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:12px; font-size:13px; font-family:inherit; outline:none; resize:vertical; min-height:100px; transition:border-color .15s; line-height:1.6; }
+.bg-field textarea:focus { border-color:var(--accent); }
+.bg-full { grid-column:1/-1; }
+.bg-full textarea { min-height:140px; }
+
+/* Species box */
+.species-ref {
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:14px; margin-bottom:20px;
+}
+.species-ref-title { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:8px; }
+.species-ref-body  { font-size:13px; color:var(--text-dim); line-height:1.6; }
+.species-bonus-chip { display:inline-block; background:var(--surface3); border:1px solid var(--border); color:var(--text-dim); font-size:11px; padding:2px 8px; border-radius:4px; margin:2px; }
+.species-bonus-chip.pos { border-color:#2a7a46; color:#4acc7a; background:rgba(40,120,70,.15); }
+.species-bonus-chip.neg { border-color:#7a2020; color:#ff8888; background:rgba(160,40,40,.15); }
+
+/* Edit mode */
+body.edit-mode .stat-val   { display:none; }
+body.edit-mode .stat-input { display:block; }
+body.edit-mode .edit-hint  { display:block; }
+.edit-hint { display:none; font-size:11px; color:var(--accent); margin-bottom:12px; }
+</style>
+</head>
+<body>
+
+<header class="app-topbar">
+  <a class="topbar-brand" href="dashboard.html">
+    <div class="brand-icon">✦</div>
+    <div class="brand-text">
+      <div class="brand-name">Starbound Chronicles</div>
+      <div class="brand-tagline">Character Sheet</div>
+    </div>
+  </a>
+  <nav class="topbar-nav">
+    <a class="topbar-link" href="dashboard.html">← Dashboard</a>
+  </nav>
+  <div style="flex:1"></div>
+  <div style="padding:0 16px; display:flex; gap:8px; align-items:center;">
+    <button class="btn-secondary" id="edit-btn" onclick="toggleEdit()" style="padding:7px 16px; font-size:12px;">Edit</button>
+    <button class="btn-primary"   id="save-btn" onclick="saveCharacter()" style="padding:7px 16px; font-size:12px; display:none; width:auto;">Save</button>
+    <button class="btn-ghost"     id="cancel-btn" onclick="cancelEdit()" style="padding:7px 16px; font-size:12px; display:none;">Cancel</button>
+  </div>
+</header>
+
+<div class="sheet-layout">
+  <!-- Sidebar -->
+  <aside class="sheet-sidebar">
+    <div class="char-portrait" id="char-portrait" style="background:linear-gradient(135deg,#1e4a9a,#3a78d4)">
+      <span class="char-portrait-icon" id="portrait-icon">🧑</span>
+      <span class="char-portrait-species" id="portrait-species"></span>
+    </div>
+    <div>
+      <div class="char-bio-name" id="bio-name">Loading…</div>
+      <div class="char-bio-sub"  id="bio-sub">—</div>
+    </div>
+    <div class="char-badges" id="char-badges"></div>
+
+    <!-- HP -->
+    <div class="hp-block">
+      <div class="hp-label">Hit Points</div>
+      <div class="hp-row">
+        <input class="hp-input" id="hp-cur" type="number" min="0" value="10" oninput="updateHPBar()">
+        <span class="hp-sep">/</span>
+        <input class="hp-input" id="hp-max-inp" type="number" min="1" value="10" oninput="updateHPBar()">
+      </div>
+      <div class="hp-bar-wrap">
+        <div class="hp-bar" id="hp-bar" style="width:100%; background:#4acc7a;"></div>
+      </div>
+    </div>
+
+    <!-- Level / XP -->
+    <div class="xp-block">
+      <div class="xp-label">Level & Experience</div>
+      <div class="xp-row">
+        <span class="xp-level" id="xp-level">1</span>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <button class="level-btn" onclick="changeLevel(1)">▲</button>
+          <button class="level-btn" onclick="changeLevel(-1)">▼</button>
+        </div>
+        <div style="flex:1;">
+          <input class="form-input" id="xp-input" type="number" min="0" placeholder="XP" style="font-size:12px; padding:6px 8px;">
+        </div>
+      </div>
+    </div>
+
+    <!-- Species wiki link -->
+    <a id="species-wiki-link" href="species.html" style="display:block; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; text-decoration:none; color:var(--text-dim); font-size:12px; transition:all .12s;"
+       onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+      📖 View Species in Wiki →
+    </a>
+
+    <button class="btn-danger" onclick="deleteCharacter()" style="margin-top:auto;">Delete Character</button>
+  </aside>
+
+  <!-- Main -->
+  <main class="sheet-main">
+    <div class="tab-bar">
+      <button class="tab-pill active" data-tab="stats"      onclick="switchTab(this)">Stats</button>
+      <button class="tab-pill"        data-tab="skills"     onclick="switchTab(this)">Skills</button>
+      <button class="tab-pill"        data-tab="inventory"  onclick="switchTab(this)">Inventory</button>
+      <button class="tab-pill"        data-tab="background" onclick="switchTab(this)">Background</button>
+      <button class="tab-pill"        data-tab="notes"      onclick="switchTab(this)">Notes</button>
+    </div>
+
+    <!-- STATS TAB -->
+    <div class="tab-pane active" id="tab-stats">
+      <div class="edit-hint" id="edit-hint">✏️ Click stat values to edit. Changes are saved when you click Save.</div>
+
+      <div class="species-ref" id="species-ref-box"></div>
+
+      <div class="stats-grid" id="stats-grid"></div>
+
+      <div class="combat-row" id="combat-row"></div>
+    </div>
+
+    <!-- SKILLS TAB -->
+    <div class="tab-pane" id="tab-skills">
+      <p style="font-size:12px; color:var(--text-faint); margin-bottom:16px;">
+        Click the circle to toggle proficiency. Proficiency bonus = +<span id="prof-bonus">2</span>
+        (scales with level).
+      </p>
+      <div class="skills-grid" id="skills-grid"></div>
+    </div>
+
+    <!-- INVENTORY TAB -->
+    <div class="tab-pane" id="tab-inventory">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <span style="font-size:13px; color:var(--text-dim);">
+          Total weight: <strong id="total-weight">0</strong> kg &nbsp;·&nbsp;
+          Total value: <strong id="total-value">0</strong> ¢
+        </span>
+        <button class="btn-secondary" onclick="openAddItem()" style="font-size:12px; padding:7px 14px;">+ Add Item</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="inv-table">
+          <thead>
+            <tr>
+              <th style="width:28px">E</th>
+              <th>Item</th>
+              <th>Type</th>
+              <th>Qty</th>
+              <th>Weight</th>
+              <th>Value</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="inv-body">
+            <tr><td colspan="7" style="text-align:center; color:var(--text-faint); padding:24px;">No items yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- BACKGROUND TAB -->
+    <div class="tab-pane" id="tab-background">
+      <div class="bg-grid">
+        <div class="bg-field bg-full">
+          <label>Backstory</label>
+          <textarea id="bg-backstory" placeholder="Where did your character come from? What drives them?"></textarea>
+        </div>
+        <div class="bg-field">
+          <label>Personality Traits</label>
+          <textarea id="bg-personality" placeholder="How does your character act?"></textarea>
+        </div>
+        <div class="bg-field">
+          <label>Bonds</label>
+          <textarea id="bg-bonds" placeholder="What do they care about most?"></textarea>
+        </div>
+        <div class="bg-field">
+          <label>Ideals</label>
+          <textarea id="bg-ideals" placeholder="What principles guide them?"></textarea>
+        </div>
+        <div class="bg-field">
+          <label>Flaws</label>
+          <textarea id="bg-flaws" placeholder="What are their weaknesses?"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTES TAB -->
+    <div class="tab-pane" id="tab-notes">
+      <textarea id="char-notes" class="form-textarea" style="min-height:420px; font-size:14px; line-height:1.7;"
+        placeholder="Session notes, quest reminders, NPC names, loot, anything…"></textarea>
+    </div>
+  </main>
+</div>
+
+<!-- Modal: Add Item -->
+<div class="modal-backdrop" id="modal-add-item">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <span class="modal-title">Add Item</span>
+      <button class="modal-close" onclick="closeModal('modal-add-item')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Item Name</label>
+        <input class="form-input" id="item-name" placeholder="e.g. Plasma Pistol">
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select class="form-select" id="item-type">
+            <option value="weapon">⚔️ Weapon</option>
+            <option value="armor">🛡️ Armor</option>
+            <option value="tool">🔧 Tool</option>
+            <option value="consumable">💊 Consumable</option>
+            <option value="misc" selected>📦 Misc</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantity</label>
+          <input class="form-input" id="item-qty" type="number" min="1" value="1">
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Weight (kg)</label>
+          <input class="form-input" id="item-weight" type="number" step="0.1" min="0" value="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Value (credits)</label>
+          <input class="form-input" id="item-value" type="number" min="0" value="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-textarea" id="item-desc" placeholder="Optional…" style="min-height:60px;"></textarea>
+      </div>
+      <div class="form-error" id="item-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('modal-add-item')">Cancel</button>
+      <button class="btn-primary" onclick="addItem()" style="width:auto; padding:10px 24px;">Add Item</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+const STAT_DEFS = [
+  { key:'strength',  label:'Strength',  color:'#c84040', abbr:'STR' },
+  { key:'agility',   label:'Agility',   color:'#40a040', abbr:'AGI' },
+  { key:'intellect', label:'Intellect', color:'#4080c8', abbr:'INT' },
+  { key:'tenacity',  label:'Tenacity',  color:'#c87820', abbr:'TEN' },
+  { key:'social',    label:'Social',    color:'#8040c8', abbr:'SOC' },
+  { key:'tech',      label:'Tech',      color:'#20a8a8', abbr:'TEC' },
+];
+
+const SKILLS = [
+  { name:'Athletics',    stat:'strength',   key:'athletics'   },
+  { name:'Melee Combat', stat:'strength',   key:'melee'       },
+  { name:'Intimidate',   stat:'strength',   key:'intimidate'  },
+  { name:'Brawn',        stat:'strength',   key:'brawn'       },
+  { name:'Piloting',     stat:'agility',    key:'piloting'    },
+  { name:'Stealth',      stat:'agility',    key:'stealth'     },
+  { name:'Ranged Combat',stat:'agility',    key:'ranged'      },
+  { name:'Acrobatics',   stat:'agility',    key:'acrobatics'  },
+  { name:'Technology',   stat:'intellect',  key:'technology'  },
+  { name:'Science',      stat:'intellect',  key:'science'     },
+  { name:'Medicine',     stat:'intellect',  key:'medicine'    },
+  { name:'Lore',         stat:'intellect',  key:'lore'        },
+  { name:'Endurance',    stat:'tenacity',   key:'endurance'   },
+  { name:'Survival',     stat:'tenacity',   key:'survival'    },
+  { name:'Willpower',    stat:'tenacity',   key:'willpower'   },
+  { name:'Resistance',   stat:'tenacity',   key:'resistance'  },
+  { name:'Persuasion',   stat:'social',     key:'persuasion'  },
+  { name:'Deception',    stat:'social',     key:'deception'   },
+  { name:'Insight',      stat:'social',     key:'insight'     },
+  { name:'Performance',  stat:'social',     key:'performance' },
+  { name:'Hacking',      stat:'tech',       key:'hacking'     },
+  { name:'Engineering',  stat:'tech',       key:'engineering' },
+  { name:'Electronics',  stat:'tech',       key:'electronics' },
+  { name:'Mechanics',    stat:'tech',       key:'mechanics'   },
+];
+
+const SPECIES_REF = {
+  human:       { bonuses:['+1 to any two stats'], traits:['Adaptable','Resourceful','Resilient'], diet:'Omnivore' },
+  kragol:      { bonuses:['+3 STR','+1 TEN','−2 SOC'], traits:['Stone Skin (natural armor)','Mineral Senses','Lithivore'], diet:'Lithivore' },
+  skitterling: { bonuses:['+3 AGI','+2 TEC','−2 STR'], traits:['Hyper-Metabolism','Multi-Limbed','Can ingest anything'], diet:'Hyper-Omnivore' },
+  myxos:       { bonuses:['+2 TEC','+2 INT'], traits:['Gelatinous Form (squeeze through gaps)','Bio-Acid Digestion','Dissolvent'], diet:'Dissolvent' },
+  arboran:     { bonuses:['+2 INT','+2 TEN'], traits:['Photosynthetic (no food needed)','Bark Skin','Colour-Shifting Patterns'], diet:'Photosynthetic' },
+  kaelen:      { bonuses:['+2 SOC','+2 AGI','+1 TEN'], traits:['Mineral-Infused Skeleton','Horn-Crests (pressure sense)','Strict Herbivore'], diet:'Strict Herbivore' },
+};
+
+const ROLE_ICONS = { pilot:'🚀', engineer:'⚙️', gunsmith:'🔧', face:'🗣️', medic:'💊', navigator:'🧭', science:'🔭', heavy:'🛡️' };
+const SPECIES_ICONS_MAP = { human:'🧑', kragol:'🪨', skitterling:'🐾', myxos:'🫧', arboran:'🌿', kaelen:'💠' };
+
+const params = new URLSearchParams(location.search);
+const charId = params.get('id');
+let char, inventory, proficiencies = {}, editMode = false;
+let currentUser;
+
+if (!charId) window.location.href = 'dashboard.html';
+
+(async () => {
+  const session = await Auth.requireAuth();
+  if (!session) return;
+  currentUser = session.user;
+
+  const { data: c } = await db.from('characters').select('*').eq('id', charId).single();
+  if (!c) return window.location.href = 'dashboard.html';
+  char = c;
+  proficiencies = char.skills || {};
+
+  populateSidebar();
+  populateStats();
+  populateSkills();
+  populateCombat();
+  populateBackground();
+  populateNotes();
+  await loadInventory();
+  renderSpeciesRef();
+})();
+
+function mod(stat) { return Math.floor((stat - 10) / 2); }
+function profBonus()  { return Math.floor((char.level - 1) / 4) + 2; }
+function fmtMod(m)  { return m >= 0 ? '+' + m : '' + m; }
+
+function populateSidebar() {
+  const spec  = char.species || 'human';
+  const role  = char.role   || '';
+  document.title = `${char.name} — Starbound Chronicles`;
+  document.getElementById('bio-name').textContent   = char.name;
+  document.getElementById('bio-sub').textContent    = `${cap(spec)} · ${char.rank || 'Ensign'}`;
+  document.getElementById('portrait-icon').textContent    = SPECIES_ICONS_MAP[spec] || '🧑';
+  document.getElementById('portrait-species').textContent = '';
+  document.getElementById('char-portrait').style.background =
+    `linear-gradient(135deg, ${speciesGrad(spec)})`;
+
+  const badges = document.getElementById('char-badges');
+  badges.innerHTML = [
+    `<span class="char-badge rank">${esc(char.rank||'Ensign')}</span>`,
+    role ? `<span class="char-badge">${ROLE_ICONS[role]||''} ${cap(role)}</span>` : '',
+    `<span class="char-badge">Lv ${char.level||1}</span>`,
+  ].join('');
+
+  document.getElementById('hp-cur').value      = char.hp_current || 10;
+  document.getElementById('hp-max-inp').value  = char.hp_max     || 10;
+  document.getElementById('xp-level').textContent = char.level || 1;
+  document.getElementById('xp-input').value    = char.xp || 0;
+  document.getElementById('prof-bonus').textContent = profBonus();
+  updateHPBar();
+
+  const sp = char.species || 'human';
+  document.getElementById('species-wiki-link').href = `species.html#${sp === 'skitterling' ? 'skitterlings' : sp + (sp === 'human' ? 's' : '')}`;
+}
+
+function populateStats() {
+  const grid = document.getElementById('stats-grid');
+  grid.innerHTML = STAT_DEFS.map(s => {
+    const val = char.stats?.[s.key] ?? 10;
+    const m   = mod(val);
+    return `
+      <div class="stat-card" style="--stat-color:${s.color}">
+        <div class="stat-name">${s.label}</div>
+        <div class="stat-val"  id="sv-${s.key}">${val}</div>
+        <input class="stat-input" id="si-${s.key}" type="number" min="1" max="30" value="${val}" oninput="onStatChange('${s.key}')">
+        <div class="stat-mod ${m>=0?'pos':'neg'}" id="sm-${s.key}">${fmtMod(m)}</div>
+      </div>`;
+  }).join('');
+}
+
+function onStatChange(key) {
+  const val = parseInt(document.getElementById('si-' + key).value) || 10;
+  const m   = mod(val);
+  document.getElementById('sv-' + key).textContent = val;
+  document.getElementById('sm-' + key).className   = 'stat-mod ' + (m >= 0 ? 'pos' : 'neg');
+  document.getElementById('sm-' + key).textContent = fmtMod(m);
+  char.stats[key] = val;
+  updateCombatStats();
+  updateSkillBonuses();
+}
+
+function populateCombat() {
+  updateCombatStats();
+}
+
+function updateCombatStats() {
+  const stats = char.stats || {};
+  const initiative = mod(stats.agility  ?? 10);
+  const maxHP      = 8 + mod(stats.tenacity ?? 10) + ((char.level||1) - 1) * (1 + mod(stats.tenacity ?? 10));
+  const armor      = char.armor || 10;
+  const speed      = char.speed || 30;
+
+  const row = document.getElementById('combat-row');
+  row.innerHTML = [
+    { label:'Initiative', val: fmtMod(initiative) },
+    { label:'Base HP',    val: maxHP },
+    { label:'Armor',      val: armor },
+    { label:'Speed',      val: speed + 'm' },
+  ].map(c => `
+    <div class="combat-stat">
+      <div class="combat-stat-label">${c.label}</div>
+      <div class="combat-stat-val">${c.val}</div>
+    </div>`).join('');
+}
+
+function populateSkills() {
+  const byGroup = {};
+  SKILLS.forEach(s => {
+    if (!byGroup[s.stat]) byGroup[s.stat] = [];
+    byGroup[s.stat].push(s);
+  });
+
+  const grid = document.getElementById('skills-grid');
+  grid.innerHTML = Object.entries(byGroup).map(([stat, skills]) => {
+    const sd = STAT_DEFS.find(d => d.key === stat);
+    return `
+      <div class="skill-group">
+        <div class="skill-group-title" style="color:${sd?.color}">${sd?.label || stat}</div>
+        ${skills.map(s => {
+          const prof = proficiencies[s.key];
+          const statVal = char.stats?.[s.stat] ?? 10;
+          const bonus = mod(statVal) + (prof ? profBonus() : 0);
+          return `
+            <div class="skill-row" onclick="toggleProf('${s.key}')">
+              <div class="skill-prof ${prof ? 'active' : ''}" id="prof-${s.key}"></div>
+              <span class="skill-name">${s.name}</span>
+              <span class="skill-stat-tag">${sd?.abbr}</span>
+              <span class="skill-bonus ${bonus>=0?'pos':'neg'}" id="sb-${s.key}">${fmtMod(bonus)}</span>
+            </div>`;
+        }).join('')}
+      </div>`;
+  }).join('');
+}
+
+function toggleProf(key) {
+  proficiencies[key] = !proficiencies[key];
+  const dot = document.getElementById('prof-' + key);
+  dot.classList.toggle('active', !!proficiencies[key]);
+  updateSkillBonuses();
+}
+
+function updateSkillBonuses() {
+  SKILLS.forEach(s => {
+    const prof    = proficiencies[s.key];
+    const statVal = char.stats?.[s.stat] ?? 10;
+    const bonus   = mod(statVal) + (prof ? profBonus() : 0);
+    const el = document.getElementById('sb-' + s.key);
+    if (el) { el.textContent = fmtMod(bonus); el.className = 'skill-bonus ' + (bonus >= 0 ? 'pos' : 'neg'); }
+  });
+}
+
+function renderSpeciesRef() {
+  const spec = char.species || 'human';
+  const ref  = SPECIES_REF[spec];
+  if (!ref) return;
+  document.getElementById('species-ref-box').innerHTML = `
+    <div class="species-ref-title">${SPECIES_ICONS_MAP[spec]} ${cap(spec)} Species Traits</div>
+    <div class="species-ref-body">
+      <div style="margin-bottom:8px;">${ref.bonuses.map(b =>
+        `<span class="species-bonus-chip ${b.startsWith('+') ? 'pos' : b.startsWith('−') ? 'neg' : ''}">${b}</span>`
+      ).join('')}</div>
+      ${ref.traits.map(t => `<div style="margin-bottom:3px; font-size:12px; color:var(--text-faint);">· ${t}</div>`).join('')}
+      <div style="margin-top:6px; font-size:11px; color:var(--text-faint); letter-spacing:.05em;">Diet: ${ref.diet}</div>
+    </div>`;
+}
+
+function updateHPBar() {
+  const cur = parseInt(document.getElementById('hp-cur').value) || 0;
+  const max = parseInt(document.getElementById('hp-max-inp').value) || 1;
+  const pct = Math.max(0, Math.min(100, (cur / max) * 100));
+  const bar = document.getElementById('hp-bar');
+  bar.style.width = pct + '%';
+  bar.style.background = pct > 50 ? '#4acc7a' : pct > 25 ? '#d4af37' : '#cc4444';
+}
+
+function changeLevel(delta) {
+  const cur = parseInt(document.getElementById('xp-level').textContent) || 1;
+  const nxt = Math.max(1, Math.min(20, cur + delta));
+  document.getElementById('xp-level').textContent = nxt;
+  char.level = nxt;
+  document.getElementById('prof-bonus').textContent = profBonus();
+  updateSkillBonuses();
+  updateCombatStats();
+}
+
+function populateBackground() {
+  document.getElementById('bg-backstory').value   = char.background  || '';
+  document.getElementById('bg-personality').value = char.personality || '';
+  document.getElementById('bg-bonds').value        = char.bonds       || '';
+  document.getElementById('bg-flaws').value        = char.flaws       || '';
+}
+
+function populateNotes() {
+  document.getElementById('char-notes').value = char.notes || '';
+}
+
+// ── Inventory ─────────────────────────────────────────────────
+async function loadInventory() {
+  const { data } = await db.from('character_inventory').select('*').eq('character_id', charId).order('created_at');
+  inventory = data || [];
+  renderInventory();
+}
+
+function renderInventory() {
+  const tbody = document.getElementById('inv-body');
+  let totalW = 0, totalV = 0;
+  inventory.forEach(i => { totalW += (i.weight || 0) * (i.quantity || 1); totalV += (i.value || 0) * (i.quantity || 1); });
+  document.getElementById('total-weight').textContent = totalW.toFixed(1);
+  document.getElementById('total-value').textContent  = totalV;
+
+  if (!inventory.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-faint); padding:24px;">No items yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = inventory.map(item => `
+    <tr>
+      <td><div class="inv-equipped ${item.is_equipped ? 'active' : ''}" onclick="toggleEquip('${item.id}', ${!item.is_equipped})"></div></td>
+      <td><strong style="color:var(--text)">${esc(item.name)}</strong>${item.description ? `<br><span style="font-size:11px; color:var(--text-faint)">${esc(item.description)}</span>` : ''}</td>
+      <td><span class="inv-type-badge type-${item.item_type}">${cap(item.item_type)}</span></td>
+      <td>${item.quantity}</td>
+      <td>${(item.weight||0).toFixed(1)} kg</td>
+      <td>${item.value||0} ¢</td>
+      <td><button class="inv-delete-btn" onclick="deleteItem('${item.id}')">🗑</button></td>
+    </tr>
+  `).join('');
+}
+
+async function toggleEquip(id, equipped) {
+  await db.from('character_inventory').update({ is_equipped: equipped }).eq('id', id);
+  await loadInventory();
+}
+
+async function deleteItem(id) {
+  if (!confirm('Remove this item?')) return;
+  await db.from('character_inventory').delete().eq('id', id);
+  await loadInventory();
+}
+
+function openAddItem() {
+  document.getElementById('item-name').value   = '';
+  document.getElementById('item-qty').value    = 1;
+  document.getElementById('item-weight').value = 0;
+  document.getElementById('item-value').value  = 0;
+  document.getElementById('item-desc').value   = '';
+  openModal('modal-add-item');
+}
+
+async function addItem() {
+  const name = document.getElementById('item-name').value.trim();
+  if (!name) return showError('item-error', 'Item needs a name.');
+  const { error } = await db.from('character_inventory').insert({
+    character_id: charId,
+    name,
+    item_type:   document.getElementById('item-type').value,
+    quantity:    parseInt(document.getElementById('item-qty').value)    || 1,
+    weight:      parseFloat(document.getElementById('item-weight').value) || 0,
+    value:       parseInt(document.getElementById('item-value').value)  || 0,
+    description: document.getElementById('item-desc').value.trim(),
+  });
+  if (error) return showError('item-error', error.message);
+  closeModal('modal-add-item');
+  await loadInventory();
+}
+
+// ── Edit mode ─────────────────────────────────────────────────
+function toggleEdit() {
+  editMode = true;
+  document.body.classList.add('edit-mode');
+  document.getElementById('edit-btn').style.display   = 'none';
+  document.getElementById('save-btn').style.display   = '';
+  document.getElementById('cancel-btn').style.display = '';
+  document.getElementById('edit-hint').style.display  = 'block';
+}
+
+function cancelEdit() {
+  editMode = false;
+  document.body.classList.remove('edit-mode');
+  document.getElementById('edit-btn').style.display   = '';
+  document.getElementById('save-btn').style.display   = 'none';
+  document.getElementById('cancel-btn').style.display = 'none';
+  document.getElementById('edit-hint').style.display  = 'none';
+}
+
+async function saveCharacter() {
+  const stats = {};
+  STAT_DEFS.forEach(s => { stats[s.key] = parseInt(document.getElementById('si-' + s.key).value) || 10; });
+  const updates = {
+    stats,
+    skills:      proficiencies,
+    level:       parseInt(document.getElementById('xp-level').textContent) || 1,
+    xp:          parseInt(document.getElementById('xp-input').value) || 0,
+    hp_current:  parseInt(document.getElementById('hp-cur').value) || 0,
+    hp_max:      parseInt(document.getElementById('hp-max-inp').value) || 10,
+    background:  document.getElementById('bg-backstory').value,
+    personality: document.getElementById('bg-personality').value,
+    bonds:       document.getElementById('bg-bonds').value,
+    flaws:       document.getElementById('bg-flaws').value,
+    notes:       document.getElementById('char-notes').value,
+  };
+  const { error } = await db.from('characters').update(updates).eq('id', charId);
+  if (error) return alert('Save failed: ' + error.message);
+  Object.assign(char, updates);
+  cancelEdit();
+}
+
+async function deleteCharacter() {
+  if (!confirm(`Permanently delete ${char.name}? This cannot be undone.`)) return;
+  await db.from('characters').delete().eq('id', charId);
+  window.location.href = 'dashboard.html';
+}
+
+// ── Tabs ──────────────────────────────────────────────────────
+function switchTab(btn) {
+  document.querySelectorAll('.tab-pill').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+}
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-backdrop').forEach(b => b.addEventListener('click', e => { if (e.target === b) b.classList.remove('open'); }));
+
+function speciesGrad(s) {
+  const g = { human:'#1e4a9a,#3a78d4', kragol:'#3a2010,#6a4020', skitterling:'#3a1e00,#8a4a00',
+               myxos:'#2a0850,#5a20a0', arboran:'#0a3a18,#1a6a30', kaelen:'#08303e,#10607a' };
+  return g[s] || '#1e4a9a,#3a78d4';
+}
+function esc(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function cap(s){ return s ? s[0].toUpperCase()+s.slice(1) : ''; }
+</script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In — Starbound Chronicles</title>
+<link rel="stylesheet" href="css/wiki.css">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div class="auth-page">
+
+  <!-- LEFT: Branding -->
+  <div class="auth-left">
+    <div class="starfield" id="starfield"></div>
+    <div class="auth-brand">
+      <div class="auth-logo">✦</div>
+      <h1 class="auth-game-title">Starbound Chronicles</h1>
+      <p class="auth-game-sub">The open-universe sci-fi tabletop system. Build your crew, chart your ship, and survive the void.</p>
+      <ul class="auth-feature-list">
+        <li><span>🧬</span> Choose from 6 unique species with survival biologies</li>
+        <li><span>🚀</span> Build and customise your own starship deck-by-deck</li>
+        <li><span>⚔️</span> Play campaigns together in real time</li>
+        <li><span>📖</span> Full wiki reference built right in</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- RIGHT: Form -->
+  <div class="auth-right">
+    <div class="auth-form-wrap">
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-tab="login">Sign In</button>
+        <button class="auth-tab" data-tab="register">Create Account</button>
+      </div>
+
+      <!-- LOGIN -->
+      <div class="auth-form-section active" id="section-login">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" type="email" id="login-email" placeholder="commander@starfleet.net" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <div class="form-error" id="login-error"></div>
+        <button class="btn-primary" id="login-btn">Sign In</button>
+      </div>
+
+      <!-- REGISTER -->
+      <div class="auth-form-section" id="section-register">
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input class="form-input" type="text" id="reg-username" placeholder="StarCaptain42" maxlength="20" autocomplete="username">
+          <span class="form-hint">This is your display name in campaigns.</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" type="email" id="reg-email" placeholder="commander@starfleet.net" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" type="password" id="reg-password" placeholder="Min. 8 characters" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirm Password</label>
+          <input class="form-input" type="password" id="reg-confirm" placeholder="••••••••" autocomplete="new-password">
+        </div>
+        <div class="form-error"   id="reg-error"></div>
+        <div class="form-success" id="reg-success"></div>
+        <button class="btn-primary" id="reg-btn">Create Account</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+// Redirect if already logged in
+Auth.requireGuest();
+
+// ── Tab switching ──────────────────────────────────────────────
+document.querySelectorAll('.auth-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.auth-form-section').forEach(s => s.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('section-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+// ── Login ──────────────────────────────────────────────────────
+document.getElementById('login-btn').addEventListener('click', async () => {
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const btn      = document.getElementById('login-btn');
+
+  showError('login-error', '');
+  if (!email || !password) return showError('login-error', 'Please fill in all fields.');
+
+  setLoading(btn, true);
+  const { error } = await Auth.signIn(email, password);
+  setLoading(btn, false);
+
+  if (error) return showError('login-error', error.message);
+  window.location.href = 'dashboard.html';
+});
+
+// ── Register ───────────────────────────────────────────────────
+document.getElementById('reg-btn').addEventListener('click', async () => {
+  const username = document.getElementById('reg-username').value.trim();
+  const email    = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const confirm  = document.getElementById('reg-confirm').value;
+  const btn      = document.getElementById('reg-btn');
+
+  showError('reg-error', '');
+  document.getElementById('reg-success').style.display = 'none';
+
+  if (!username || !email || !password || !confirm)
+    return showError('reg-error', 'Please fill in all fields.');
+  if (username.length < 3)
+    return showError('reg-error', 'Username must be at least 3 characters.');
+  if (!/^[a-zA-Z0-9_]+$/.test(username))
+    return showError('reg-error', 'Username can only contain letters, numbers, and underscores.');
+  if (password.length < 8)
+    return showError('reg-error', 'Password must be at least 8 characters.');
+  if (password !== confirm)
+    return showError('reg-error', 'Passwords do not match.');
+
+  setLoading(btn, true);
+  const { error } = await Auth.signUp(email, password, username);
+  setLoading(btn, false);
+
+  if (error) return showError('reg-error', error.message);
+
+  const successEl = document.getElementById('reg-success');
+  successEl.textContent = 'Account created! Check your email to confirm, then sign in.';
+  successEl.style.display = 'block';
+
+  // If email confirmation is disabled in Supabase settings, just redirect
+  setTimeout(() => { window.location.href = 'dashboard.html'; }, 1500);
+});
+
+// Enter key support
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const loginActive = document.getElementById('section-login').classList.contains('active');
+  if (loginActive) document.getElementById('login-btn').click();
+  else             document.getElementById('reg-btn').click();
+});
+
+// ── Starfield ──────────────────────────────────────────────────
+const sf = document.getElementById('starfield');
+for (let i = 0; i < 120; i++) {
+  const s = document.createElement('div');
+  s.className = 'star';
+  const size = Math.random() < 0.7 ? 1 : Math.random() < 0.7 ? 2 : 3;
+  s.style.cssText = `
+    width:${size}px; height:${size}px;
+    left:${Math.random()*100}%; top:${Math.random()*100}%;
+    --dur:${2 + Math.random()*4}s;
+    --delay:${Math.random()*4}s;
+    --bright:${0.3 + Math.random()*0.7};
+  `;
+  sf.appendChild(s);
+}
+</script>
+</body>
+</html>
