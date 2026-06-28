@@ -158,6 +158,15 @@ body.edit-mode .edit-hint  { display:block; }
     <button class="btn-secondary" id="edit-btn" onclick="toggleEdit()" style="padding:7px 16px; font-size:12px;">Edit</button>
     <button class="btn-primary"   id="save-btn" onclick="saveCharacter()" style="padding:7px 16px; font-size:12px; display:none; width:auto;">Save</button>
     <button class="btn-ghost"     id="cancel-btn" onclick="cancelEdit()" style="padding:7px 16px; font-size:12px; display:none;">Cancel</button>
+    <div class="user-menu" id="user-menu-topbar" onclick="toggleUserDD()" style="margin-left:4px;">
+      <div class="user-avatar" id="uav-char" style="background:#3a78d4;width:32px;height:32px;font-size:12px;">?</div>
+      <div class="user-info"><span class="user-name" id="uname-char" style="font-size:12px;">…</span></div>
+      <div class="user-dropdown" id="udrop-char">
+        <a href="dashboard.html" class="dropdown-item">🏠 Dashboard</a>
+        <div class="dropdown-divider"></div>
+        <button class="dropdown-item danger" onclick="Auth.signOut()">→ Sign Out</button>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -417,6 +426,12 @@ if (!charId) window.location.href = 'dashboard.html';
   const session = await Auth.requireAuth();
   if (!session) return;
   currentUser = session.user;
+
+  const profile = await Auth.getProfile(currentUser.id);
+  const uname = profile?.display_name || profile?.username || '?';
+  document.getElementById('uname-char').textContent = uname;
+  document.getElementById('uav-char').textContent   = getInitials(uname);
+  document.getElementById('uav-char').style.background = profile?.avatar_color || '#3a78d4';
 
   const { data: c } = await db.from('characters').select('*').eq('id', charId).single();
   if (!c) return window.location.href = 'dashboard.html';
@@ -739,6 +754,8 @@ function speciesGrad(s) {
                myxos:'#2a0850,#5a20a0', arboran:'#0a3a18,#1a6a30', kaelen:'#08303e,#10607a' };
   return g[s] || '#1e4a9a,#3a78d4';
 }
+function toggleUserDD() { document.getElementById('udrop-char').classList.toggle('open'); }
+document.addEventListener('click', e => { if (!e.target.closest('#user-menu-topbar')) document.getElementById('udrop-char')?.classList.remove('open'); });
 function esc(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function cap(s){ return s ? s[0].toUpperCase()+s.slice(1) : ''; }
 </script>

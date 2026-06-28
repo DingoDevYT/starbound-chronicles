@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Starbound Chronicles — Wiki</title>
 <link rel="stylesheet" href="css/wiki.css">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
 </head>
 <body>
 
@@ -25,8 +28,8 @@
     <a class="topbar-link" href="#">Locations</a>
     <a class="topbar-link" href="#">Rules</a>
   </nav>
-  <div class="topbar-right">
-    <span class="topbar-pill">Early Access</span>
+  <div class="topbar-right" style="border-left:none;">
+    <div id="nav-auth"></div>
   </div>
 </header>
 
@@ -97,5 +100,31 @@
 
 </div>
 
+<script>
+(async () => {
+  const { data: { session } } = await db.auth.getSession();
+  const el = document.getElementById('nav-auth');
+  if (session) {
+    const { data: p } = await db.from('profiles').select('username,display_name,avatar_color').eq('id', session.user.id).single();
+    const name = p?.display_name || p?.username || 'Crew';
+    const color = p?.avatar_color || '#3a78d4';
+    const initials = name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+    el.innerHTML = `
+      <a href="dashboard.html" class="topbar-link" style="margin-right:4px;">Dashboard</a>
+      <div class="user-menu" onclick="this.querySelector('.user-dropdown').classList.toggle('open')" style="cursor:pointer;">
+        <div class="user-avatar" style="background:${color};width:32px;height:32px;font-size:12px;">${initials}</div>
+        <div class="user-info"><span class="user-name" style="font-size:12px;">${name}</span></div>
+        <div class="user-dropdown" id="nav-drop">
+          <a href="dashboard.html" class="dropdown-item">🏠 Dashboard</a>
+          <div class="dropdown-divider"></div>
+          <button class="dropdown-item danger" onclick="db.auth.signOut().then(()=>location.href='auth.html')">→ Sign Out</button>
+        </div>
+      </div>`;
+    document.addEventListener('click', e => { if (!e.target.closest('.user-menu')) document.getElementById('nav-drop')?.classList.remove('open'); });
+  } else {
+    el.innerHTML = `<a href="auth.html" class="btn-primary" style="padding:8px 18px;font-size:12px;border-radius:6px;text-decoration:none;display:inline-block;">Sign In →</a>`;
+  }
+})();
+</script>
 </body>
 </html>
