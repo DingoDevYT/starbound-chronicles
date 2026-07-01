@@ -232,12 +232,13 @@
     <section class="ship-section" id="ship">
       <div class="ship-name-bar">
         <h2 id="ship-name">Loading ship…</h2>
-        <div>
-          <small id="ship-class" style="margin-right:16px;">—</small>
-          <a id="ship-editor-link" href="#" style="font-size:11px; color:var(--accent); font-weight:600; text-decoration:none; border:1px solid var(--accent-dim); padding:4px 10px; border-radius:5px;">Edit Ship</a>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <small id="ship-class">—</small>
+          <button id="ship-manage-btn" class="btn-secondary" style="font-size:11px; padding:4px 12px; display:none;" onclick="openSetupShip()">Edit Ship</button>
         </div>
       </div>
       <canvas id="ship-canvas" height="360"></canvas>
+      <div id="ship-hint" style="display:none; padding:6px 18px; font-size:11px; color:var(--text-faint); background:var(--surface); border-top:1px solid var(--border);">Click a wing or thruster slot to equip a component. Drag crew tokens to reposition them.</div>
       <div class="ship-stat-bar">
         <div class="ship-stat">
           <div class="ship-stat-label">Hull</div>
@@ -285,7 +286,7 @@
         <span class="camp-section-title">Initiative Tracker</span>
         <div style="display:flex; gap:8px;">
           <span class="round-badge" id="round-lbl">Round 0</span>
-          <button class="btn-secondary" onclick="openModal('modal-add-init')" style="font-size:11px; padding:5px 12px;">+ Combatant</button>
+          <button class="btn-secondary" onclick="openAddCombatant()" style="font-size:11px; padding:5px 12px;">+ Combatant</button>
           <button class="btn-ghost"     onclick="nextTurn()"    style="font-size:11px; padding:5px 12px;">Next Turn</button>
           <button class="btn-ghost"     onclick="clearInit()"   style="font-size:11px; padding:5px 12px; color:#ff8888;">Clear All</button>
         </div>
@@ -301,7 +302,7 @@
     <section class="camp-section" id="quests">
       <div class="camp-section-hdr">
         <span class="camp-section-title">Quest Tracker</span>
-        <button class="btn-secondary" onclick="openModal('modal-add-quest')" style="font-size:11px; padding:5px 12px;">+ Quest</button>
+        <button class="btn-secondary" onclick="openAddQuest()" style="font-size:11px; padding:5px 12px;">+ Quest</button>
       </div>
       <div class="quest-list" id="quest-list"><div class="empty-state"><div class="empty-title">No quests yet</div></div></div>
     </section>
@@ -310,7 +311,7 @@
     <section class="camp-section" id="npcs">
       <div class="camp-section-hdr">
         <span class="camp-section-title">NPC Roster</span>
-        <button class="btn-secondary" onclick="openModal('modal-add-npc')" style="font-size:11px; padding:5px 12px;">+ NPC</button>
+        <button class="btn-secondary" onclick="openAddNPC()" style="font-size:11px; padding:5px 12px;">+ NPC</button>
       </div>
       <div class="npc-grid" id="npc-grid"><div class="empty-state"><div class="empty-title">No NPCs yet</div></div></div>
     </section>
@@ -381,7 +382,23 @@
     </div>
     <div class="modal-footer">
       <button class="btn-ghost" onclick="closeModal('modal-setup-ship')">Cancel</button>
-      <button class="btn-primary" onclick="createCampaignShip()" style="width:auto;padding:10px 24px;">Assign Ship</button>
+      <button class="btn-primary" id="setup-ship-save-btn" onclick="createCampaignShip()" style="width:auto;padding:10px 24px;">Assign Ship</button>
+    </div>
+  </div>
+</div>
+
+<!-- Equip Component (GM only) -->
+<div class="modal-backdrop" id="modal-equip-slot">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header"><span class="modal-title" id="equip-slot-title">Equip Component</span><button class="modal-close" onclick="closeModal('modal-equip-slot')">✕</button></div>
+    <div class="modal-body">
+      <div id="component-picker" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-height:380px;overflow-y:auto;">
+        <div style="color:var(--text-faint);font-size:13px;grid-column:1/-1;">Loading components…</div>
+      </div>
+      <div class="form-error" id="equip-slot-error" style="margin-top:10px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('modal-equip-slot')">Close</button>
     </div>
   </div>
 </div>
@@ -403,7 +420,7 @@
       </div>
       <div class="form-error" id="init-error"></div>
     </div>
-    <div class="modal-footer"><button class="btn-ghost" onclick="closeModal('modal-add-init')">Cancel</button><button class="btn-primary" onclick="addCombatant()" style="width:auto;padding:10px 24px;">Add</button></div>
+    <div class="modal-footer"><button class="btn-ghost" onclick="closeModal('modal-add-init')">Cancel</button><button class="btn-primary" onclick="saveCombatant()" style="width:auto;padding:10px 24px;" id="init-save-btn">Add</button></div>
   </div>
 </div>
 
@@ -424,13 +441,15 @@
           <select class="form-select" id="quest-status-inp">
             <option value="active">Active</option>
             <option value="paused">Paused</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
           </select>
         </div>
       </div>
       <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" id="quest-desc-inp" placeholder="Quest details…"></textarea></div>
       <div class="form-error" id="quest-error"></div>
     </div>
-    <div class="modal-footer"><button class="btn-ghost" onclick="closeModal('modal-add-quest')">Cancel</button><button class="btn-primary" onclick="addQuest()" style="width:auto;padding:10px 24px;">Add Quest</button></div>
+    <div class="modal-footer"><button class="btn-ghost" onclick="closeModal('modal-add-quest')">Cancel</button><button class="btn-primary" onclick="saveQuest()" style="width:auto;padding:10px 24px;" id="quest-save-btn">Add Quest</button></div>
   </div>
 </div>
 
@@ -467,7 +486,7 @@
       <div class="form-group"><label class="form-label">Description / Notes</label><textarea class="form-textarea" id="npc-desc-inp" style="min-height:60px;" placeholder="Role, appearance, motivations…"></textarea></div>
       <div class="form-error" id="npc-error"></div>
     </div>
-    <div class="modal-footer"><button class="btn-ghost" onclick="closeModal('modal-add-npc')">Cancel</button><button class="btn-primary" onclick="addNPC()" style="width:auto;padding:10px 24px;">Add NPC</button></div>
+    <div class="modal-footer"><button class="btn-ghost" onclick="closeModal('modal-add-npc')">Cancel</button><button class="btn-primary" onclick="saveNPC()" style="width:auto;padding:10px 24px;" id="npc-save-btn">Add NPC</button></div>
   </div>
 </div>
 
@@ -485,6 +504,7 @@ const params     = new URLSearchParams(location.search);
 const campaignId = params.get('id');
 let currentUser, campaign, isGM = false, activeTurn = 0;
 let shipData = null, shipType = null, shipTokens = [];
+let shipComponents = { left_wing: null, right_wing: null, thruster: null };
 let tokenImages = {};  // species → HTMLImageElement
 
 if (!campaignId) location.href = 'dashboard.html';
@@ -519,7 +539,6 @@ function preloadImages() {
   document.getElementById('invite-disp').textContent  = c.invite_code;
   document.getElementById('stat-round').textContent   = c.round_num || 0;
   document.getElementById('round-lbl').textContent    = 'Round ' + (c.round_num || 0);
-  document.getElementById('ship-editor-link').href    = 'ship-editor.html?id=' + campaignId;
 
   try {
     await Promise.all([loadShip(), loadCrew(), loadInitiative(), loadQuests(), loadNPCs(), loadLog(), loadDiceHistory()]);
@@ -567,6 +586,22 @@ async function loadShip() {
     shipType = ht || null;
   }
 
+  shipComponents = { left_wing: null, right_wing: null, thruster: null };
+  const compIds = [sd?.left_wing_id, sd?.right_wing_id, sd?.thruster_id].filter(Boolean);
+  if (compIds.length) {
+    const { data: comps, error: compErr } = await db.from('ship_components').select('*').in('id', compIds);
+    if (compErr) console.error('loadShipComponents error:', compErr);
+    if (comps) {
+      shipComponents.left_wing  = comps.find(c => c.id === sd.left_wing_id)  || null;
+      shipComponents.right_wing = comps.find(c => c.id === sd.right_wing_id) || null;
+      shipComponents.thruster   = comps.find(c => c.id === sd.thruster_id)   || null;
+    }
+  }
+
+  const manageBtn = document.getElementById('ship-manage-btn');
+  manageBtn.style.display = isGM ? 'inline-block' : 'none';
+  manageBtn.textContent   = shipData ? 'Edit Ship' : '+ Assign Ship';
+
   if (shipData) {
     document.getElementById('ship-name').textContent  = shipData.ship_name || 'Unnamed Vessel';
     document.getElementById('ship-class').textContent = shipType ? `${shipType.name} — ${shipType.size}` : '—';
@@ -581,13 +616,12 @@ async function loadShip() {
     document.getElementById('stat-hp').className = 'ship-stat-val ' + (hpPct < .3 ? 'danger' : hpPct > .6 ? 'ok' : '');
     const fuelPct = shipData.fuel_max ? shipData.fuel_current / shipData.fuel_max : 1;
     document.getElementById('stat-fuel').className = 'ship-stat-val ' + (fuelPct < .2 ? 'danger' : fuelPct > .5 ? 'ok' : '');
+
+    document.getElementById('ship-hint').style.display = isGM ? 'block' : 'none';
   } else {
     document.getElementById('ship-name').textContent = 'No Ship Assigned';
-    if (isGM) {
-      document.getElementById('ship-class').innerHTML = '<button class="btn-secondary" onclick="openSetupShip()" style="font-size:11px;padding:4px 12px;">+ Assign Ship</button>';
-    } else {
-      document.getElementById('ship-class').textContent = 'Waiting for GM to assign a ship.';
-    }
+    document.getElementById('ship-class').textContent = isGM ? '' : 'Waiting for GM to assign a ship.';
+    document.getElementById('ship-hint').style.display = 'none';
   }
 
   await loadTokens();
@@ -601,6 +635,7 @@ async function loadTokens() {
 
 // Ship canvas rendering
 let shipScale = 1, shipOffX = 0, shipOffY = 0;
+let slotRects = {};
 const CELL = 28;
 
 function drawShipMap() {
@@ -709,9 +744,9 @@ function drawShipMap() {
   });
 
   // Draw wing slots
-  drawSlot(lwSlot, 'L Wing', '#2a4a7a', '#3a6aaa');
-  drawSlot(rwSlot, 'R Wing', '#2a4a7a', '#3a6aaa');
-  drawSlot(thrSlot, 'Thruster', '#1a3a5a', '#2a5a8a');
+  drawSlot('left_wing',  lwSlot,  'L Wing',   '#2a4a7a', '#3a6aaa', shipComponents.left_wing?.name);
+  drawSlot('right_wing', rwSlot,  'R Wing',   '#2a4a7a', '#3a6aaa', shipComponents.right_wing?.name);
+  drawSlot('thruster',   thrSlot, 'Thruster', '#1a3a5a', '#2a5a8a', shipComponents.thruster?.name);
 
   // Draw tokens
   shipTokens.forEach(tok => {
@@ -752,26 +787,30 @@ function drawShipMap() {
     }
   });
 
-  function drawSlot(slot, label, bg, border) {
+  function drawSlot(key, slot, label, bg, border, equippedName) {
     const px = gx(slot.x), py = gy(slot.y);
     const sw = slot.w * cs, sh = slot.h * cs;
-    shipCtx.fillStyle = bg + '44';
+    slotRects[key] = { x: px, y: py, w: sw, h: sh };
+
+    shipCtx.fillStyle = equippedName ? border + '33' : bg + '44';
     shipCtx.strokeStyle = border;
     shipCtx.lineWidth = 1;
-    shipCtx.setLineDash([4, 3]);
+    shipCtx.setLineDash(equippedName ? [] : [4, 3]);
     shipCtx.fillRect(px, py, sw, sh);
     shipCtx.strokeRect(px + .5, py + .5, sw - 1, sh - 1);
     shipCtx.setLineDash([]);
-    shipCtx.fillStyle = border;
-    shipCtx.font = `${Math.max(9, cs * .3)}px system-ui, sans-serif`;
+    shipCtx.fillStyle = equippedName ? '#d0e4ff' : border;
+    shipCtx.font = `${equippedName ? '600 ' : ''}${Math.max(9, cs * .28)}px system-ui, sans-serif`;
     shipCtx.textAlign = 'center';
     shipCtx.textBaseline = 'middle';
-    shipCtx.fillText(label, px + sw / 2, py + sh / 2);
+    const text = equippedName || label;
+    const maxChars = Math.max(4, Math.floor(sw / (cs * .22)));
+    shipCtx.fillText(text.length > maxChars ? text.slice(0, maxChars - 1) + '…' : text, px + sw / 2, py + sh / 2);
   }
 }
 
 // Token drag support
-let dragToken = null, dragOffX = 0, dragOffY = 0;
+let dragToken = null, dragOffX = 0, dragOffY = 0, justDraggedToken = false;
 
 shipCanvas.addEventListener('mousedown', e => {
   const rect = shipCanvas.getBoundingClientRect();
@@ -826,7 +865,21 @@ shipCanvas.addEventListener('mouseup', async e => {
   const newY = Math.round((my - shipOffY) / cs);
   await db.from('ship_tokens').update({ token_x: newX, token_y: newY }).eq('id', dragToken.id);
   dragToken = null;
+  justDraggedToken = true;
   shipCanvas.style.cursor = 'default';
+});
+
+shipCanvas.addEventListener('click', e => {
+  if (justDraggedToken) { justDraggedToken = false; return; }
+  if (!isGM || !shipData || !shipType) return;
+  const rect = shipCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  for (const [key, r] of Object.entries(slotRects)) {
+    if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+      openEquipSlot(key);
+      return;
+    }
+  }
 });
 
 // Resize / redraw
@@ -857,7 +910,7 @@ async function loadCrew() {
 }
 
 // ── Initiative ──────────────────────────────────────────────────
-let combatants = [];
+let combatants = [], editingCombatantId = null;
 async function loadInitiative() {
   const { data } = await db.from('initiative_tracker').select('*').eq('campaign_id', campaignId).eq('is_active', true).order('initiative', {ascending:false}).order('created_at');
   combatants = data || [];
@@ -879,21 +932,52 @@ function renderInitiative() {
         <button class="hp-adj-btn" onclick="adjHP('${c.id}',+1)">+</button>
       </div></td>
       <td>${(c.conditions||[]).map(cd=>`<span class="cond-chip">${esc(cd)}</span>`).join('')||'<span style="color:var(--text-faint);font-size:12px;">—</span>'}</td>
-      <td><button class="del-btn" onclick="removeCombatant('${c.id}')">✕</button></td>
+      <td style="white-space:nowrap;">
+        <button class="del-btn" onclick="openEditCombatant('${c.id}')" style="color:var(--text-dim);">Edit</button>
+        <button class="del-btn" onclick="removeCombatant('${c.id}')">✕</button>
+      </td>
     </tr>`;
   }).join('');
 }
 
-async function addCombatant() {
+function openAddCombatant() {
+  editingCombatantId = null;
+  document.getElementById('modal-add-init').querySelector('.modal-title').textContent = 'Add Combatant';
+  document.getElementById('init-save-btn').textContent = 'Add';
+  document.getElementById('init-name-inp').value = '';
+  document.getElementById('init-val-inp').value  = '';
+  document.getElementById('init-hp-inp').value   = '';
+  document.getElementById('init-npc-inp').value  = 'false';
+  showError('init-error','');
+  openModal('modal-add-init');
+}
+
+function openEditCombatant(id) {
+  const c = combatants.find(x => x.id === id); if (!c) return;
+  editingCombatantId = id;
+  document.getElementById('modal-add-init').querySelector('.modal-title').textContent = 'Edit Combatant';
+  document.getElementById('init-save-btn').textContent = 'Save Changes';
+  document.getElementById('init-name-inp').value = c.combatant;
+  document.getElementById('init-val-inp').value  = c.initiative;
+  document.getElementById('init-hp-inp').value   = c.hp_max ?? c.hp_current ?? '';
+  document.getElementById('init-npc-inp').value  = c.is_npc ? 'true' : 'false';
+  showError('init-error','');
+  openModal('modal-add-init');
+}
+
+async function saveCombatant() {
   const name = document.getElementById('init-name-inp').value.trim();
   const init = parseInt(document.getElementById('init-val-inp').value) || 0;
   const hp   = parseInt(document.getElementById('init-hp-inp').value)  || null;
   const isNPC = document.getElementById('init-npc-inp').value === 'true';
   showError('init-error','');
   if (!name) return showError('init-error','Enter a name.');
-  await db.from('initiative_tracker').insert({ campaign_id:campaignId, combatant:name, initiative:init, hp_current:hp, hp_max:hp, is_npc:isNPC });
+  if (editingCombatantId) {
+    await db.from('initiative_tracker').update({ combatant:name, initiative:init, hp_max:hp, is_npc:isNPC }).eq('id', editingCombatantId);
+  } else {
+    await db.from('initiative_tracker').insert({ campaign_id:campaignId, combatant:name, initiative:init, hp_current:hp, hp_max:hp, is_npc:isNPC });
+  }
   closeModal('modal-add-init');
-  document.getElementById('init-name-inp').value = '';
 }
 
 async function adjHP(id, delta) {
@@ -926,10 +1010,12 @@ async function clearInit() {
 }
 
 // ── Quests ──────────────────────────────────────────────────────
+let questsCache = [], editingQuestId = null;
+
 async function loadQuests() {
   const { data } = await db.from('campaign_quests').select('*').eq('campaign_id', campaignId).order('created_at');
+  questsCache = data || [];
   const list = document.getElementById('quest-list');
-  const active = (data||[]).filter(q => q.status === 'active').length;
   if (!data?.length) { list.innerHTML='<div class="empty-state"><div class="empty-title">No quests yet</div></div>'; return; }
   const PRIORITY_COLORS = { main:'#7aaeff', side:'#4acc7a', urgent:'#ff8888' };
   list.innerHTML = data.map(q => `
@@ -941,6 +1027,7 @@ async function loadQuests() {
       </div>
       ${q.description?`<div class="quest-desc">${esc(q.description)}</div>`:''}
       <div class="quest-actions">
+        <button class="quest-btn" onclick="openEditQuest('${q.id}')">Edit</button>
         ${q.status!=='active'    ?`<button class="quest-btn" onclick="setQuestStatus('${q.id}','active')">Activate</button>`:''}
         ${q.status!=='completed' ?`<button class="quest-btn" onclick="setQuestStatus('${q.id}','completed')" style="color:#4acc7a;">Complete</button>`:''}
         ${q.status!=='failed'    ?`<button class="quest-btn" onclick="setQuestStatus('${q.id}','failed')" style="color:#ff8888;">Fail</button>`:''}
@@ -949,21 +1036,57 @@ async function loadQuests() {
     </div>`).join('');
 }
 
-async function addQuest() {
+function openAddQuest() {
+  editingQuestId = null;
+  document.getElementById('modal-add-quest').querySelector('.modal-title').textContent = 'Add Quest';
+  document.getElementById('quest-save-btn').textContent = 'Add Quest';
+  document.getElementById('quest-title-inp').value = '';
+  document.getElementById('quest-desc-inp').value  = '';
+  document.getElementById('quest-priority-inp').value = 'main';
+  document.getElementById('quest-status-inp').value   = 'active';
+  showError('quest-error','');
+  openModal('modal-add-quest');
+}
+
+function openEditQuest(id) {
+  const q = questsCache.find(x => x.id === id); if (!q) return;
+  editingQuestId = id;
+  document.getElementById('modal-add-quest').querySelector('.modal-title').textContent = 'Edit Quest';
+  document.getElementById('quest-save-btn').textContent = 'Save Changes';
+  document.getElementById('quest-title-inp').value = q.title;
+  document.getElementById('quest-desc-inp').value  = q.description || '';
+  document.getElementById('quest-priority-inp').value = q.priority;
+  document.getElementById('quest-status-inp').value   = q.status;
+  showError('quest-error','');
+  openModal('modal-add-quest');
+}
+
+async function saveQuest() {
   const title = document.getElementById('quest-title-inp').value.trim();
   showError('quest-error','');
   if (!title) return showError('quest-error','Enter a quest title.');
-  await db.from('campaign_quests').insert({ campaign_id:campaignId, title, description:document.getElementById('quest-desc-inp').value.trim(), priority:document.getElementById('quest-priority-inp').value, status:document.getElementById('quest-status-inp').value, created_by:currentUser.id });
+  const payload = {
+    title,
+    description: document.getElementById('quest-desc-inp').value.trim(),
+    priority:    document.getElementById('quest-priority-inp').value,
+    status:      document.getElementById('quest-status-inp').value,
+  };
+  if (editingQuestId) {
+    await db.from('campaign_quests').update(payload).eq('id', editingQuestId);
+  } else {
+    await db.from('campaign_quests').insert({ campaign_id:campaignId, created_by:currentUser.id, ...payload });
+  }
   closeModal('modal-add-quest');
-  document.getElementById('quest-title-inp').value = '';
-  document.getElementById('quest-desc-inp').value  = '';
 }
 async function setQuestStatus(id, status) { await db.from('campaign_quests').update({ status, completed_at: status==='completed'?new Date().toISOString():null }).eq('id',id); }
 async function deleteQuest(id) { if (confirm('Delete quest?')) await db.from('campaign_quests').delete().eq('id',id); }
 
 // ── NPCs ────────────────────────────────────────────────────────
+let npcsCache = [], editingNPCId = null;
+
 async function loadNPCs() {
   const { data } = await db.from('campaign_npcs').select('*').eq('campaign_id', campaignId).order('created_at');
+  npcsCache = data || [];
   const grid = document.getElementById('npc-grid');
   if (!data?.length) { grid.innerHTML='<div class="empty-state"><div class="empty-title">No NPCs yet</div></div>'; return; }
   const DISP_COLORS = { friendly:'#4acc7a', neutral:'var(--text-dim)', hostile:'#ff8888', unknown:'var(--text-faint)' };
@@ -983,6 +1106,7 @@ async function loadNPCs() {
       ${n.description?`<div style="font-size:12px;color:var(--text-faint);margin-bottom:8px;line-height:1.5;">${esc(n.description)}</div>`:''}
       ${n.hp_max?`<div class="npc-hp-row">HP: ${n.hp_current||0} / ${n.hp_max}</div>`:''}
       <div style="display:flex;gap:6px;margin-top:10px;">
+        <button class="quest-btn" onclick="openEditNPC('${n.id}')">Edit</button>
         <button class="quest-btn" onclick="toggleNPCAlive('${n.id}',${!n.is_alive})">${n.is_alive?'KO':'Revive'}</button>
         <button class="quest-btn" onclick="deleteNPC('${n.id}')" style="color:#ff8888;margin-left:auto;">Delete</button>
       </div>
@@ -990,13 +1114,54 @@ async function loadNPCs() {
   }).join('');
 }
 
-async function addNPC() {
+function openAddNPC() {
+  editingNPCId = null;
+  document.getElementById('modal-add-npc').querySelector('.modal-title').textContent = 'Add NPC';
+  document.getElementById('npc-save-btn').textContent = 'Add NPC';
+  document.getElementById('npc-name-inp').value = '';
+  document.getElementById('npc-species-inp').value = 'human';
+  document.getElementById('npc-faction-inp').value = '';
+  document.getElementById('npc-disp-inp').value = 'neutral';
+  document.getElementById('npc-hp-inp').value = 10;
+  document.getElementById('npc-desc-inp').value = '';
+  showError('npc-error','');
+  openModal('modal-add-npc');
+}
+
+function openEditNPC(id) {
+  const n = npcsCache.find(x => x.id === id); if (!n) return;
+  editingNPCId = id;
+  document.getElementById('modal-add-npc').querySelector('.modal-title').textContent = 'Edit NPC';
+  document.getElementById('npc-save-btn').textContent = 'Save Changes';
+  document.getElementById('npc-name-inp').value = n.name;
+  document.getElementById('npc-species-inp').value = n.species;
+  document.getElementById('npc-faction-inp').value = n.faction || '';
+  document.getElementById('npc-disp-inp').value = n.disposition;
+  document.getElementById('npc-hp-inp').value = n.hp_max;
+  document.getElementById('npc-desc-inp').value = n.description || '';
+  showError('npc-error','');
+  openModal('modal-add-npc');
+}
+
+async function saveNPC() {
   const name = document.getElementById('npc-name-inp').value.trim();
   showError('npc-error','');
   if (!name) return showError('npc-error','Enter a name.');
-  await db.from('campaign_npcs').insert({ campaign_id:campaignId, name, species:document.getElementById('npc-species-inp').value, faction:document.getElementById('npc-faction-inp').value.trim(), disposition:document.getElementById('npc-disp-inp').value, description:document.getElementById('npc-desc-inp').value.trim(), hp_max:parseInt(document.getElementById('npc-hp-inp').value)||10, hp_current:parseInt(document.getElementById('npc-hp-inp').value)||10 });
+  const hp = parseInt(document.getElementById('npc-hp-inp').value) || 10;
+  const payload = {
+    name,
+    species:     document.getElementById('npc-species-inp').value,
+    faction:     document.getElementById('npc-faction-inp').value.trim(),
+    disposition: document.getElementById('npc-disp-inp').value,
+    description: document.getElementById('npc-desc-inp').value.trim(),
+    hp_max:      hp,
+  };
+  if (editingNPCId) {
+    await db.from('campaign_npcs').update(payload).eq('id', editingNPCId);
+  } else {
+    await db.from('campaign_npcs').insert({ campaign_id:campaignId, hp_current:hp, ...payload });
+  }
   closeModal('modal-add-npc');
-  document.getElementById('npc-name-inp').value = '';
 }
 async function toggleNPCAlive(id, alive) { await db.from('campaign_npcs').update({ is_alive:alive }).eq('id',id); }
 async function deleteNPC(id) { if (confirm('Delete NPC?')) await db.from('campaign_npcs').delete().eq('id',id); }
@@ -1079,7 +1244,12 @@ document.getElementById('log-txt').addEventListener('keydown',  e => { if (e.key
 let allHullTypes = [], selectedHullId = null;
 
 async function openSetupShip() {
-  selectedHullId = null;
+  selectedHullId = shipData?.ship_type_id || null;
+  document.getElementById('setup-ship-name').value = shipData?.ship_name || '';
+  document.getElementById('modal-setup-ship').querySelector('.modal-title').textContent = shipData ? 'Edit Campaign Ship' : 'Assign Campaign Ship';
+  document.getElementById('setup-ship-save-btn').textContent = shipData ? 'Save Changes' : 'Assign Ship';
+  showError('setup-ship-error', '');
+
   const picker = document.getElementById('hull-picker');
   picker.innerHTML = '<div style="color:var(--text-faint);font-size:13px;grid-column:1/-1;">Loading hulls…</div>';
   openModal('modal-setup-ship');
@@ -1092,7 +1262,7 @@ async function openSetupShip() {
   allHullTypes = data;
 
   picker.innerHTML = data.map(h => `
-    <div class="hull-card" id="hull-${h.id}" onclick="selectHull('${h.id}')">
+    <div class="hull-card ${h.id===selectedHullId?'selected':''}" id="hull-${h.id}" onclick="selectHull('${h.id}')">
       <div class="hull-card-name">${esc(h.name)}</div>
       <div class="hull-card-size">${cap(h.size)}</div>
       <div class="hull-card-desc">${esc(h.description)}</div>
@@ -1103,6 +1273,13 @@ async function openSetupShip() {
         <span>Crew ${h.crew_capacity}</span>
       </div>
     </div>`).join('');
+
+  if (shipData && shipData.ship_type_id) {
+    const note = document.createElement('div');
+    note.style.cssText = 'grid-column:1/-1;font-size:11px;color:var(--text-faint);';
+    note.textContent = 'Changing the hull will unequip any wing/thruster components and reset stats to the new hull\'s base values.';
+    picker.appendChild(note);
+  }
 }
 
 function selectHull(id) {
@@ -1119,20 +1296,108 @@ async function createCampaignShip() {
   const hull = allHullTypes.find(h => h.id === selectedHullId);
   if (!hull) return;
 
-  const { error } = await db.from('campaign_ships').upsert({
-    campaign_id:  campaignId,
-    ship_type_id: hull.id,
-    ship_name:    name,
-    hp_current:   hull.hp_base,
-    hp_max:       hull.hp_base,
-    armor:        hull.armor_base,
-    speed:        hull.speed_base,
-    fuel_current: hull.fuel_capacity,
-    fuel_max:     hull.fuel_capacity,
-  }, { onConflict: 'campaign_id' });
+  const hullChanged = !shipData || shipData.ship_type_id !== selectedHullId;
 
-  if (error) return showError('setup-ship-error', 'Failed to create ship: ' + error.message);
+  const payload = { campaign_id: campaignId, ship_type_id: hull.id, ship_name: name };
+  if (hullChanged) {
+    Object.assign(payload, {
+      left_wing_id: null, right_wing_id: null, thruster_id: null,
+      hp_current: hull.hp_base, hp_max: hull.hp_base,
+      armor: hull.armor_base, speed: hull.speed_base,
+      fuel_current: hull.fuel_capacity, fuel_max: hull.fuel_capacity,
+    });
+  }
+
+  const { error } = await db.from('campaign_ships').upsert(payload, { onConflict: 'campaign_id' });
+
+  if (error) return showError('setup-ship-error', 'Failed to save ship: ' + error.message);
   closeModal('modal-setup-ship');
+  await loadShip();
+}
+
+// ── Component slots (GM) ─────────────────────────────────────────
+let currentEquipSlot = null;
+
+async function openEquipSlot(slotKey) {
+  currentEquipSlot = slotKey;
+  const type  = slotKey === 'thruster' ? 'thruster' : 'wing';
+  const label = slotKey === 'left_wing' ? 'Left Wing' : slotKey === 'right_wing' ? 'Right Wing' : 'Thruster';
+  document.getElementById('equip-slot-title').textContent = 'Equip ' + label;
+  showError('equip-slot-error', '');
+
+  const list = document.getElementById('component-picker');
+  list.innerHTML = '<div style="color:var(--text-faint);font-size:13px;grid-column:1/-1;">Loading components…</div>';
+  openModal('modal-equip-slot');
+
+  const { data, error } = await db.from('ship_components').select('*').eq('type', type).contains('compatible_sizes', [shipType.size]);
+  if (error) {
+    list.innerHTML = '<div style="color:#ff8888;font-size:13px;grid-column:1/-1;">Could not load components.</div>';
+    return;
+  }
+
+  const currentId = shipData?.[slotKey + '_id'] || null;
+  const cards = (data || []).map(c => `
+    <div class="hull-card ${c.id===currentId?'selected':''}" onclick="equipComponent('${c.id}')">
+      <div class="hull-card-name">${esc(c.name)}</div>
+      <div class="hull-card-desc">${esc(c.description)}</div>
+      <div class="hull-card-stats">
+        ${c.speed_mod ? `<span>Speed ${c.speed_mod>0?'+':''}${c.speed_mod}</span>` : ''}
+        ${c.armor_mod ? `<span>Armor ${c.armor_mod>0?'+':''}${c.armor_mod}</span>` : ''}
+        ${c.hp_mod    ? `<span>HP ${c.hp_mod>0?'+':''}${c.hp_mod}</span>`          : ''}
+        ${c.fuel_mod  ? `<span>Fuel ${c.fuel_mod>0?'+':''}${c.fuel_mod}</span>`    : ''}
+        ${c.fuel_regen ? `<span>Regen +${c.fuel_regen}/turn</span>` : ''}
+      </div>
+    </div>`).join('');
+
+  list.innerHTML = `
+    <div class="hull-card ${!currentId?'selected':''}" onclick="equipComponent(null)">
+      <div class="hull-card-name">None</div>
+      <div class="hull-card-desc">Remove the equipped component from this slot.</div>
+    </div>` + cards;
+
+  if (!data?.length) {
+    list.innerHTML += '<div style="grid-column:1/-1;color:var(--text-faint);font-size:12px;">No components compatible with this hull size.</div>';
+  }
+}
+
+async function equipComponent(componentId) {
+  const field = currentEquipSlot + '_id';
+  const { error } = await db.from('campaign_ships').update({ [field]: componentId }).eq('campaign_id', campaignId);
+  if (error) return showError('equip-slot-error', error.message);
+  closeModal('modal-equip-slot');
+  await recomputeShipStats();
+}
+
+async function recomputeShipStats() {
+  const { data: sd } = await db.from('campaign_ships').select('*').eq('campaign_id', campaignId).maybeSingle();
+  if (!sd) return;
+  const { data: hull } = await db.from('ship_types').select('*').eq('id', sd.ship_type_id).maybeSingle();
+  if (!hull) return;
+
+  const ids = [sd.left_wing_id, sd.right_wing_id, sd.thruster_id].filter(Boolean);
+  let comps = [];
+  if (ids.length) {
+    const { data } = await db.from('ship_components').select('*').in('id', ids);
+    comps = data || [];
+  }
+  const find = id => comps.find(c => c.id === id);
+  const lw = find(sd.left_wing_id), rw = find(sd.right_wing_id), th = find(sd.thruster_id);
+  const sum = key => (lw?.[key]||0) + (rw?.[key]||0) + (th?.[key]||0);
+
+  const newHpMax   = hull.hp_base + sum('hp_mod');
+  const newArmor   = hull.armor_base + sum('armor_mod');
+  const newSpeed   = hull.speed_base + sum('speed_mod');
+  const newFuelMax = hull.fuel_capacity + sum('fuel_mod');
+
+  await db.from('campaign_ships').update({
+    hp_max: newHpMax,
+    hp_current: Math.min(sd.hp_current ?? newHpMax, newHpMax),
+    armor: newArmor,
+    speed: newSpeed,
+    fuel_max: newFuelMax,
+    fuel_current: Math.min(sd.fuel_current ?? newFuelMax, newFuelMax),
+  }).eq('campaign_id', campaignId);
+
   await loadShip();
 }
 
