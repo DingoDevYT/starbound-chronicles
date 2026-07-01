@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Space Map — Starbound Chronicles</title>
+<link rel="stylesheet" href="css/wiki.css">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+.map-layout { margin-top:58px; min-height:calc(100vh - 58px); padding:28px 36px; max-width:1100px; margin-left:auto; margin-right:auto; }
+.map-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:10px; }
+.map-title { font-size:24px; font-weight:800; color:#e0ecff; }
+.map-breadcrumb { font-size:12px; color:var(--text-faint); margin-top:4px; }
+.map-breadcrumb a { color:#7aaeff; text-decoration:none; cursor:pointer; }
+.map-breadcrumb a:hover { text-decoration:underline; }
+
+.party-banner {
+  background:rgba(58,120,212,.1); border:1px solid var(--accent-dim); border-radius:10px;
+  padding:10px 16px; margin-bottom:20px; font-size:13px; color:#a8c8ff; display:flex; align-items:center; gap:10px;
+}
+
+/* Sector grid (level 1) */
+.sector-grid-wrap { display:grid; grid-template-columns:repeat(10,1fr); gap:3px; max-width:640px; margin-bottom:20px; }
+.sec-cell {
+  aspect-ratio:1; border-radius:4px; display:flex; align-items:center; justify-content:center;
+  font-size:10px; font-weight:700; color:rgba(255,255,255,.6); cursor:pointer; position:relative;
+  transition:transform .1s, box-shadow .1s; border:1px solid transparent;
+}
+.sec-cell:hover { transform:scale(1.08); z-index:2; box-shadow:0 0 0 2px rgba(255,255,255,.5); }
+.sec-cell.known { color:#fff; font-weight:900; }
+.sec-cell.here { border-color:#ffd23a; box-shadow:0 0 0 2px #ffd23a, 0 0 12px rgba(255,210,58,.6); }
+.zone-legend { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px; font-size:11px; color:var(--text-dim); }
+.zone-legend span.dot { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:middle; }
+
+/* System view (level 2) */
+.system-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:14px; }
+.planet-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px;
+  text-align:center; cursor:pointer; transition:all .15s;
+}
+.planet-card:hover { background:var(--surface2); border-color:var(--border2); transform:translateY(-2px); }
+.planet-card.here { border-color:#ffd23a; box-shadow:0 0 0 1px #ffd23a; }
+.planet-img { width:88px; height:88px; object-fit:contain; margin:0 auto 10px; display:block; }
+.planet-name { font-size:14px; font-weight:700; color:#d0e4ff; margin-bottom:4px; }
+.planet-desc { font-size:11px; color:var(--text-faint); line-height:1.5; }
+.planet-set-btn { margin-top:10px; font-size:11px; }
+
+.uncharted-box {
+  text-align:center; padding:60px 20px; color:var(--text-faint); font-size:14px;
+  border:1px dashed var(--border); border-radius:12px;
+}
+</style>
+</head>
+<body>
+
+<header class="app-topbar">
+  <a class="topbar-brand" href="dashboard.html">
+    <div class="brand-icon">✦</div>
+    <div class="brand-text"><div class="brand-name">Starbound Chronicles</div><div class="brand-tagline">Space Map</div></div>
+  </a>
+  <nav class="topbar-nav">
+    <a class="topbar-link" id="back-to-campaign" href="dashboard.html">← Campaign</a>
+  </nav>
+  <div style="flex:1"></div>
+  <div class="user-menu" onclick="toggleDD()">
+    <div class="user-avatar" id="uav" style="background:#3a78d4">?</div>
+    <div class="user-info"><span class="user-name" id="uname">…</span></div>
+    <div class="user-dropdown" id="udrop">
+      <button class="dropdown-item danger" onclick="Auth.signOut()">Sign Out</button>
+    </div>
+  </div>
+</header>
+
+<div class="map-layout">
+  <div class="map-hdr">
+    <div>
+      <div class="map-title">Space Map</div>
+      <div class="map-breadcrumb" id="breadcrumb">Sector Grid</div>
+    </div>
+  </div>
+
+  <div class="party-banner" id="party-banner" style="display:none;"></div>
+
+  <div id="view-sector-grid">
+    <div class="sector-grid-wrap" id="sector-grid"></div>
+    <div class="zone-legend">
+      <span><span class="dot" style="background:#8a6a3a;"></span>Mineral (A–C)</span>
+      <span><span class="dot" style="background:#3a78d4;"></span>Temperate (D–E)</span>
+      <span><span class="dot" style="background:#2a90a0;"></span>Liquid (F–G)</span>
+      <span><span class="dot" style="background:#5a6a80;"></span>Gaseous (H–J)</span>
+      <span><span style="color:#ffd23a;">★</span> Party location</span>
+    </div>
+  </div>
+
+  <div id="view-system" style="display:none;">
+    <div class="system-grid" id="system-grid"></div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js?v=2"></script>
+<script>
+const params = new URLSearchParams(location.search);
+const campaignId = params.get('id');
+let currentUser, campaign, isGM = false;
+
+if (!campaignId) location.href = 'dashboard.html';
+
+// ── Canonical sector lore (from the Lore Guide) ──────────────────
+const SECTOR_LORE = {
+  'B2': { region:'Krag System, The Great Ring', desc:'Home of the Kragol. A mineral-dense system under heavy KEC extraction operations.', systems: [
+    { name:'Mintonas', planet:'Baren', desc:'Kragol homeworld. Rock, crystal, and gemstone deposits as far as sensors can read. KEC mining rigs dominate the orbital lanes.' },
+  ]},
+  'C3': { region:'Nomadic Drift, Mobile Warrens', desc:'No fixed coordinates — Skitterling warrens drift with the currents of this fringe region.', systems: [
+    { name:'Mobile Warren Cluster', planet:'Lava', desc:'A shifting cloud of scavenged hab-modules. Home to nomadic Skitterling clans. Coordinates change monthly.' },
+  ]},
+  'E4': { region:'Sol System, Milky Way', desc:'Human homeworld and a founding seat of the GAC.', systems: [
+    { name:'Sol', planet:'Terran', desc:'Earth. GAC founding world, dense population, heaviest patrol coverage in the sector.' },
+    { name:'Jupiter (The Moon Colonies)', planet:'Ice', desc:'SNA founding territory. Loosely governed colony worlds, popular with scavenger crews.' },
+    { name:'The Rust Belts', planet:'Baren', desc:'Human Renegade territory — a Void Pirate stronghold hiding in the debris fields.' },
+  ]},
+  'F3': { region:'Calamitus Field', desc:'Home of the Arborans. A calm, sun-drenched field despite its ominous name.', systems: [
+    { name:'Arkanos System', planet:'Terran', desc:'Arboran homeworld. Lush, high-UV, and a founding GAC world.' },
+  ]},
+  'G5': { region:'Myx System, Nebulous Way', desc:'Home of the Myxos.', systems: [
+    { name:'Juniper', planet:'Ice', desc:'Myxos homeworld. Chemical seas and gelatinous ecosystems — bring a suit.' },
+  ]},
+  'B1': { region:'Outer Rim', desc:'The Obsidian Fringe — claimed by no one, patrolled by fewer.', systems: [
+    { name:'Obsidian Fringe', planet:'Black_hole', desc:'Kaelen Outcast territory. Void Pirate crews operate freely; GAC patrols rarely bother.' },
+  ]},
+};
+
+// ── Init ──────────────────────────────────────────────────────────
+(async () => {
+  const sess = await Auth.requireAuth(); if (!sess) return;
+  currentUser = sess.user;
+  const profile = await Auth.getProfile(currentUser.id);
+  const name = profile?.display_name || profile?.username || '?';
+  document.getElementById('uname').textContent = name;
+  document.getElementById('uav').textContent   = getInitials(name);
+  document.getElementById('uav').style.background = profile?.avatar_color || '#3a78d4';
+
+  const { data: c } = await db.from('campaigns').select('*').eq('id', campaignId).single();
+  if (!c) return location.href = 'dashboard.html';
+  campaign = c; isGM = c.owner_id === currentUser.id;
+  document.getElementById('back-to-campaign').href = 'campaign.html?id=' + campaignId;
+  document.title = c.name + ' — Space Map';
+
+  renderSectorGrid();
+  renderPartyBanner();
+
+  db.channel('spacemap-' + campaignId)
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'campaigns', filter:`id=eq.${campaignId}` }, p => {
+      campaign = p.new;
+      renderPartyBanner();
+      renderSectorGrid();
+    })
+    .subscribe();
+})();
+
+function esc(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function renderPartyBanner() {
+  const el = document.getElementById('party-banner');
+  if (!campaign.current_sector) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = `Party currently at <strong>${esc(campaign.current_system || 'Sector ' + campaign.current_sector)}</strong>` +
+    (campaign.current_planet ? `, ${esc(campaign.current_planet)}` : '') +
+    ` — Sector ${esc(campaign.current_sector)}`;
+}
+
+// ── Level 1: Sector grid ─────────────────────────────────────────
+function renderSectorGrid() {
+  const cols = ['A','B','C','D','E','F','G','H','I','J'];
+  const zoneColor = col => col <= 2 ? '#8a6a3a' : col <= 4 ? '#3a78d4' : col <= 6 ? '#2a90a0' : '#5a6a80';
+  const grid = document.getElementById('sector-grid');
+  let html = '';
+  for (let row = 0; row < 10; row++) {
+    for (let col = 0; col < 10; col++) {
+      const coord = cols[col] + row;
+      const known = SECTOR_LORE[coord];
+      const isHere = campaign.current_sector === coord;
+      html += `<div class="sec-cell ${known?'known':''} ${isHere?'here':''}" style="background:${zoneColor(col)}${known?'':'55'};" title="Sector ${coord}" onclick="openSector('${coord}')">${isHere?'★':(known?'●':'')}</div>`;
+    }
+  }
+  grid.innerHTML = html;
+}
+
+// ── Level 2: System / planet view ────────────────────────────────
+let currentSectorCoord = null;
+
+function openSector(coord) {
+  currentSectorCoord = coord;
+  document.getElementById('view-sector-grid').style.display = 'none';
+  document.getElementById('view-system').style.display = 'block';
+  document.getElementById('breadcrumb').innerHTML = `<a onclick="backToGrid()">Sector Grid</a> / Sector ${coord}`;
+
+  const lore = SECTOR_LORE[coord];
+  const grid = document.getElementById('system-grid');
+
+  if (!lore) {
+    grid.innerHTML = `<div class="uncharted-box" style="grid-column:1/-1;">Sector ${coord} is uncharted space. No recorded systems, planets, or points of interest — a good candidate for your next expedition.</div>`;
+    return;
+  }
+
+  grid.innerHTML = lore.systems.map(sys => {
+    const isHere = campaign.current_sector === coord && campaign.current_system === sys.name;
+    return `<div class="planet-card ${isHere?'here':''}">
+      <img class="planet-img" src="assets/map/planets/${sys.planet}.png" alt="${esc(sys.name)}">
+      <div class="planet-name">${esc(sys.name)}</div>
+      <div class="planet-desc">${esc(sys.desc)}</div>
+      ${isGM ? `<button class="btn-secondary planet-set-btn" onclick="setPartyLocation('${coord}','${esc(sys.name).replace(/'/g,"\\'")}')">${isHere?'Currently Here':'Set Party Location'}</button>` : (isHere ? '<div style="margin-top:8px;color:#ffd23a;font-size:11px;font-weight:700;">★ Party is here</div>' : '')}
+    </div>`;
+  }).join('');
+}
+
+function backToGrid() {
+  currentSectorCoord = null;
+  document.getElementById('view-system').style.display = 'none';
+  document.getElementById('view-sector-grid').style.display = 'block';
+  document.getElementById('breadcrumb').textContent = 'Sector Grid';
+}
+
+async function setPartyLocation(sector, systemName) {
+  await db.from('campaigns').update({
+    current_sector: sector,
+    current_system: systemName,
+    current_planet: null,
+  }).eq('id', campaignId);
+}
+
+function toggleDD() { document.getElementById('udrop').classList.toggle('open'); }
+document.addEventListener('click', e => { if (!e.target.closest('.user-menu')) document.getElementById('udrop')?.classList.remove('open'); });
+</script>
+</body>
+</html>

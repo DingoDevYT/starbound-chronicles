@@ -196,6 +196,7 @@
       <a class="sidebar-link" href="#quests">Quests</a>
       <a class="sidebar-link" href="#npcs">NPCs</a>
       <a class="sidebar-link" href="#log">Ship Log</a>
+      <a class="sidebar-link" id="space-map-link" href="#">Space Map</a>
     </div>
     <div class="sidebar-divider"></div>
     <div class="sidebar-section">
@@ -547,6 +548,7 @@ function preloadImages() {
   document.title = c.name + ' — Starbound Chronicles';
   document.getElementById('topbar-name').textContent  = c.name;
   document.getElementById('camp-title-side').textContent = c.name;
+  document.getElementById('space-map-link').href = 'space-map.html?id=' + campaignId;
   document.getElementById('invite-disp').textContent  = c.invite_code;
   document.getElementById('stat-round').textContent   = c.round_num || 0;
   document.getElementById('round-lbl').textContent    = 'Round ' + (c.round_num || 0);
