@@ -71,6 +71,14 @@
 .map-result-item:last-child { border-bottom:none; }
 .map-result-item:hover, .map-result-item.hl { background:var(--surface3); }
 .map-result-name { font-size:12px; font-weight:700; color:#d0e4ff; }
+.map-layers-menu {
+  display:none; position:absolute; top:calc(100% + 4px); right:0; z-index:20; min-width:220px;
+  background:var(--surface2); border:1px solid var(--border2); border-radius:8px; padding:6px;
+  box-shadow:0 8px 24px rgba(0,0,0,.4);
+}
+.map-layers-menu.open { display:block; }
+.map-layer-item { display:flex; align-items:center; gap:8px; padding:6px 8px; font-size:12px; color:var(--text-dim); cursor:pointer; border-radius:5px; }
+.map-layer-item:hover { background:var(--surface3); color:var(--text); }
 .map-result-addr { font-size:10px; color:var(--text-faint); margin-top:1px; }
 .map-breadcrumb { font-size:11px; color:var(--text-faint); flex:1; text-align:center; min-width:140px; }
 .map-zoom-controls { display:flex; gap:4px; }
@@ -336,7 +344,10 @@
           </div>
           <div class="map-breadcrumb" id="map-breadcrumb">Galaxy View</div>
           <div class="map-zoom-controls">
-            <button class="btn-ghost" id="zones-toggle-btn" onclick="toggleZones()" style="padding:4px 10px; font-size:11px;">Zones: Off</button>
+            <div class="map-layers-wrap" style="position:relative;">
+              <button class="btn-ghost" onclick="toggleLayersMenu()" style="padding:4px 10px; font-size:11px;">Layers ▾</button>
+              <div class="map-layers-menu" id="map-layers-menu"></div>
+            </div>
             <button class="btn-ghost" onclick="mapZoomStep(1.6)" style="padding:4px 10px;">+</button>
             <button class="btn-ghost" onclick="mapZoomStep(1/1.6)" style="padding:4px 10px;">−</button>
             <button class="btn-ghost" onclick="mapResetView()" style="padding:4px 10px; font-size:11px;">Reset</button>
@@ -1222,6 +1233,10 @@ const SECTORS = {
       { type:'asteroid_belt', name:'Cinderfall Belt', x:880, y:120, desc:'Secondary KEC extraction site. Lower security than Ironback; popular with smugglers skimming tailings.' },
       { type:'asteroid_belt', name:'The Slagfields',  x:920, y:780, desc:'Depleted mining claim, mostly abandoned. Rumoured Skitterling scavenger nests in the wreckage.' },
       { type:'asteroid_belt', name:'The Weighing Fields', x:520, y:900, desc:'Neutral appraisal zone where independent haulers get their ore graded before KEC will buy it. Heavily armed, oddly civil.' },
+      { type:'small_asteroid_belt', name:'Tailings Field 7', x:60, y:60, desc:'KEC smelting runoff, dumped in orbit for decades.' },
+      { type:'small_asteroid_belt', name:'Tailings Field 12', x:960, y:40, desc:'Another KEC dumping ground.' },
+      { type:'asteroid_belt', name:'The Rubble Line', x:700, y:600 },
+      { type:'small_asteroid_belt', name:'Loose Ore Cluster', x:60, y:960 },
     ],
     docks: [
       { name:'Forgehold Platform', owner:'KEC', x:340, y:340, desc:'KEC\'s primary extraction-fleet dock, bristling with cargo cranes and refinery stacks. Non-KEC crews are tolerated if they\'re buying — and searched thoroughly regardless.' },
@@ -1231,27 +1246,44 @@ const SECTORS = {
         { name:'Mintonas',        x:-90, y:-60, planets:[
           { name:'Mintonas',      img:'Moon', ox:0,   oy:0,  desc:'Kragol homeworld. Rock, crystal, and gemstone deposits as far as sensors can read. KEC mining rigs dominate the orbital lanes.' },
           { name:'Mintonas Minor', img:'Moon', ox:14,  oy:6,  desc:'A hollowed moonlet, converted entirely into KEC smelting works. Never goes dark — the forges run in three shifts.' },
+          { name:'Mintonas III', img:'Lava', ox:-16, oy:8 },
+          { name:'Grit', img:'Moon', ox:8, oy:-14 },
         ]},
         { name:'Grannite Reach',  x:110, y:-30, planets:[
           { name:'Grannite Reach Prime', img:'Moon', ox:0, oy:0, desc:'Second Kragol home system. Almost entirely hollowed out by generations of mining clans.' },
           { name:'The Cracked Shell', img:'Lava', ox:-12, oy:10, desc:'A fractured world, its molten core exposed after centuries of deep-core extraction. Considered sacred ruin by elder Kragol.' },
+          { name:'Reach II', img:'Moon', ox:14, oy:-8 },
         ]},
-        { name:"Ore's End",       x:20,  y:120, planets:[ { name:"Ore's End",      img:'Lava', ox:0, oy:0,  desc:'KEC forward extraction colony. Molten-core world; refineries run around the clock.' } ] },
-        { name:'Deepvein',        x:-40, y:80,  planets:[ { name:'Deepvein Prime', img:'Moon', ox:0, oy:0, desc:'Newest Kragol claim, still under survey. Early scans suggest the richest gemstone deposits in the Ring.' } ] },
+        { name:"Ore's End",       x:20,  y:120, planets:[
+          { name:"Ore's End",      img:'Lava', ox:0, oy:0,  desc:'KEC forward extraction colony. Molten-core world; refineries run around the clock.' },
+          { name:"Ore's End Beta", img:'Moon', ox:12, oy:10 },
+        ]},
+        { name:'Deepvein',        x:-40, y:80,  planets:[
+          { name:'Deepvein Prime', img:'Moon', ox:0, oy:0, desc:'Newest Kragol claim, still under survey. Early scans suggest the richest gemstone deposits in the Ring.' },
+          { name:'Deepvein II', img:'Lava', ox:-10, oy:-12 },
+        ]},
       ]},
     ],
   },
   'C3': { region: 'Nomadic Drift, Mobile Warrens',
     objects: [
       { type:'asteroid_belt', name:'The Scrapfield', x:200, y:600, desc:'A drifting junkyard of decommissioned hulls and salvage. Skitterling clans strip it clean and it refills anyway — nobody knows from where.' },
+      { type:'small_asteroid_belt', name:'Loose Scrap Cluster', x:600, y:850 },
+      { type:'small_asteroid_belt', name:'Driftstone Scatter', x:850, y:500 },
     ],
     docks: [
       { name:"Wanderer's Rest", owner:'Neutral', x:450, y:450, desc:'A patchwork waystation that drifts loosely alongside the Warrens. No flag, no faction, no questions — just fuel, food, and a boarding fee that changes depending on who\'s asking.' },
     ],
     galaxies: [
       { name:'Mobile Warrens', sprite:2, x:700, y:200, systems: [
-        { name:'Warren Cluster Prime', x:-40, y:0,  planets:[ { name:'Warren Cluster', img:'Lava', ox:0, oy:0, desc:'A shifting cloud of scavenged hab-modules. Home to nomadic Skitterling clans. Coordinates change monthly.' } ] },
-        { name:'Drift Anchor Seven',   x:90,  y:50, planets:[ { name:'Anchor Seven',   img:'Moon', ox:0, oy:0, desc:'A second drifting warren, currently anchored to a dead comet core for stability.' } ] },
+        { name:'Warren Cluster Prime', x:-40, y:0,  planets:[
+          { name:'Warren Cluster', img:'Lava', ox:0, oy:0, desc:'A shifting cloud of scavenged hab-modules. Home to nomadic Skitterling clans. Coordinates change monthly.' },
+          { name:'Scrap Moon', img:'Moon', ox:12, oy:8 },
+        ]},
+        { name:'Drift Anchor Seven',   x:90,  y:50, planets:[
+          { name:'Anchor Seven',   img:'Moon', ox:0, oy:0, desc:'A second drifting warren, currently anchored to a dead comet core for stability.' },
+          { name:'Anchor Seven-B', img:'Lava', ox:-10, oy:10 },
+        ]},
         { name:'The Rattling Column',  x:20,  y:-70, planets:[ { name:'Column Warren', img:'Lava', ox:0, oy:0, desc:'A vertical stack of linked habitats, built and rebuilt so many times nobody remembers the original hull underneath.' } ] },
       ]},
     ],
@@ -1260,6 +1292,7 @@ const SECTORS = {
     objects: [
       { type:'asteroid_belt', name:'The Shattered Ring', x:180, y:850, desc:'An unclaimed debris ring, remnant of a shattered proto-planet. Rich, unclaimed, and unguarded — for now.' },
       { type:'nebula', name:'The Verdant Haze', x:600, y:150, desc:'A drifting nebula rich in ionised gas. Beautiful from a distance; sensors are useless inside it.' },
+      { type:'small_asteroid_belt', name:'Loose Scree Field', x:850, y:700 },
     ],
     docks: [
       { name:'Crossroads Exchange', owner:'Neutral', x:480, y:420, desc:'Deliberately built on neutral ground by a consortium of frontier colonies. GAC, KEC, SNA, and the occasional VP crew all dock here under an uneasy truce — the one rule everyone enforces is no violence on the platform.' },
@@ -1297,6 +1330,14 @@ const SECTORS = {
           { name:'Saturn',  img:'Ice',     ox:14,  oy:30,  desc:'Ringed ice giant. The rings themselves are actively mined for water ice and rare volatiles.' },
           { name:'Uranus',  img:'Ice',     ox:-20, oy:32,  desc:'Tilted ice giant on the outer edge of common patrol range. A handful of automated GAC listening posts.' },
           { name:'Neptune', img:'Ice',     ox:32,  oy:6,   desc:'Outermost major planet. Extreme cold, extreme winds. Mostly of interest to deep-space researchers.' },
+          { name:'Ceres', img:'Moon', ox:8, oy:2 },
+          { name:'Io', img:'Lava', ox:24, oy:-19 },
+          { name:'Europa', img:'Ice', ox:25, oy:-13 },
+          { name:'Ganymede', img:'Moon', ox:20, oy:-20 },
+          { name:'Titan', img:'Ice', ox:17, oy:33 },
+          { name:'Enceladus', img:'Ice', ox:11, oy:27 },
+          { name:'Pluto', img:'Ice', ox:44, oy:20 },
+          { name:'Charon', img:'Moon', ox:47, oy:22 },
         ]},
         { name:'Alpha Centauri', x:-70, y:40, planets:[
           { name:'Centauri Prime', img:'Terran7', ox:0, oy:0, desc:'GAC-adjacent human colony, closest star system to Sol. Independently governed but Council-friendly.' },
@@ -1314,25 +1355,45 @@ const SECTORS = {
   'F3': { region: 'Calamitus Field',
     objects: [
       { type:'asteroid_belt', name:'The Withered Belt', x:650, y:250, desc:'A dead, sun-bleached ring of rock — Arboran botanists study it as a cautionary tale of a system that lost its light.' },
+      { type:'small_asteroid_belt', name:'Ashfall Cluster', x:850, y:550 },
     ],
     galaxies: [
       { name:'Calamitus Field', sprite:5, x:180, y:750, systems: [
-        { name:'Arkanos System', x:0,  y:-60, planets:[ { name:'Arkanos', img:'Terran3', ox:0, oy:0, desc:'Arboran homeworld. Lush, high-UV, and a founding GAC world.' } ] },
-        { name:'Sunreach Cluster', x:100, y:60, planets:[ { name:'Sunreach Prime', img:'Terran2', ox:0, oy:0, desc:'Second Arboran home system. Orbits close to its star — solar farming megastructures visible from orbit.' } ] },
-        { name:'Bloomwake', x:-90, y:40, planets:[ { name:'Bloomwake Prime', img:'Terran4', ox:0, oy:0, desc:'Third Arboran system, largely given over to seed-vault preservation of pre-GAC flora.' } ] },
+        { name:'Arkanos System', x:0,  y:-60, planets:[
+          { name:'Arkanos', img:'Terran3', ox:0, oy:0, desc:'Arboran homeworld. Lush, high-UV, and a founding GAC world.' },
+          { name:'Arkanos II', img:'Terran4', ox:14, oy:8 },
+          { name:'Verdant Moon', img:'Moon', ox:-10, oy:-10 },
+        ]},
+        { name:'Sunreach Cluster', x:100, y:60, planets:[
+          { name:'Sunreach Prime', img:'Terran2', ox:0, oy:0, desc:'Second Arboran home system. Orbits close to its star — solar farming megastructures visible from orbit.' },
+          { name:'Sunreach II', img:'Terran5', ox:-12, oy:10 },
+        ]},
+        { name:'Bloomwake', x:-90, y:40, planets:[
+          { name:'Bloomwake Prime', img:'Terran4', ox:0, oy:0, desc:'Third Arboran system, largely given over to seed-vault preservation of pre-GAC flora.' },
+          { name:'Bloomwake Minor', img:'Moon', ox:10, oy:-8 },
+        ]},
       ]},
     ],
   },
   'F5': { region: 'New Meridian — Habitable Frontier',
     objects: [
       { type:'asteroid_belt', name:'Anchorpoint Debris Field', x:820, y:180, desc:'Scattered wreckage from a century of trade-run accidents near the Anchorpoint approach lanes.' },
+      { type:'small_asteroid_belt', name:'Loose Cargo Scatter', x:150, y:750 },
     ],
     docks: [
       { name:'Free Harbor', owner:'SNA', x:350, y:520, desc:'A Scavenger Nomad Allegiance stronghold dressed up as a trade post. Redistributes salvage and credits to frontier worlds that need it. GAC patrols avoid the approach lanes — officially because of "navigation hazards."' },
     ],
     galaxies: [
       { name:'New Meridian', sprite:1, x:250, y:600, systems: [
-        { name:'Meridian Trade Anchor', x:0, y:0, planets:[ { name:'Anchorpoint', img:'Terran6', ox:0, oy:0, desc:'SNA-friendly trade hub world. Neutral ground — scavengers, GAC traders, and the occasional KEC freighter all dock here without incident.' } ] },
+        { name:'Meridian Trade Anchor', x:0, y:0, planets:[
+          { name:'Anchorpoint', img:'Terran6', ox:0, oy:0, desc:'SNA-friendly trade hub world. Neutral ground — scavengers, GAC traders, and the occasional KEC freighter all dock here without incident.' },
+          { name:'Anchorpoint II', img:'Terran2', ox:14, oy:10 },
+          { name:'Anchorpoint Moon', img:'Moon', ox:-10, oy:8 },
+        ]},
+        { name:'Farside Cluster', x:90, y:-60, planets:[
+          { name:'Farside I', img:'Terran5', ox:0, oy:0 },
+          { name:'Farside II', img:'Ice', ox:12, oy:8 },
+        ]},
       ]},
     ],
   },
@@ -1340,11 +1401,19 @@ const SECTORS = {
     objects: [
       { type:'asteroid_belt', name:'The Chemsea Drift', x:300, y:850, desc:'A field of frozen chemical slush and drifting organic residue. Myxos harvesting crews consider it a delicacy run.' },
       { type:'nebula', name:'The Weeping Veil', x:850, y:400, desc:'A soft, glowing nebula of vaporised ice. Myxos scholars believe it\'s the ghost of a long-dead ocean world.' },
+      { type:'small_asteroid_belt', name:'Frost Scatter', x:150, y:250 },
     ],
     galaxies: [
       { name:'Nebulous Way', sprite:2, x:720, y:720, systems: [
-        { name:'Myx System', x:-60, y:-30, planets:[ { name:'Juniper', img:'Ice', ox:0, oy:0, desc:'Myxos homeworld. Chemical seas and gelatinous ecosystems — bring a suit.' } ] },
-        { name:'Sporewell Cluster', x:80, y:60, planets:[ { name:'Sporewell', img:'Ice', ox:0, oy:0, desc:'Second Myxos home system. A colder, denser chemical-sea world used for deep research.' } ] },
+        { name:'Myx System', x:-60, y:-30, planets:[
+          { name:'Juniper', img:'Ice', ox:0, oy:0, desc:'Myxos homeworld. Chemical seas and gelatinous ecosystems — bring a suit.' },
+          { name:'Juniper II', img:'Ice', ox:12, oy:-8 },
+          { name:'Brinewatch', img:'Moon', ox:-10, oy:10 },
+        ]},
+        { name:'Sporewell Cluster', x:80, y:60, planets:[
+          { name:'Sporewell', img:'Ice', ox:0, oy:0, desc:'Second Myxos home system. A colder, denser chemical-sea world used for deep research.' },
+          { name:'Sporewell II', img:'Terran4', ox:-14, oy:8 },
+        ]},
         { name:'The Undertow', x:-100, y:60, planets:[ { name:'Undertow Prime', img:'Ice', ox:0, oy:0, desc:'Third Myxos system, largely submerged. Cities exist as pressurised bubbles beneath the chemical tides.' } ] },
       ]},
     ],
@@ -1353,13 +1422,22 @@ const SECTORS = {
     objects: [
       { type:'black_hole', name:'The Obsidian Maw', x:250, y:250, desc:'A stellar-mass black hole. Void Pirate crews use its gravity shadow to vanish from GAC sensors — most patrols simply refuse to follow.' },
       { type:'asteroid_belt', name:'Wreckwatch Belt', x:600, y:400, desc:'A debris field of picked-clean hulls. Void Pirate crews use it as an ambush point for ships hugging the sector edge.' },
+      { type:'small_asteroid_belt', name:'Loose Hullmetal', x:850, y:850 },
+      { type:'small_asteroid_belt', name:'Debris Scatter', x:100, y:600 },
     ],
     docks: [
       { name:'Blacktide Anchorage', owner:'VP', x:600, y:600, desc:'A lawless dock cobbled together from salvaged capital-ship hulls. No registry, no questions, no mercy if you owe someone credits. Non-affiliated crews should mask their identity and colours before approach — GAC or KEC transponders will get you boarded, or worse.' },
     ],
     galaxies: [
       { name:'Outer Rim', sprite:3, x:780, y:750, systems: [
-        { name:'Obsidian Fringe', x:0, y:0, planets:[ { name:'The Obsidian Fringe', img:'Moon', ox:0, oy:0, desc:'Kaelen Outcast territory. Void Pirate crews operate freely; GAC patrols rarely bother.' } ] },
+        { name:'Obsidian Fringe', x:0, y:0, planets:[
+          { name:'The Obsidian Fringe', img:'Moon', ox:0, oy:0, desc:'Kaelen Outcast territory. Void Pirate crews operate freely; GAC patrols rarely bother.' },
+          { name:'Fringe II', img:'Lava', ox:12, oy:-8 },
+        ]},
+        { name:'Hollowreach', x:-80, y:60, planets:[
+          { name:'Hollowreach I', img:'Moon', ox:0, oy:0 },
+          { name:'Hollowreach II', img:'Lava', ox:10, oy:10 },
+        ]},
       ]},
     ],
   },
@@ -1380,11 +1458,109 @@ const SECTORS = {
     ],
     galaxies: [],
   },
+  'A1': { region: 'Unmapped Fringe',
+    objects: [
+      { type:'small_asteroid_belt', name:'Coldrock Scatter', x:300, y:400 },
+      { type:'small_asteroid_belt', name:'The Splinters', x:650, y:200 },
+    ],
+    galaxies: [],
+  },
+  'A2': { region: 'Unmapped Fringe',
+    objects: [
+      { type:'asteroid_belt', name:'Ironshale Belt', x:450, y:500, desc:'A dense, unclaimed belt of iron-rich rubble drifting just outside The Great Ring — Kragol prospectors sweep it occasionally.' },
+      { type:'small_asteroid_belt', name:'Loose Gravel Run', x:150, y:700 },
+    ],
+    galaxies: [],
+  },
+  'A3': { region: 'Unmapped Fringe',
+    objects: [
+      { type:'small_asteroid_belt', name:'Cracked Shell Field', x:400, y:300 },
+      { type:'small_asteroid_belt', name:'Dustline Scatter', x:700, y:650 },
+      { type:'nebula', name:'The Grey Drift', x:200, y:850 },
+    ],
+    galaxies: [],
+  },
+  'B0': { region: 'Unmapped Fringe',
+    objects: [
+      { type:'small_asteroid_belt', name:'Highvein Scatter', x:500, y:400 },
+    ],
+    galaxies: [],
+  },
+  'B3': { region: 'Unmapped Fringe',
+    objects: [
+      { type:'asteroid_belt', name:'Slagheap Ring', x:350, y:550, desc:'Rubble field thick with smelted-looking debris — Kragol legend claims it\'s the wreck of a proto-forge moon, cracked open long before The Great Ring was settled.' },
+      { type:'small_asteroid_belt', name:'Loose Ore Trail', x:800, y:250 },
+    ],
+    galaxies: [],
+  },
+  'C1': { region: 'Unmapped Fringe',
+    objects: [
+      { type:'small_asteroid_belt', name:'Fractured Shard Field', x:300, y:300 },
+      { type:'small_asteroid_belt', name:'Rubblewake Cluster', x:650, y:600 },
+    ],
+    galaxies: [],
+  },
+  'C2': { region: 'Unmapped Fringe',
+    objects: [
+      { type:'asteroid_belt', name:'The Cracked Vein', x:500, y:450, desc:'A wide unclaimed belt of ore-heavy rubble, close enough to The Great Ring that independent Kragol miners regularly stake short-term claims.' },
+      { type:'small_asteroid_belt', name:'Stray Boulder Field', x:200, y:700 },
+    ],
+    galaxies: [],
+  },
+  'C4': { region: 'Unmapped Fringe',
+    objects: [
+      { type:'small_asteroid_belt', name:'Loose Rockfall', x:400, y:400 },
+      { type:'small_asteroid_belt', name:'Scatterstone Drift', x:750, y:700 },
+    ],
+    galaxies: [],
+  },
+  'A0': { region: 'Unmapped Fringe',
+    objects: [
+      { type:'small_asteroid_belt', name:'Farflung Gravel', x:500, y:500 },
+    ],
+    galaxies: [],
+  },
 };
+
+// ── Map layer toggles ──────────────────────────────────────────────
+const LABEL_MIN_PX = 15; // labels stay hidden until an icon renders at least this big on screen
+let showZones = false, showDocks = true, showHazards = true, showBodies = true, showLabels = true;
+const MAP_LAYERS = [
+  { key:'showZones',   label:'Faction Zones' },
+  { key:'showDocks',    label:'Space Docks' },
+  { key:'showHazards',  label:'Hazards (belts, nebulae, black holes)' },
+  { key:'showBodies',   label:'Planets & Moons' },
+  { key:'showLabels',   label:'Names' },
+];
+const MAP_LAYER_STATE = { showZones, showDocks, showHazards, showBodies, showLabels };
+function toggleMapLayer(key) {
+  MAP_LAYER_STATE[key] = !MAP_LAYER_STATE[key];
+  showZones = MAP_LAYER_STATE.showZones;
+  showDocks = MAP_LAYER_STATE.showDocks;
+  showHazards = MAP_LAYER_STATE.showHazards;
+  showBodies = MAP_LAYER_STATE.showBodies;
+  showLabels = MAP_LAYER_STATE.showLabels;
+  renderLayersMenu();
+  redrawSpaceMap();
+}
+function renderLayersMenu() {
+  const el = document.getElementById('map-layers-menu');
+  if (!el) return;
+  el.innerHTML = MAP_LAYERS.map(l => `
+    <label class="map-layer-item">
+      <input type="checkbox" ${MAP_LAYER_STATE[l.key] ? 'checked' : ''} onchange="toggleMapLayer('${l.key}')">
+      ${esc(l.label)}
+    </label>`).join('');
+}
+function toggleLayersMenu() {
+  document.getElementById('map-layers-menu').classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.map-layers-wrap')) document.getElementById('map-layers-menu')?.classList.remove('open');
+});
 
 // Faction territory — deliberately free-form polygons in world-space, not aligned to the
 // sector grid. Overlaps between zones are intentional (contested/shared space).
-let showZones = false;
 const TERRITORY_ZONES = [
   { name: 'GAC Core Territory', color: '#3a78d4', points: [
     [3000,2800],[6500,2600],[7000,4500],[6200,6800],[3800,6600],[2800,4800],
@@ -1400,11 +1576,7 @@ const TERRITORY_ZONES = [
   ]},
 ];
 
-function toggleZones() {
-  showZones = !showZones;
-  document.getElementById('zones-toggle-btn').textContent = 'Zones: ' + (showZones ? 'On' : 'Off');
-  redrawSpaceMap();
-}
+renderLayersMenu();
 
 function galaxyWorldPos(coord, gal) {
   const { col, row } = sectorColRow(coord);
@@ -1413,6 +1585,12 @@ function galaxyWorldPos(coord, gal) {
 function systemWorldPos(coord, gal, sys) {
   const gp = galaxyWorldPos(coord, gal);
   return { x: gp.x + sys.x, y: gp.y + sys.y };
+}
+// A system renders as a persistent zone circle sized to comfortably fit its furthest planet.
+function systemZoneRadius(sys) {
+  let maxDist = 14;
+  sys.planets.forEach(p => { const d = Math.hypot(p.ox, p.oy); if (d > maxDist) maxDist = d; });
+  return maxDist + 14;
 }
 function planetWorldPos(coord, gal, sys, planet) {
   const sp = systemWorldPos(coord, gal, sys);
@@ -1577,6 +1755,10 @@ function drawSpaceMap() {
     return { dr, hovered };
   }
   function drawLabel(text, x, y, dr, hovered, color) {
+    // Hovering always reveals the label (explicit intent); otherwise only show it once you're
+    // close enough for the icon to actually be big on screen — no text vomit from orbit.
+    if (!showLabels) return;
+    if (!hovered && dr < LABEL_MIN_PX) return;
     mapCtx.fillStyle = color;
     mapCtx.font = `${hovered ? '700 ' : ''}${hovered ? 16 : 13}px system-ui, sans-serif`;
     mapCtx.textAlign = 'center'; mapCtx.textBaseline = 'top';
@@ -1604,7 +1786,7 @@ function drawSpaceMap() {
     }
 
     // Sector hazard objects (asteroid belts, nebulae, black holes) — never expand further
-    (sector.objects||[]).forEach(obj => {
+    if (showHazards) (sector.objects||[]).forEach(obj => {
       const op = objectWorldPos(coord, obj);
       const opx = wx(op.x), opy = wy(op.y);
       const spec = OBJECT_SPRITES[obj.type] || OBJECT_SPRITES.asteroid_belt;
@@ -1619,7 +1801,7 @@ function drawSpaceMap() {
 
     // Space docks — stations ships can actually stop at (refuel, restock, quests). Always a
     // clickable destination, colored by the owning faction (or neutral grey if unaligned).
-    (sector.docks||[]).forEach(dock => {
+    if (showDocks) (sector.docks||[]).forEach(dock => {
       const dp = objectWorldPos(coord, dock);
       const dpx = wx(dp.x), dpy = wy(dp.y);
       const img = getSpriteImg('assets/map/space_dock.png');
@@ -1656,31 +1838,29 @@ function drawSpaceMap() {
         return;
       }
 
-      // Expanded: show systems within this galaxy
+      // Expanded: each system is a persistent zone circle (like a faction territory, just per
+      // system) rather than a dot you have to zoom into — planets are always visible inside it
+      // once the parent galaxy is expanded, no separate "zoom into the dot" step.
       gal.systems.forEach(sys => {
         const sp = systemWorldPos(coord, gal, sys);
         const spx = wx(sp.x), spy = wy(sp.y);
-        const sysR = SYSTEM_RADIUS_WORLD * mapScale;
+        const zoneRadiusWorld = systemZoneRadius(sys);
+        const sysR = zoneRadiusWorld * mapScale;
         if (spx < -sysR-60 || spx > W+sysR+60 || spy < -sysR-60 || spy > H+sysR+60) return;
 
-        if (sysR < SYSTEM_EXPAND_PX) {
-          const r = Math.max(4, sysR);
-          const hovered = Math.hypot(mapMouseX - spx, mapMouseY - spy) <= Math.max(r, 10);
-          const dr = hovered ? r * 1.6 : r;
-          mapCtx.fillStyle = '#ffe07a';
-          mapCtx.beginPath(); mapCtx.arc(spx, spy, dr, 0, Math.PI*2); mapCtx.fill();
-          drawLabel(sys.name, spx, spy, dr, hovered, 'rgba(255,224,122,.9)');
-          mapHitboxes.push({ x:spx, y:spy, r:Math.max(dr,10), kind:'system', coord, galaxy:gal.name, system:sys.name });
-          return;
-        }
+        mapCtx.fillStyle = 'rgba(255,224,122,.06)';
+        mapCtx.beginPath(); mapCtx.arc(spx, spy, sysR, 0, Math.PI*2); mapCtx.fill();
+        mapCtx.strokeStyle = 'rgba(255,224,122,.25)';
+        mapCtx.lineWidth = 1;
+        mapCtx.beginPath(); mapCtx.arc(spx, spy, sysR, 0, Math.PI*2); mapCtx.stroke();
 
-        // Expanded: star + planets
+        const sysHovered = Math.hypot(mapMouseX - spx, mapMouseY - spy) <= sysR;
         mapCtx.fillStyle = '#ffe07a';
-        mapCtx.beginPath(); mapCtx.arc(spx, spy, 5, 0, Math.PI*2); mapCtx.fill();
-        mapCtx.fillStyle = 'rgba(255,224,122,.85)';
-        mapCtx.font = '13px system-ui, sans-serif'; mapCtx.textAlign='center'; mapCtx.textBaseline='bottom';
-        mapCtx.fillText(sys.name, spx, spy - 10);
+        mapCtx.beginPath(); mapCtx.arc(spx, spy, Math.max(3, sysR*.05), 0, Math.PI*2); mapCtx.fill();
+        drawLabel(sys.name, spx, spy - sysR + 6, sysR - 4, sysHovered, 'rgba(255,224,122,.85)');
+        mapHitboxes.push({ x:spx, y:spy, r:sysR, kind:'system', coord, galaxy:gal.name, system:sys.name });
 
+        if (!showBodies) return;
         sys.planets.forEach(p => {
           const pp = planetWorldPos(coord, gal, sys, p);
           const ppx = wx(pp.x), ppy = wy(pp.y);
@@ -1809,7 +1989,7 @@ mapCanvas.addEventListener('click', e => {
   if (best.kind === 'planet') return showLeafInfo('planet', best.coord, best.galaxy, best.system, best.planet);
   if (best.kind === 'object') return showLeafInfo('object', best.coord, null, null, null, best.object);
   if (best.kind === 'dock')   return showLeafInfo('dock', best.coord, null, null, null, null, best.dock);
-  if (best.kind === 'system') return jumpToMapTarget({ type:'system', coord:best.coord, galaxy:best.galaxy, system:best.system });
+  if (best.kind === 'system') return showLeafInfo('system', best.coord, best.galaxy, best.system);
   if (best.kind === 'galaxy') return jumpToMapTarget({ type:'galaxy', coord:best.coord, galaxy:best.galaxy });
 });
 
@@ -1827,6 +2007,17 @@ function showLeafInfo(kind, coord, galaxyName, systemName, planetName, objectNam
       <div class="addr">${OBJECT_TYPE_LABELS[obj.type] || 'Object'} — ${esc(sector.region)} — SECTOR ${esc(coord)}</div>
       <p>${esc(obj.desc)}</p>
       <div style="color:#ff8888;font-size:11px;font-weight:700;">⚠ Navigational hazard</div>
+    `;
+    return;
+  }
+
+  if (kind === 'system') {
+    const gal = sector.galaxies.find(g => g.name === galaxyName);
+    const sys = gal.systems.find(s => s.name === systemName);
+    card.innerHTML = `
+      <h4>${esc(sys.name)}</h4>
+      <div class="addr">${esc(gal.name)} — SECTOR ${esc(coord)}</div>
+      <p>${sys.planets.length} known bod${sys.planets.length === 1 ? 'y' : 'ies'}: ${sys.planets.map(p => esc(p.name)).join(', ')}</p>
     `;
     return;
   }
