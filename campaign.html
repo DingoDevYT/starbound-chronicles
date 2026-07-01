@@ -15,6 +15,13 @@
 .ship-section {
   position:relative; background:#020810; border-bottom:1px solid var(--border);
 }
+.viewport-resize-handle {
+  height:14px; display:flex; align-items:center; justify-content:center;
+  background:var(--surface); border-top:1px solid var(--border);
+  cursor:ns-resize; color:var(--text-faint); font-size:12px; letter-spacing:.2em;
+  user-select:none;
+}
+.viewport-resize-handle:hover { color:var(--text-dim); background:var(--surface2); }
 #ship-canvas {
   display:block; width:100%; cursor:default;
 }
@@ -288,8 +295,8 @@
 
       <!-- SHIP VIEW -->
       <div id="ship-view-panel">
-        <canvas id="ship-canvas" height="360"></canvas>
-        <div id="ship-hint" style="display:none; padding:6px 18px; font-size:11px; color:var(--text-faint); background:var(--surface); border-top:1px solid var(--border);">Click a wing or thruster slot to equip a component. Drag crew tokens to reposition them.</div>
+        <canvas id="ship-canvas" height="520"></canvas>
+        <div id="ship-hint" style="display:none; padding:6px 18px; font-size:11px; color:var(--text-faint); background:var(--surface); border-top:1px solid var(--border);">Click a wing or thruster slot to equip a component. Drag crew tokens to reposition them. Scroll to zoom, drag empty space to pan, double-click to reset.</div>
         <div class="ship-stat-bar">
           <div class="ship-stat">
             <div class="ship-stat-label">Hull</div>
@@ -329,15 +336,18 @@
           </div>
           <div class="map-breadcrumb" id="map-breadcrumb">Galaxy View</div>
           <div class="map-zoom-controls">
+            <button class="btn-ghost" id="zones-toggle-btn" onclick="toggleZones()" style="padding:4px 10px; font-size:11px;">Zones: Off</button>
             <button class="btn-ghost" onclick="mapZoomStep(1.6)" style="padding:4px 10px;">+</button>
             <button class="btn-ghost" onclick="mapZoomStep(1/1.6)" style="padding:4px 10px;">−</button>
             <button class="btn-ghost" onclick="mapResetView()" style="padding:4px 10px; font-size:11px;">Reset</button>
           </div>
         </div>
-        <canvas id="space-map-canvas" height="360"></canvas>
+        <canvas id="space-map-canvas" height="520"></canvas>
         <div id="map-route-banner" class="map-route-banner" style="display:none;"></div>
         <div id="map-info-card" class="map-info-card" style="display:none;"></div>
       </div>
+
+      <div id="viewport-resize-handle" class="viewport-resize-handle" title="Drag to resize">⋯</div>
     </section>
 
     <div class="camp-inner">
@@ -596,9 +606,9 @@
 <script src="js/auth.js?v=2"></script>
 <script>
 const SPECIES_IMGS = {
-  human:'assets/NN_Species_Human.png', kragol:'assets/NN_Species_Kragol.png',
-  skitterling:'assets/NN_Species_Skitterling.png', myxos:'assets/NN_Species_Myxos.png',
-  arboran:'assets/NN_Species_Arboran.png'
+  human:'assets/NN_Species_HumanM_0.png', kragol:'assets/NN_Species_KragolM.png',
+  skitterling:'assets/NN_Species_SkitterlingM_0.png', myxos:'assets/NN_Species_MyxosF.png',
+  arboran:'assets/NN_Species_ArboranM.png'
 };
 const AVATAR_COLORS = ['#1e4a9a','#4a1a0a','#1a3a2a','#0a2a3a','#2a2a1a','#3a1a1a','#1a2a0a','#1a1a3a','#1a2430'];
 
@@ -798,6 +808,36 @@ async function placeAllCrewTokens() {
   setTimeout(() => { btn.textContent = original; }, 2200);
 }
 
+// ── Shared resizable viewport height (ship canvas + space map canvas) ────
+let viewportHeight = parseInt(localStorage.getItem('sbc-viewport-h')) || 520;
+
+function applyViewportHeight() {
+  document.getElementById('ship-canvas').height = viewportHeight;
+  document.getElementById('space-map-canvas').height = viewportHeight;
+  if (shipCanvas) { shipCanvas.height = viewportHeight; drawShipMap(); }
+  if (mapCanvas)  { mapCanvas.height  = viewportHeight; if (shipViewMode === 'map') redrawSpaceMap(); }
+}
+
+(() => {
+  const handle = document.getElementById('viewport-resize-handle');
+  let dragging = false, startY = 0, startH = 0;
+  handle.addEventListener('mousedown', e => {
+    dragging = true; startY = e.clientY; startH = viewportHeight;
+    document.body.style.cursor = 'ns-resize';
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    viewportHeight = Math.max(240, Math.min(900, startH + (e.clientY - startY)));
+    applyViewportHeight();
+  });
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    document.body.style.cursor = '';
+    localStorage.setItem('sbc-viewport-h', viewportHeight);
+  });
+})();
+
 // Ship canvas rendering
 let shipScale = 1, shipOffX = 0, shipOffY = 0;
 let slotRects = {};
@@ -856,16 +896,17 @@ function getTintedSprite(img, color) {
 function drawShipMap() {
   const W = shipCanvas.offsetWidth || 800;
   shipCanvas.width  = W;
-  shipCanvas.height = 360;
+  shipCanvas.height = viewportHeight;
+  const H = shipCanvas.height;
 
   shipCtx.fillStyle = '#020810';
-  shipCtx.fillRect(0, 0, W, 360);
+  shipCtx.fillRect(0, 0, W, H);
 
   if (!shipType || !shipType.floor_rows) {
     shipCtx.fillStyle = '#4a5568';
     shipCtx.font = '14px system-ui, sans-serif';
     shipCtx.textAlign = 'center';
-    shipCtx.fillText('No ship assigned to this campaign.', W / 2, 180);
+    shipCtx.fillText('No ship assigned to this campaign.', W / 2, H / 2);
     return;
   }
 
@@ -886,16 +927,16 @@ function drawShipMap() {
   const totalW    = totalMaxX - totalMinX;
   const totalH    = totalMaxY - totalMinY;
 
-  // Scale to fit canvas with padding
+  // Scale to fit canvas with padding, then apply the user's manual zoom/pan on top
   const PAD = 24;
   const scaleX = (W - PAD * 2) / (totalW * CELL);
-  const scaleY = (360 - PAD * 2) / (totalH * CELL);
-  shipScale = Math.min(scaleX, scaleY, 1.4);
+  const scaleY = (H - PAD * 2) / (totalH * CELL);
+  shipScale = Math.min(scaleX, scaleY, 1.4) * shipUserZoom;
   const cs  = CELL * shipScale;
 
-  // Center the hull in the canvas
-  shipOffX = (W - totalW * cs) / 2 - lwSlot.x * cs;
-  shipOffY = (360 - totalH * cs) / 2;
+  // Center the hull in the canvas, offset by the user's pan
+  shipOffX = (W - totalW * cs) / 2 - lwSlot.x * cs + shipUserPanX;
+  shipOffY = (H - totalH * cs) / 2 + shipUserPanY;
 
   function gx(cx) { return shipOffX + cx * cs; }
   function gy(cy) { return shipOffY + cy * cs; }
@@ -1027,8 +1068,10 @@ function drawShipMap() {
 
 }
 
-// Token drag support
+// Token drag support + ship-view pan/zoom
 let dragToken = null, dragOffX = 0, dragOffY = 0, justDraggedToken = false;
+let shipUserZoom = 1, shipUserPanX = 0, shipUserPanY = 0;
+let shipPanning = false, shipPanStartX = 0, shipPanStartY = 0, shipPanStartOffX = 0, shipPanStartOffY = 0, justPannedShip = false;
 
 shipCanvas.addEventListener('mousedown', e => {
   const rect = shipCanvas.getBoundingClientRect();
@@ -1045,50 +1088,84 @@ shipCanvas.addEventListener('mousedown', e => {
       dragOffX  = mx - px;
       dragOffY  = my - py;
       shipCanvas.style.cursor = 'grabbing';
-      break;
+      return;
     }
   }
+
+  // No token grabbed — pan the view instead
+  shipPanning = true; justPannedShip = false;
+  shipPanStartX = e.clientX; shipPanStartY = e.clientY;
+  shipPanStartOffX = shipUserPanX; shipPanStartOffY = shipUserPanY;
+  shipCanvas.style.cursor = 'grabbing';
 });
 
 shipCanvas.addEventListener('mousemove', e => {
-  if (!dragToken) return;
-  const rect = shipCanvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left - dragOffX;
-  const my = e.clientY - rect.top  - dragOffY;
-  const cs = CELL * shipScale;
-  dragToken._liveX = (mx - shipOffX) / cs;
-  dragToken._liveY = (my - shipOffY) / cs;
-  drawShipMap();
+  if (dragToken) {
+    const rect = shipCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left - dragOffX;
+    const my = e.clientY - rect.top  - dragOffY;
+    const cs = CELL * shipScale;
+    dragToken._liveX = (mx - shipOffX) / cs;
+    dragToken._liveY = (my - shipOffY) / cs;
+    drawShipMap();
 
-  // Draw preview at cursor position
-  const px = shipOffX + dragToken._liveX * cs + cs / 2;
-  const py = shipOffY + dragToken._liveY * cs + cs / 2;
-  const r  = cs * .42;
-  shipCtx.strokeStyle = '#7aaeff';
-  shipCtx.lineWidth   = 2;
-  shipCtx.setLineDash([4, 3]);
-  shipCtx.beginPath();
-  shipCtx.arc(px, py, r, 0, Math.PI * 2);
-  shipCtx.stroke();
-  shipCtx.setLineDash([]);
+    const px = shipOffX + dragToken._liveX * cs + cs / 2;
+    const py = shipOffY + dragToken._liveY * cs + cs / 2;
+    const r  = cs * .42;
+    shipCtx.strokeStyle = '#7aaeff';
+    shipCtx.lineWidth   = 2;
+    shipCtx.setLineDash([4, 3]);
+    shipCtx.beginPath();
+    shipCtx.arc(px, py, r, 0, Math.PI * 2);
+    shipCtx.stroke();
+    shipCtx.setLineDash([]);
+    return;
+  }
+
+  if (shipPanning) {
+    const dx = e.clientX - shipPanStartX, dy = e.clientY - shipPanStartY;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) justPannedShip = true;
+    shipUserPanX = shipPanStartOffX + dx;
+    shipUserPanY = shipPanStartOffY + dy;
+    drawShipMap();
+  }
 });
 
 shipCanvas.addEventListener('mouseup', async e => {
-  if (!dragToken) return;
-  const cs = CELL * shipScale;
-  const rect = shipCanvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left - dragOffX;
-  const my = e.clientY - rect.top  - dragOffY;
-  const newX = Math.round((mx - shipOffX) / cs);
-  const newY = Math.round((my - shipOffY) / cs);
-  await db.from('ship_tokens').update({ grid_x: newX, grid_y: newY }).eq('id', dragToken.id);
-  dragToken = null;
-  justDraggedToken = true;
-  shipCanvas.style.cursor = 'default';
+  if (dragToken) {
+    const cs = CELL * shipScale;
+    const rect = shipCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left - dragOffX;
+    const my = e.clientY - rect.top  - dragOffY;
+    const newX = Math.round((mx - shipOffX) / cs);
+    const newY = Math.round((my - shipOffY) / cs);
+    await db.from('ship_tokens').update({ grid_x: newX, grid_y: newY }).eq('id', dragToken.id);
+    dragToken = null;
+    justDraggedToken = true;
+    shipCanvas.style.cursor = 'default';
+    return;
+  }
+  if (shipPanning) {
+    shipPanning = false;
+    shipCanvas.style.cursor = 'default';
+  }
+});
+
+shipCanvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.15 : 1/1.15;
+  shipUserZoom = Math.max(0.4, Math.min(4, shipUserZoom * factor));
+  drawShipMap();
+}, { passive:false });
+
+shipCanvas.addEventListener('dblclick', () => {
+  shipUserZoom = 1; shipUserPanX = 0; shipUserPanY = 0;
+  drawShipMap();
 });
 
 shipCanvas.addEventListener('click', e => {
   if (justDraggedToken) { justDraggedToken = false; return; }
+  if (justPannedShip) { justPannedShip = false; return; }
   if (!isGM || !shipData || !shipType) return;
   const rect = shipCanvas.getBoundingClientRect();
   const mx = e.clientX - rect.left, my = e.clientY - rect.top;
@@ -1125,16 +1202,17 @@ const SECTOR_SIZE = 1000;
 const SECTOR_COLS = ['A','B','C','D','E','F','G','H','I','J'];
 function sectorColRow(coord) { return { col: SECTOR_COLS.indexOf(coord[0]), row: parseInt(coord.slice(1)) }; }
 
-// Every icon is drawn at its sprite's *native pixel resolution* converted 1:1 into world
-// units (then doubled) — a black hole (512px) really is enormous next to a planet (48px).
-// Nothing is normalized to a common on-screen size; scale is whatever the art says it is.
-const ICON_SIZE_MULTIPLIER = 2;  // applied to objects (asteroid belts/black holes) and planets, where true relative pixel size matters
+// Every icon is drawn at its sprite's *native pixel resolution* converted into world units via
+// a per-category multiplier — a black hole (512px) is still enormous next to a planet (48px),
+// but each category gets its own dial so relative feel can be tuned independently.
+const OBJECT_ICON_MULTIPLIER = 2;      // asteroid belts / black holes
+const PLANET_ICON_MULTIPLIER = 2 / 8;  // planets — 8x smaller than the original 2x
 // Galaxy icon sprites are all the same 100x100 source regardless of the galaxy's "true" scale, so
 // galaxies get a fixed, deliberately small world footprint instead — a sector should comfortably
 // hold a dozen-plus galaxies, not just 2-3.
 const GALAXY_RADIUS_WORLD = 35;
 const GALAXY_EXPAND_PX = 90;     // once a galaxy's icon would render bigger than this, open it into systems
-const SYSTEM_RADIUS_WORLD = 14;  // systems are a plain star-dot, not a sprite, so this is a fixed world-unit size
+const SYSTEM_RADIUS_WORLD = 7;   // systems are a plain star-dot, not a sprite — halved (2x smaller) per feedback
 const SYSTEM_EXPAND_PX = 70;     // once a system's dot would render bigger than this, open it into planets
 const SECTOR_CONTENT_SCALE = 0.1; // mapScale above which a sector's galaxies/objects render individually
 const MAP_MIN_SCALE = 0.005, MAP_MAX_SCALE = 80; // shared zoom clamp — must allow reaching the system-expand threshold above
@@ -1241,6 +1319,30 @@ const SECTORS = {
   },
 };
 
+// Faction territory — deliberately free-form polygons in world-space, not aligned to the
+// sector grid. Overlaps between zones are intentional (contested/shared space).
+let showZones = false;
+const TERRITORY_ZONES = [
+  { name: 'GAC Core Territory', color: '#3a78d4', points: [
+    [3000,2800],[6500,2600],[7000,4500],[6200,6800],[3800,6600],[2800,4800],
+  ]},
+  { name: 'KEC Mining Concession', color: '#c87820', points: [
+    [600,1600],[2400,1400],[2600,3400],[1200,3800],[400,2800],
+  ]},
+  { name: 'SNA Free Territory', color: '#4acc7a', points: [
+    [5200,4600],[7200,4400],[7600,6600],[5600,7000],
+  ]},
+  { name: 'Void Pirate Contested Space', color: '#c84040', points: [
+    [0,0],[2200,200],[2400,2400],[600,2800],[0,1800],
+  ]},
+];
+
+function toggleZones() {
+  showZones = !showZones;
+  document.getElementById('zones-toggle-btn').textContent = 'Zones: ' + (showZones ? 'On' : 'Off');
+  redrawSpaceMap();
+}
+
 function galaxyWorldPos(coord, gal) {
   const { col, row } = sectorColRow(coord);
   return { x: col*SECTOR_SIZE + gal.x, y: row*SECTOR_SIZE + gal.y };
@@ -1318,15 +1420,15 @@ const mapCtx = mapCanvas.getContext('2d');
 
 function mapResizeCanvas() {
   mapCanvas.width  = mapCanvas.offsetWidth || 800;
-  mapCanvas.height = 360;
+  mapCanvas.height = viewportHeight;
 }
 
 // An icon's world-space radius comes straight from its sprite's native pixel size — a
 // black hole (512px) is really enormous next to a planet (48px), by design. Falls back to
 // a placeholder size only until the image has finished loading.
-function iconWorldRadius(img, fallbackPx) {
+function iconWorldRadius(img, fallbackPx, multiplier) {
   const px = spriteReady(img) ? img.naturalWidth : fallbackPx;
-  return (px / 2) * ICON_SIZE_MULTIPLIER;
+  return (px / 2) * multiplier;
 }
 
 // Zoom deeper => the backdrop fades toward pure black, so it reads as "space" rather than a map.
@@ -1358,6 +1460,28 @@ function drawSpaceMap() {
   }
   const fade = spaceFadeAlpha(mapScale);
   if (fade > 0) { mapCtx.fillStyle = `rgba(0,0,2,${fade})`; mapCtx.fillRect(0, 0, W, H); }
+
+  if (showZones) {
+    TERRITORY_ZONES.forEach(zone => {
+      const pts = zone.points.map(([x, y]) => [wx(x), wy(y)]);
+      mapCtx.beginPath();
+      mapCtx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) mapCtx.lineTo(pts[i][0], pts[i][1]);
+      mapCtx.closePath();
+      mapCtx.fillStyle = zone.color + '26'; // ~15% opacity
+      mapCtx.fill();
+      mapCtx.strokeStyle = zone.color + '80';
+      mapCtx.lineWidth = 1.5;
+      mapCtx.stroke();
+
+      const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+      const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      mapCtx.fillStyle = zone.color;
+      mapCtx.font = '700 14px system-ui, sans-serif';
+      mapCtx.textAlign = 'center'; mapCtx.textBaseline = 'middle';
+      mapCtx.fillText(zone.name, cx, cy);
+    });
+  }
 
   const showSectorContent = mapScale > SECTOR_CONTENT_SCALE;
   document.getElementById('map-breadcrumb').textContent =
@@ -1414,7 +1538,7 @@ function drawSpaceMap() {
       const opx = wx(op.x), opy = wy(op.y);
       const imgName = obj.type === 'black_hole' ? 'Black_hole' : 'asteroid_belt';
       const img = getSpriteImg(`assets/map/misc/${imgName}.png`);
-      const r = Math.max(6, iconWorldRadius(img, obj.type === 'black_hole' ? 512 : 256) * mapScale);
+      const r = Math.max(6, iconWorldRadius(img, obj.type === 'black_hole' ? 512 : 256, OBJECT_ICON_MULTIPLIER) * mapScale);
       if (opx < -r-60 || opx > W+r+60 || opy < -r-60 || opy > H+r+60) return;
 
       const { dr, hovered } = drawCircleIcon(img, opx, opy, r, '#5a3a2a');
@@ -1471,7 +1595,7 @@ function drawSpaceMap() {
           const pp = planetWorldPos(coord, gal, sys, p);
           const ppx = wx(pp.x), ppy = wy(pp.y);
           const img = getSpriteImg(`assets/map/planets/${p.img}.png`);
-          const r = Math.max(6, iconWorldRadius(img, 48) * mapScale);
+          const r = Math.max(6, iconWorldRadius(img, 48, PLANET_ICON_MULTIPLIER) * mapScale);
           if (ppx < -r-40 || ppx > W+r+40 || ppy < -r-40 || ppy > H+r+40) return;
 
           const { dr, hovered } = drawCircleIcon(img, ppx, ppy, r, '#3a4050');
@@ -1638,24 +1762,34 @@ function showLeafInfo(kind, coord, galaxyName, systemName, planetName, objectNam
   `;
 }
 
+async function applyCampaignUpdate(updates) {
+  const { error } = await db.from('campaigns').update(updates).eq('id', campaignId);
+  if (error) {
+    console.error('Campaign update failed:', error);
+    alert('Failed to save: ' + error.message + '\n\nIf this mentions a missing column, make sure schema-v9.sql has been run in Supabase.');
+    return false;
+  }
+  // Update optimistically rather than waiting on the realtime round-trip, so the GM who just
+  // clicked sees it immediately even if realtime is slow (or, before schema-v10, wasn't wired at all).
+  Object.assign(campaign, updates);
+  if (shipViewMode === 'map') redrawSpaceMap();
+  return true;
+}
+
 async function setPartyLocation(sector, systemName, planetName) {
   const updates = { current_sector: sector, current_system: systemName, current_planet: planetName };
   // Arriving at the plotted destination clears the route automatically
   if (campaign.destination_sector === sector && campaign.destination_system === systemName && campaign.destination_planet === planetName) {
     Object.assign(updates, { destination_sector: null, destination_system: null, destination_planet: null });
   }
-  await db.from('campaigns').update(updates).eq('id', campaignId);
+  if (await applyCampaignUpdate(updates)) document.getElementById('map-info-card').style.display = 'none';
 }
 
 async function setDestination(sector, systemName, planetName) {
-  await db.from('campaigns').update({
-    destination_sector: sector, destination_system: systemName, destination_planet: planetName,
-  }).eq('id', campaignId);
+  await applyCampaignUpdate({ destination_sector: sector, destination_system: systemName, destination_planet: planetName });
 }
 async function clearDestination() {
-  await db.from('campaigns').update({
-    destination_sector: null, destination_system: null, destination_planet: null,
-  }).eq('id', campaignId);
+  await applyCampaignUpdate({ destination_sector: null, destination_system: null, destination_planet: null });
 }
 
 function mapZoomStep(factor) {
@@ -1791,7 +1925,11 @@ async function saveMyCharacter() {
   myCharacterId = charId;
   closeModal('modal-my-character');
   await loadCrew();
-  if (isGM) await ensureCrewTokens();
+  if (isGM) {
+    const { error: tokErr } = await ensureCrewTokens();
+    if (tokErr) console.error('ensureCrewTokens failed:', tokErr);
+    drawShipMap();
+  }
 }
 
 // ── Initiative ──────────────────────────────────────────────────

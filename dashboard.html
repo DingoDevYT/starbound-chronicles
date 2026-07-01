@@ -128,20 +128,30 @@
         <label class="form-label">Species</label>
         <div class="species-picker" id="species-picker" style="grid-template-columns:repeat(5,1fr);">
           <button class="species-opt active" data-species="human">
-            <img src="assets/NN_Species_Human.png" class="species-opt-icon" style="width:44px;height:44px;object-fit:contain;border-radius:6px;" alt="">Human
+            <img src="assets/NN_Species_HumanM_0.png" class="species-opt-icon" style="width:44px;height:44px;object-fit:contain;border-radius:6px;" alt="">Human
           </button>
           <button class="species-opt" data-species="kragol">
-            <img src="assets/NN_Species_Kragol.png" class="species-opt-icon" style="width:44px;height:44px;object-fit:contain;border-radius:6px;" alt="">Kragol
+            <img src="assets/NN_Species_KragolM.png" class="species-opt-icon" style="width:44px;height:44px;object-fit:contain;border-radius:6px;" alt="">Kragol
           </button>
           <button class="species-opt" data-species="skitterling">
-            <img src="assets/NN_Species_Skitterling.png" class="species-opt-icon" style="width:44px;height:44px;object-fit:contain;border-radius:6px;" alt="">Skitterling
+            <img src="assets/NN_Species_SkitterlingM_0.png" class="species-opt-icon" style="width:44px;height:44px;object-fit:contain;border-radius:6px;" alt="">Skitterling
           </button>
           <button class="species-opt" data-species="myxos">
-            <img src="assets/NN_Species_Myxos.png" class="species-opt-icon" style="width:44px;height:44px;object-fit:contain;border-radius:6px;" alt="">Myxos
+            <img src="assets/NN_Species_MyxosF.png" class="species-opt-icon" style="width:44px;height:44px;object-fit:contain;border-radius:6px;" alt="">Myxos
           </button>
           <button class="species-opt" data-species="arboran">
-            <img src="assets/NN_Species_Arboran.png" class="species-opt-icon" style="width:44px;height:44px;object-fit:contain;border-radius:6px;" alt="">Arboran
+            <img src="assets/NN_Species_ArboranM.png" class="species-opt-icon" style="width:44px;height:44px;object-fit:contain;border-radius:6px;" alt="">Arboran
           </button>
+        </div>
+      </div>
+      <div class="form-group" id="appearance-picker-group">
+        <label class="form-label">Appearance</label>
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <img id="appearance-preview" src="assets/NN_Species_HumanM_0.png" style="width:64px;height:64px;object-fit:contain;border-radius:8px;background:var(--surface2);border:1px solid var(--border);flex-shrink:0;">
+          <div style="flex:1;">
+            <div id="gender-picker" style="display:flex; gap:6px; margin-bottom:8px;"></div>
+            <div id="variant-picker" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+          </div>
         </div>
       </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
@@ -186,6 +196,32 @@
     <div class="modal-footer">
       <button class="btn-ghost" onclick="closeModal('modal-new-char')">Cancel</button>
       <button class="btn-primary" id="create-char-btn" style="width:auto; padding:10px 24px;">Create Character</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MODAL: CHANGE APPEARANCE
+═══════════════════════════════════════════ -->
+<div class="modal-backdrop" id="modal-change-appearance">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-header">
+      <span class="modal-title">Change Appearance</span>
+      <button class="modal-close" onclick="closeModal('modal-change-appearance')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex; gap:14px; align-items:flex-start;">
+        <img id="ca-preview" src="" style="width:64px;height:64px;object-fit:contain;border-radius:8px;background:var(--surface2);border:1px solid var(--border);flex-shrink:0;">
+        <div style="flex:1;">
+          <div id="ca-gender-picker" style="display:flex; gap:6px; margin-bottom:8px;"></div>
+          <div id="ca-variant-picker" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+        </div>
+      </div>
+      <div class="form-error" id="ca-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('modal-change-appearance')">Cancel</button>
+      <button class="btn-primary" onclick="saveChangeAppearance()" style="width:auto;padding:10px 24px;">Save</button>
     </div>
   </div>
 </div>
@@ -314,9 +350,28 @@ const PB_MAX    = 14;
 const PB_BUDGET = 20;
 
 const SPECIES_LABELS = { human:'Human', kragol:'Kragol', skitterling:'Skitterling', myxos:'Myxos', arboran:'Arboran' };
-const SPECIES_IMGS   = { human:'assets/NN_Species_Human.png', kragol:'assets/NN_Species_Kragol.png',
-                         skitterling:'assets/NN_Species_Skitterling.png', myxos:'assets/NN_Species_Myxos.png',
-                         arboran:'assets/NN_Species_Arboran.png' };
+
+// Which genders/variants exist per species. A variant of `null` means there's a single fixed
+// image for that gender (no numbered options).
+const SPECIES_VARIANTS = {
+  human:       { M: [0,1,2,3], F: [0,1,2,3] },
+  skitterling: { M: [0,1,2,3], F: [0,1,2,3] },
+  kragol:      { M: [null] },
+  myxos:       { F: [null] },
+  arboran:     { M: [null] },
+};
+function speciesImagePath(species, gender, variant) {
+  const variants = SPECIES_VARIANTS[species] || {};
+  const g = gender && variants[gender] ? gender : Object.keys(variants)[0];
+  const opts = variants[g] || [null];
+  const v = opts.includes(variant) ? variant : opts[0];
+  const suffix = v === null || v === undefined ? '' : `_${v}`;
+  const speciesName = species ? species[0].toUpperCase() + species.slice(1) : 'Human';
+  return `assets/NN_Species_${speciesName}${g || 'M'}${suffix}.png`;
+}
+// Default portrait per species (first available gender/variant) — used wherever a character's
+// specific appearance choice isn't available (NPCs, fallbacks, etc).
+const SPECIES_IMGS = Object.fromEntries(Object.keys(SPECIES_VARIANTS).map(s => [s, speciesImagePath(s)]));
 const ROLE_ICONS = { pilot:'🚀', gunsmith:'🔫', technician:'⚙️', smuggler:'🗣️' };
 
 const PLACEHOLDER = {
@@ -490,8 +545,8 @@ async function loadCharacters() {
 
   grid.innerHTML = chars.map(c => `
     <div class="char-card" style="--card-top:${speciesColor(c.species)};cursor:pointer;" onclick="window.location.href='character.html?id=${c.id}'">
-      <div class="char-card-icon" style="padding:0;overflow:hidden;border-radius:10px;">
-        ${SPECIES_IMGS[c.species] ? `<img src="${SPECIES_IMGS[c.species]}" alt="${c.species}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">` : '🧑'}
+      <div class="char-card-icon" style="padding:0;overflow:hidden;border-radius:10px;" title="Click to change appearance" onclick="event.stopPropagation(); openChangeAppearance('${c.id}','${c.species}',${JSON.stringify(c.appearance || {}).replace(/"/g,'&quot;')})">
+        <img src="${speciesImagePath(c.species, c.appearance?.gender, c.appearance?.variant)}" alt="${c.species}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">
       </div>
       <div class="char-card-name">${esc(c.name)}</div>
       <div class="char-card-meta">
@@ -586,15 +641,97 @@ function newCampCard() {
     </button>`;
 }
 
-// ── Species picker ──────────────────────────────────────────────
+// ── Species + appearance picker ──────────────────────────────────
+let selectedGender = 'M', selectedVariant = null;
+
 document.getElementById('species-picker').addEventListener('click', e => {
   const btn = e.target.closest('.species-opt');
   if (!btn) return;
   document.querySelectorAll('.species-opt').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   selectedSpecies = btn.dataset.species;
+  const genders = Object.keys(SPECIES_VARIANTS[selectedSpecies] || { M:[null] });
+  selectedGender = genders[0];
+  selectedVariant = (SPECIES_VARIANTS[selectedSpecies][selectedGender] || [null])[0];
+  renderAppearancePicker();
   updatePointBuy();
 });
+
+function renderAppearancePicker() {
+  const variants = SPECIES_VARIANTS[selectedSpecies] || { M: [null] };
+  const genders = Object.keys(variants);
+
+  const genderPicker = document.getElementById('gender-picker');
+  genderPicker.innerHTML = genders.length > 1 ? genders.map(g => `
+    <button type="button" class="btn-ghost appearance-gender-btn ${g===selectedGender?'active':''}" style="font-size:11px;padding:5px 14px;" onclick="selectGender('${g}')">${g === 'M' ? 'Male' : 'Female'}</button>
+  `).join('') : '';
+
+  const opts = variants[selectedGender] || [null];
+  const variantPicker = document.getElementById('variant-picker');
+  variantPicker.innerHTML = opts.length > 1 ? opts.map(v => `
+    <img class="appearance-variant-opt ${v===selectedVariant?'active':''}" src="${speciesImagePath(selectedSpecies, selectedGender, v)}"
+         style="width:40px;height:40px;object-fit:contain;border-radius:6px;cursor:pointer;background:var(--surface2);border:2px solid ${v===selectedVariant?'var(--accent)':'var(--border)'};"
+         onclick="selectVariant(${v})">
+  `).join('') : '';
+
+  document.getElementById('appearance-preview').src = speciesImagePath(selectedSpecies, selectedGender, selectedVariant);
+}
+function selectGender(g) {
+  selectedGender = g;
+  selectedVariant = (SPECIES_VARIANTS[selectedSpecies][g] || [null])[0];
+  renderAppearancePicker();
+}
+function selectVariant(v) {
+  selectedVariant = v;
+  renderAppearancePicker();
+}
+renderAppearancePicker();
+
+// ── Change appearance (existing character) ───────────────────────
+let caCharId = null, caSpecies = null, caGender = 'M', caVariant = null;
+
+function openChangeAppearance(charId, species, appearance) {
+  caCharId = charId; caSpecies = species;
+  const variants = SPECIES_VARIANTS[species] || { M: [null] };
+  caGender  = (appearance?.gender && variants[appearance.gender]) ? appearance.gender : Object.keys(variants)[0];
+  caVariant = (variants[caGender] || [null]).includes(appearance?.variant) ? appearance.variant : (variants[caGender] || [null])[0];
+  showError('ca-error', '');
+  renderCAPicker();
+  openModal('modal-change-appearance');
+}
+
+function renderCAPicker() {
+  const variants = SPECIES_VARIANTS[caSpecies] || { M: [null] };
+  const genders = Object.keys(variants);
+
+  document.getElementById('ca-gender-picker').innerHTML = genders.length > 1 ? genders.map(g => `
+    <button type="button" class="btn-ghost appearance-gender-btn ${g===caGender?'active':''}" style="font-size:11px;padding:5px 14px;" onclick="selectCAGender('${g}')">${g === 'M' ? 'Male' : 'Female'}</button>
+  `).join('') : '';
+
+  const opts = variants[caGender] || [null];
+  document.getElementById('ca-variant-picker').innerHTML = opts.length > 1 ? opts.map(v => `
+    <img class="appearance-variant-opt" src="${speciesImagePath(caSpecies, caGender, v)}"
+         style="width:40px;height:40px;object-fit:contain;border-radius:6px;cursor:pointer;background:var(--surface2);border:2px solid ${v===caVariant?'var(--accent)':'var(--border)'};"
+         onclick="selectCAVariant(${v})">
+  `).join('') : '';
+
+  document.getElementById('ca-preview').src = speciesImagePath(caSpecies, caGender, caVariant);
+}
+function selectCAGender(g) {
+  caGender = g;
+  caVariant = (SPECIES_VARIANTS[caSpecies][g] || [null])[0];
+  renderCAPicker();
+}
+function selectCAVariant(v) {
+  caVariant = v;
+  renderCAPicker();
+}
+async function saveChangeAppearance() {
+  const { error } = await db.from('characters').update({ appearance: { gender: caGender, variant: caVariant } }).eq('id', caCharId);
+  if (error) return showError('ca-error', error.message);
+  closeModal('modal-change-appearance');
+  await loadCharacters();
+}
 
 // ── Create Character ────────────────────────────────────────────
 document.getElementById('create-char-btn').addEventListener('click', async () => {
@@ -630,6 +767,7 @@ document.getElementById('create-char-btn').addEventListener('click', async () =>
     stats, background, personality, bonds, flaws,
     hp_current: hp_max, hp_max, level: 1, xp: 0,
     armor: 10 + flyMod, speed: 30,
+    appearance: { gender: selectedGender, variant: selectedVariant },
   });
   setLoading(btn, false);
 
