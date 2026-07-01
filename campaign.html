@@ -1012,20 +1012,6 @@ function drawShipMap() {
     }
   }
 
-  // Draw station labels (subtle)
-  const stations = shipType.station_positions || [];
-  stations.forEach(st => {
-    const px = gx(st.x) + cs/2, py = gy(st.y) + cs/2;
-    shipCtx.fillStyle = 'rgba(80,140,220,.18)';
-    shipCtx.beginPath();
-    shipCtx.arc(px, py, cs * .38, 0, Math.PI * 2);
-    shipCtx.fill();
-    shipCtx.fillStyle = 'rgba(100,160,255,.5)';
-    shipCtx.font = `${Math.max(8, cs * .28)}px system-ui, sans-serif`;
-    shipCtx.textAlign = 'center';
-    shipCtx.textBaseline = 'middle';
-    shipCtx.fillText(st.label, px, py);
-  });
 
   // Draw tokens
   shipTokens.forEach(tok => {
@@ -1223,21 +1209,32 @@ const SECTORS = {
       { type:'asteroid_belt', name:'Ironback Belt',  x:150, y:820, desc:'A dense KEC mining claim. Heavy industrial traffic — unlicensed vessels are boarded on sight.' },
       { type:'asteroid_belt', name:'Cinderfall Belt', x:880, y:120, desc:'Secondary KEC extraction site. Lower security than Ironback; popular with smugglers skimming tailings.' },
       { type:'asteroid_belt', name:'The Slagfields',  x:920, y:780, desc:'Depleted mining claim, mostly abandoned. Rumoured Skitterling scavenger nests in the wreckage.' },
+      { type:'asteroid_belt', name:'The Weighing Fields', x:520, y:900, desc:'Neutral appraisal zone where independent haulers get their ore graded before KEC will buy it. Heavily armed, oddly civil.' },
     ],
     galaxies: [
       { name:'The Great Ring', sprite:1, x:220, y:280, systems: [
-        { name:'Mintonas',        x:-90, y:-60, planets:[ { name:'Mintonas',        img:'Moon', ox:0, oy:0,   desc:'Kragol homeworld. Rock, crystal, and gemstone deposits as far as sensors can read. KEC mining rigs dominate the orbital lanes.' } ] },
-        { name:'Grannite Reach',  x:110, y:-30, planets:[ { name:'Grannite Reach Prime', img:'Moon', ox:0, oy:0, desc:'Second Kragol home system. Almost entirely hollowed out by generations of mining clans.' } ] },
+        { name:'Mintonas',        x:-90, y:-60, planets:[
+          { name:'Mintonas',      img:'Moon', ox:0,   oy:0,  desc:'Kragol homeworld. Rock, crystal, and gemstone deposits as far as sensors can read. KEC mining rigs dominate the orbital lanes.' },
+          { name:'Mintonas Minor', img:'Moon', ox:14,  oy:6,  desc:'A hollowed moonlet, converted entirely into KEC smelting works. Never goes dark — the forges run in three shifts.' },
+        ]},
+        { name:'Grannite Reach',  x:110, y:-30, planets:[
+          { name:'Grannite Reach Prime', img:'Moon', ox:0, oy:0, desc:'Second Kragol home system. Almost entirely hollowed out by generations of mining clans.' },
+          { name:'The Cracked Shell', img:'Lava', ox:-12, oy:10, desc:'A fractured world, its molten core exposed after centuries of deep-core extraction. Considered sacred ruin by elder Kragol.' },
+        ]},
         { name:"Ore's End",       x:20,  y:120, planets:[ { name:"Ore's End",      img:'Lava', ox:0, oy:0,  desc:'KEC forward extraction colony. Molten-core world; refineries run around the clock.' } ] },
+        { name:'Deepvein',        x:-40, y:80,  planets:[ { name:'Deepvein Prime', img:'Moon', ox:0, oy:0, desc:'Newest Kragol claim, still under survey. Early scans suggest the richest gemstone deposits in the Ring.' } ] },
       ]},
     ],
   },
   'C3': { region: 'Nomadic Drift, Mobile Warrens',
-    objects: [],
+    objects: [
+      { type:'asteroid_belt', name:'The Scrapfield', x:200, y:600, desc:'A drifting junkyard of decommissioned hulls and salvage. Skitterling clans strip it clean and it refills anyway — nobody knows from where.' },
+    ],
     galaxies: [
       { name:'Mobile Warrens', sprite:2, x:700, y:200, systems: [
         { name:'Warren Cluster Prime', x:-40, y:0,  planets:[ { name:'Warren Cluster', img:'Lava', ox:0, oy:0, desc:'A shifting cloud of scavenged hab-modules. Home to nomadic Skitterling clans. Coordinates change monthly.' } ] },
         { name:'Drift Anchor Seven',   x:90,  y:50, planets:[ { name:'Anchor Seven',   img:'Moon', ox:0, oy:0, desc:'A second drifting warren, currently anchored to a dead comet core for stability.' } ] },
+        { name:'The Rattling Column',  x:20,  y:-70, planets:[ { name:'Column Warren', img:'Lava', ox:0, oy:0, desc:'A vertical stack of linked habitats, built and rebuilt so many times nobody remembers the original hull underneath.' } ] },
       ]},
     ],
   },
@@ -1259,19 +1256,29 @@ const SECTORS = {
   },
   'E4': { region: 'Sol System, Milky Way',
     objects: [
-      { type:'asteroid_belt', name:'The Kessler Field', x:850, y:850, desc:'Centuries of orbital debris and dead satellites. Automated GAC patrol drones sweep it constantly — mostly for show.' },
+      { type:'asteroid_belt', name:'The Sol Belt', x:170, y:260, desc:'The main asteroid belt, sitting between Mars and Jupiter. Heavily surveyed, lightly claimed — mostly rubble, occasionally a fortune.' },
+      { type:'asteroid_belt', name:'The Kuiper Fringe', x:120, y:520, desc:'A vast, scattered shell of ice and rock at the edge of the Sol system. Cold, dark, and largely unmapped past the inner fringe.' },
     ],
     galaxies: [
       { name:'Milky Way', sprite:4, x:280, y:220, systems: [
         { name:'Sol', x:-110, y:0, planets:[
-          { name:'Earth',        img:'Terran',  ox:-15, oy:0, desc:'GAC founding world, dense population, heaviest patrol coverage in the sector.' },
-          { name:'Mars Colony',  img:'Terran6', ox:20,  oy:15, desc:'Terraformed GAC colony world. Still finishing its atmospheric processors after two centuries.' },
+          { name:'Mercury', img:'Lava',    ox:-30, oy:-10, desc:'Closest planet to the sun. Scorched and airless. A handful of GAC solar research outposts cling to the twilight terminator.' },
+          { name:'Venus',   img:'Lava',    ox:-24, oy:8,   desc:'Runaway greenhouse world under crushing atmospheric pressure. Only the high-altitude GAC cloud-cities are habitable.' },
+          { name:'Earth',   img:'Terran',  ox:-15, oy:-4,  desc:'GAC founding world, dense population, heaviest patrol coverage in the sector.' },
+          { name:'Luna',    img:'Moon',    ox:-11, oy:-9,  desc:'Earth\'s moon. GAC Fleet Command\'s primary shipyards and the Patrol Fleet Academy.' },
+          { name:'Mars',    img:'Terran6', ox:-2,  oy:14,  desc:'Terraformed GAC colony world. Still finishing its atmospheric processors after two centuries.' },
+          { name:'Jupiter', img:'Terran7', ox:22,  oy:-16, desc:'Massive gas giant. Its moons host most of the system\'s heavy industry and fuel-scooping operations.' },
+          { name:'The Moon Colonies', img:'Moon', ox:28, oy:-8, desc:'SNA founding territory, orbiting Jupiter. Loosely governed colony worlds, popular with scavenger crews.' },
+          { name:'Saturn',  img:'Ice',     ox:14,  oy:30,  desc:'Ringed ice giant. The rings themselves are actively mined for water ice and rare volatiles.' },
+          { name:'Uranus',  img:'Ice',     ox:-20, oy:32,  desc:'Tilted ice giant on the outer edge of common patrol range. A handful of automated GAC listening posts.' },
+          { name:'Neptune', img:'Ice',     ox:32,  oy:6,   desc:'Outermost major planet. Extreme cold, extreme winds. Mostly of interest to deep-space researchers.' },
         ]},
-        { name:'Jupiter System', x:60, y:-80, planets:[
-          { name:'The Moon Colonies', img:'Moon', ox:0, oy:0, desc:'SNA founding territory. Loosely governed colony worlds, popular with scavenger crews.' },
+        { name:'Alpha Centauri', x:-70, y:40, planets:[
+          { name:'Centauri Prime', img:'Terran7', ox:0, oy:0, desc:'GAC-adjacent human colony, closest star system to Sol. Independently governed but Council-friendly.' },
+          { name:'Proxima Outpost', img:'Moon', ox:14, oy:-8, desc:'A small research and relay outpost orbiting the system\'s dim red-dwarf companion.' },
         ]},
-        { name:'Alpha Centauri Reach', x:40, y:100, planets:[
-          { name:'Centauri Prime', img:'Terran7', ox:0, oy:0, desc:'GAC-adjacent human colony, several lightyears out. Independently governed but Council-friendly.' },
+        { name:"Barnard's Star", x:-140, y:70, planets:[
+          { name:"Barnard's Reach", img:'Lava', ox:0, oy:0, desc:'A cold, dim system with a single scorched rock of a world. No permanent settlement — just the occasional survey crew.' },
         ]},
         { name:'The Rust Belts', x:-70, y:90, planets:[
           { name:'Rust Belt Debris Field', img:'Lava', ox:0, oy:0, desc:'Human Renegade territory — a Void Pirate stronghold hiding in the debris fields.' },
@@ -1280,11 +1287,14 @@ const SECTORS = {
     ],
   },
   'F3': { region: 'Calamitus Field',
-    objects: [],
+    objects: [
+      { type:'asteroid_belt', name:'The Withered Belt', x:650, y:250, desc:'A dead, sun-bleached ring of rock — Arboran botanists study it as a cautionary tale of a system that lost its light.' },
+    ],
     galaxies: [
       { name:'Calamitus Field', sprite:5, x:180, y:750, systems: [
         { name:'Arkanos System', x:0,  y:-60, planets:[ { name:'Arkanos', img:'Terran3', ox:0, oy:0, desc:'Arboran homeworld. Lush, high-UV, and a founding GAC world.' } ] },
         { name:'Sunreach Cluster', x:100, y:60, planets:[ { name:'Sunreach Prime', img:'Terran2', ox:0, oy:0, desc:'Second Arboran home system. Orbits close to its star — solar farming megastructures visible from orbit.' } ] },
+        { name:'Bloomwake', x:-90, y:40, planets:[ { name:'Bloomwake Prime', img:'Terran4', ox:0, oy:0, desc:'Third Arboran system, largely given over to seed-vault preservation of pre-GAC flora.' } ] },
       ]},
     ],
   },
@@ -1299,23 +1309,39 @@ const SECTORS = {
     ],
   },
   'G5': { region: 'Myx System, Nebulous Way',
-    objects: [],
+    objects: [
+      { type:'asteroid_belt', name:'The Chemsea Drift', x:300, y:850, desc:'A field of frozen chemical slush and drifting organic residue. Myxos harvesting crews consider it a delicacy run.' },
+    ],
     galaxies: [
       { name:'Nebulous Way', sprite:2, x:720, y:720, systems: [
         { name:'Myx System', x:-60, y:-30, planets:[ { name:'Juniper', img:'Ice', ox:0, oy:0, desc:'Myxos homeworld. Chemical seas and gelatinous ecosystems — bring a suit.' } ] },
         { name:'Sporewell Cluster', x:80, y:60, planets:[ { name:'Sporewell', img:'Ice', ox:0, oy:0, desc:'Second Myxos home system. A colder, denser chemical-sea world used for deep research.' } ] },
+        { name:'The Undertow', x:-100, y:60, planets:[ { name:'Undertow Prime', img:'Ice', ox:0, oy:0, desc:'Third Myxos system, largely submerged. Cities exist as pressurised bubbles beneath the chemical tides.' } ] },
       ]},
     ],
   },
   'B1': { region: 'Outer Rim, Obsidian Fringe',
     objects: [
       { type:'black_hole', name:'The Obsidian Maw', x:250, y:250, desc:'A stellar-mass black hole. Void Pirate crews use its gravity shadow to vanish from GAC sensors — most patrols simply refuse to follow.' },
+      { type:'asteroid_belt', name:'Wreckwatch Belt', x:600, y:400, desc:'A debris field of picked-clean hulls. Void Pirate crews use it as an ambush point for ships hugging the sector edge.' },
     ],
     galaxies: [
       { name:'Outer Rim', sprite:3, x:780, y:750, systems: [
         { name:'Obsidian Fringe', x:0, y:0, planets:[ { name:'The Obsidian Fringe', img:'Moon', ox:0, oy:0, desc:'Kaelen Outcast territory. Void Pirate crews operate freely; GAC patrols rarely bother.' } ] },
       ]},
     ],
+  },
+  'H7': { region: 'Unmapped Fringe',
+    objects: [
+      { type:'asteroid_belt', name:'The Drift Yards', x:400, y:400, desc:'An enormous, unclaimed debris field far past any patrolled lane. No faction has bothered to survey it properly.' },
+    ],
+    galaxies: [],
+  },
+  'C7': { region: 'Unmapped Fringe',
+    objects: [
+      { type:'black_hole', name:'The Devourer', x:500, y:500, desc:'An isolated black hole with no nearby claims. Deep-space researchers occasionally charter expeditions to study its accretion disk — few come back with useful data, or on schedule.' },
+    ],
+    galaxies: [],
   },
 };
 
@@ -1916,11 +1942,15 @@ async function saveMyCharacter() {
   const charId = document.getElementById('my-character-select').value || null;
   showError('my-character-error', '');
 
-  const { error } = await db.from('campaign_members')
+  const { data, error } = await db.from('campaign_members')
     .update({ character_id: charId })
-    .eq('campaign_id', campaignId).eq('user_id', currentUser.id);
+    .eq('campaign_id', campaignId).eq('user_id', currentUser.id)
+    .select();
 
   if (error) return showError('my-character-error', error.message);
+  // RLS can silently match zero rows instead of erroring — catch that explicitly rather than
+  // letting the UI report success on an update that never actually happened.
+  if (!data?.length) return showError('my-character-error', 'Update didn\'t apply — check the campaign_members UPDATE policy (schema-v11.sql).');
 
   myCharacterId = charId;
   closeModal('modal-my-character');
