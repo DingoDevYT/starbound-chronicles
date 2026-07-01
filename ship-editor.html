@@ -117,7 +117,7 @@ canvas#main-canvas{display:block;width:100%;height:100%;}
 <div class="editor-wrap">
 
   <aside class="sidebar">
-    <div class="sb-section" style="padding-top:56px;">
+    <div class="sb-section" id="sb-tools" style="padding-top:56px;">
       <div class="sb-label">Tools</div>
       <div class="tool-grid">
         <button class="tool-btn" id="t-floor"      onclick="setTool('floor')"     >Floor<span class="key-hint">F</span></button>
@@ -133,7 +133,7 @@ canvas#main-canvas{display:block;width:100%;height:100%;}
       </div>
     </div>
 
-    <div class="sb-section">
+    <div class="sb-section" id="sb-rooms">
       <div class="sb-label">Rooms</div>
       <div id="room-btn-list"></div>
     </div>
@@ -158,7 +158,7 @@ canvas#main-canvas{display:block;width:100%;height:100%;}
       <div class="toggle-row" id="gm-row" style="display:none;"><label>👑 GM view</label><label class="toggle-switch"><input type="checkbox" id="gm-toggle" checked onchange="render()"><span class="toggle-track"></span></label></div>
     </div>
 
-    <div class="sb-section">
+    <div class="sb-section" id="sb-layout">
       <div class="sb-label">Load Layout</div>
       <button class="room-btn" onclick="loadLayout('scout')">Scout<small style="color:var(--text-faint);margin-left:auto;">16×10</small></button>
       <button class="room-btn" onclick="loadLayout('frigate')">Frigate<small style="color:var(--text-faint);margin-left:auto;">24×16</small></button>
@@ -166,7 +166,7 @@ canvas#main-canvas{display:block;width:100%;height:100%;}
       <button class="room-btn" onclick="loadLayout('dreadnought')">Dreadnought<small style="color:var(--text-faint);margin-left:auto;">40×28</small></button>
     </div>
 
-    <div class="sb-section" style="border-bottom:none;">
+    <div class="sb-section" id="sb-clear" style="border-bottom:none;">
       <button class="room-btn" style="color:#ff8888;" onclick="clearGrid()">🗑 Clear Grid</button>
     </div>
   </aside>
@@ -406,7 +406,21 @@ if(!campaignId)location.href='dashboard.html';
   document.title=(camp.ship_name||'Ship')+' Editor';
   document.getElementById('camp-name').textContent=camp.ship_name||'Ship Editor';
   document.getElementById('camp-back').href='campaign.html?id='+campaignId;
-  if(isGM)document.getElementById('gm-row').style.display='';
+  if(isGM){
+    document.getElementById('gm-row').style.display='';
+  }else{
+    ['sb-tools','sb-rooms','sb-layout','sb-clear'].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.style.display='none';
+    });
+    document.getElementById('gw-input').closest('.grid-row').style.display='none';
+    document.getElementById('fog-toggle').closest('.toggle-row').style.display='none';
+    const sbLabel=document.querySelector('#sb-tools')?.closest('.sb-section');
+    const playerBanner=document.createElement('div');
+    playerBanner.style.cssText='padding:12px 10px 8px;font-size:11px;color:var(--text-faint);border-bottom:1px solid var(--border);padding-top:56px;';
+    playerBanner.innerHTML='<div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-faint);font-weight:700;margin-bottom:6px;">Session View</div><div style="color:var(--text-dim);line-height:1.5;">Drag your token to move. Click a token to see its details.</div>';
+    document.querySelector('.sidebar').prepend(playerBanner);
+    activeTool='select';
+  }
   buildRoomButtons();
   setupCanvas();
   if(camp.ship_layout?.cells){
@@ -587,6 +601,7 @@ function render(){
   ctx.fillStyle='#050a10';ctx.fillRect(0,0,canvas.width,canvas.height);
 
   const cs=CELL_SIZE*zoom;
+  drawShipHullLayer(cs);
   const gmView=isGM&&document.getElementById('gm-toggle')?.checked;
   const sx=Math.max(0,Math.floor(-offsetX/cs));
   const ex=Math.min(gridW,Math.ceil((canvas.width-offsetX)/cs)+1);
@@ -672,12 +687,16 @@ function render(){
 function drawCell(x,y,type,paintIdx,fogState,cs){
   const px=offsetX+x*cs,py=offsetY+y*cs,dim=fogState<2;
   if(type===FLOOR){
+    ctx.globalAlpha=0.68;
     ctx.fillStyle=dim?darkenHex(paintIdx?ROOM_TYPES[paintIdx-1].color:'#1a2232',.5):(paintIdx?ROOM_TYPES[paintIdx-1].color:'#1a2232');
     ctx.fillRect(px,py,cs,cs);
+    ctx.globalAlpha=1;
   }else if(type===WALL){
+    ctx.globalAlpha=0.82;
     ctx.fillStyle='#181e28';ctx.fillRect(px,py,cs,cs);
     ctx.fillStyle=dim?'#1e2a36':'#3a4a58';ctx.fillRect(px,py,cs,2);ctx.fillRect(px,py,2,cs);
     ctx.fillStyle=dim?'#222a38':'#2e3848';ctx.fillRect(px+2,py+2,cs-3,cs-3);
+    ctx.globalAlpha=1;
   }else if(type===DOOR){
     const t=Date.now()/1200;
     ctx.fillStyle='#0a1828';ctx.fillRect(px,py,cs,cs);
@@ -693,6 +712,234 @@ function drawCell(x,y,type,paintIdx,fogState,cs){
 function darkenHex(hex,amount){
   let r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
   return`rgb(${Math.round(r*amount)},${Math.round(g*amount)},${Math.round(b*amount)})`;
+}
+
+// ── Ship Hull Background Layer ─────────────────────────────────
+function drawShipHullLayer(cs){
+  if(!campaignData)return;
+  const gx=offsetX,gy=offsetY,gw=gridW*cs,gh=gridH*cs;
+  const cx=gx+gw/2,cy=gy+gh/2;
+  const lw=Math.max(1,cs*0.05);
+  ctx.save();
+  const cls=(campaignData.ship_class||'frigate').toLowerCase();
+  if(cls==='scout')       drawScoutHull(cx,cy,gw,gh,lw);
+  else if(cls==='cruiser')     drawCruiserHull(cx,cy,gw,gh,lw);
+  else if(cls==='dreadnought') drawDreadnoughtHull(cx,cy,gw,gh,lw);
+  else                         drawFrigateHull(cx,cy,gw,gh,lw);
+  ctx.restore();
+}
+
+function hullGrad(x1,y1,x2,y2,c1,c2,c3){
+  const g=ctx.createLinearGradient(x1,y1,x2,y2);
+  g.addColorStop(0,c1);g.addColorStop(0.45,c2);g.addColorStop(1,c3);return g;
+}
+function porthole(x,y,r){
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fillStyle='#c8e4ff';ctx.fill();
+  ctx.strokeStyle='#6090b8';ctx.lineWidth=Math.max(1,r*0.35);ctx.stroke();
+  ctx.beginPath();ctx.arc(x,y,r*0.52,0,Math.PI*2);
+  ctx.strokeStyle='#90b8d8';ctx.lineWidth=Math.max(0.5,r*0.18);ctx.stroke();
+}
+function engineGlow(x,y,w,h){
+  const g=ctx.createRadialGradient(x,y+h*0.3,0,x,y+h*0.3,w*0.9);
+  g.addColorStop(0,'rgba(120,200,255,0.9)');
+  g.addColorStop(0.35,'rgba(60,120,220,0.55)');
+  g.addColorStop(0.7,'rgba(20,60,160,0.25)');
+  g.addColorStop(1,'rgba(5,15,60,0)');
+  ctx.fillStyle=g;ctx.fillRect(x-w,y,w*2,h*1.6);
+}
+function panelSeams(cx,cy,hw,hh,nx,ny,alpha){
+  ctx.strokeStyle=`rgba(50,70,90,${alpha})`;ctx.lineWidth=0.5;
+  for(let i=1;i<ny;i++){const fy=cy-hh+hh*2*(i/ny);ctx.beginPath();ctx.moveTo(cx-hw*0.92,fy);ctx.lineTo(cx+hw*0.92,fy);ctx.stroke();}
+  for(let i=1;i<nx;i++){const fx=cx-hw+hw*2*(i/nx);ctx.beginPath();ctx.moveTo(fx,cy-hh*0.9);ctx.lineTo(fx,cy+hh*0.9);ctx.stroke();}
+}
+
+// Scout — slim dart, single porthole, small wings
+function drawScoutHull(cx,cy,gw,gh,lw){
+  const w=gw*0.48,h=gh*0.80,hw=w/2,hh=h/2;
+  // main body
+  ctx.beginPath();
+  ctx.moveTo(cx,cy-hh);
+  ctx.lineTo(cx+hw*0.8,cy-hh*0.25);
+  ctx.lineTo(cx+hw,cy+hh*0.22);
+  ctx.lineTo(cx+hw*0.55,cy+hh);
+  ctx.lineTo(cx-hw*0.55,cy+hh);
+  ctx.lineTo(cx-hw,cy+hh*0.22);
+  ctx.lineTo(cx-hw*0.8,cy-hh*0.25);
+  ctx.closePath();
+  ctx.fillStyle=hullGrad(cx,cy-hh,cx,cy+hh,'#aab4c0','#c2cad4','#8a929c');
+  ctx.fill();ctx.strokeStyle='#4a5868';ctx.lineWidth=lw;ctx.stroke();
+  // swept wings
+  for(const s of[-1,1]){
+    ctx.beginPath();
+    ctx.moveTo(cx+s*hw,cy+hh*0.05);
+    ctx.lineTo(cx+s*(hw+w*0.24),cy+hh*0.42);
+    ctx.lineTo(cx+s*hw,cy+hh*0.38);
+    ctx.closePath();
+    ctx.fillStyle='#384050';ctx.fill();ctx.strokeStyle='#28303e';ctx.lineWidth=lw*0.7;ctx.stroke();
+  }
+  // single engine
+  const ew=w*0.20,eh=h*0.07;
+  ctx.beginPath();ctx.moveTo(cx-ew/2,cy+hh);ctx.lineTo(cx+ew/2,cy+hh);
+  ctx.lineTo(cx+ew*0.35,cy+hh+eh);ctx.lineTo(cx-ew*0.35,cy+hh+eh);ctx.closePath();
+  ctx.fillStyle='#222a36';ctx.fill();
+  engineGlow(cx,cy+hh,ew*0.75,eh);
+  // porthole
+  porthole(cx,cy-hh*0.52,Math.max(3,gw*0.022));
+  // cockpit arc
+  ctx.beginPath();ctx.ellipse(cx,cy-hh*0.34,w*0.26,h*0.09,0,0,Math.PI*2);
+  ctx.strokeStyle='rgba(100,160,210,0.45)';ctx.lineWidth=lw*0.5;ctx.stroke();
+  panelSeams(cx,cy,hw,hh,1,4,0.28);
+}
+
+// Frigate — octagonal hull, double engine, 3 portholes (matches mockup)
+function drawFrigateHull(cx,cy,gw,gh,lw){
+  const w=gw*0.70,h=gh*0.80,hw=w/2,hh=h/2,cut=hw*0.22;
+  // octagonal hull
+  ctx.beginPath();
+  ctx.moveTo(cx-hw+cut,cy-hh);ctx.lineTo(cx+hw-cut,cy-hh);
+  ctx.lineTo(cx+hw,cy-hh+cut);ctx.lineTo(cx+hw,cy+hh-cut);
+  ctx.lineTo(cx+hw-cut,cy+hh);ctx.lineTo(cx-hw+cut,cy+hh);
+  ctx.lineTo(cx-hw,cy+hh-cut);ctx.lineTo(cx-hw,cy-hh+cut);
+  ctx.closePath();
+  ctx.fillStyle=hullGrad(cx,cy-hh,cx,cy+hh,'#b0b8c4','#c4cad4','#8c9098');
+  ctx.fill();ctx.strokeStyle='#4a5568';ctx.lineWidth=lw;ctx.stroke();
+  // wings
+  for(const s of[-1,1]){
+    ctx.beginPath();
+    ctx.moveTo(cx+s*hw,cy-hh*0.12);
+    ctx.lineTo(cx+s*(hw+w*0.30),cy+hh*0.18);
+    ctx.lineTo(cx+s*hw,cy+hh*0.35);
+    ctx.closePath();
+    ctx.fillStyle='#3c4555';ctx.fill();ctx.strokeStyle='#2c3545';ctx.lineWidth=lw*0.8;ctx.stroke();
+  }
+  // double engine
+  const ew=w*0.17,eh=h*0.07,esep=w*0.14;
+  for(const ex of[cx-esep,cx+esep]){
+    ctx.beginPath();ctx.moveTo(ex-ew/2,cy+hh);ctx.lineTo(ex+ew/2,cy+hh);
+    ctx.lineTo(ex+ew*0.35,cy+hh+eh);ctx.lineTo(ex-ew*0.35,cy+hh+eh);ctx.closePath();
+    ctx.fillStyle='#252c3a';ctx.fill();
+    engineGlow(ex,cy+hh,ew*0.68,eh);
+  }
+  // 3 portholes
+  const pr=Math.max(3,gw*0.024),ps=pr*3.2;
+  for(const i of[-1,0,1])porthole(cx+i*ps,cy-hh*0.70,pr);
+  // sensor bar
+  const sbw=w*0.48,sbh=Math.max(3,gh*0.018);
+  ctx.fillStyle='#606878';ctx.fillRect(cx-sbw/2,cy-hh*0.50,sbw,sbh);
+  ctx.fillStyle='#3a4455';ctx.fillRect(cx-sbw/2,cy-hh*0.50,sbw,sbh*0.42);
+  // central cargo bay
+  const rw=w*0.44,rh=h*0.28;
+  ctx.fillStyle='rgba(15,28,45,0.50)';ctx.fillRect(cx-rw/2,cy-rh*0.42,rw,rh);
+  ctx.strokeStyle='rgba(50,70,95,0.75)';ctx.lineWidth=lw*0.7;ctx.strokeRect(cx-rw/2,cy-rh*0.42,rw,rh);
+  // side airlocks
+  const aw=w*0.06,ah=h*0.12;
+  ctx.fillStyle='rgba(15,28,45,0.50)';
+  ctx.fillRect(cx-hw+aw*0.5,cy-ah/2,aw,ah);ctx.fillRect(cx+hw-aw*1.5,cy-ah/2,aw,ah);
+  ctx.strokeStyle='rgba(50,70,95,0.72)';ctx.lineWidth=lw*0.5;
+  ctx.strokeRect(cx-hw+aw*0.5,cy-ah/2,aw,ah);ctx.strokeRect(cx+hw-aw*1.5,cy-ah/2,aw,ah);
+  panelSeams(cx,cy,hw,hh,2,5,0.28);
+}
+
+// Cruiser — wide battle-freighter, triple engine, bridge strip
+function drawCruiserHull(cx,cy,gw,gh,lw){
+  const w=gw*0.78,h=gh*0.82,hw=w/2,hh=h/2,nw=hw*0.48,cut=hw*0.14;
+  ctx.beginPath();
+  ctx.moveTo(cx-nw,cy-hh);ctx.lineTo(cx+nw,cy-hh);
+  ctx.lineTo(cx+hw,cy-hh*0.38);ctx.lineTo(cx+hw,cy+hh*0.50);
+  ctx.lineTo(cx+hw-cut,cy+hh);ctx.lineTo(cx-hw+cut,cy+hh);
+  ctx.lineTo(cx-hw,cy+hh*0.50);ctx.lineTo(cx-hw,cy-hh*0.38);
+  ctx.closePath();
+  ctx.fillStyle=hullGrad(cx,cy-hh,cx,cy+hh,'#a8b0bc','#bec4ce','#7a8088');
+  ctx.fill();ctx.strokeStyle='#404858';ctx.lineWidth=lw;ctx.stroke();
+  // forward-swept wings
+  for(const s of[-1,1]){
+    ctx.beginPath();
+    ctx.moveTo(cx+s*hw,cy-hh*0.08);
+    ctx.lineTo(cx+s*(hw+w*0.34),cy+hh*0.32);
+    ctx.lineTo(cx+s*(hw+w*0.18),cy+hh*0.58);
+    ctx.lineTo(cx+s*hw,cy+hh*0.50);
+    ctx.closePath();
+    ctx.fillStyle='#38404e';ctx.fill();ctx.strokeStyle='#28303e';ctx.lineWidth=lw;ctx.stroke();
+  }
+  // triple engine
+  const ew=w*0.13,eh=h*0.07;
+  for(const ex of[cx-w*0.20,cx,cx+w*0.20]){
+    ctx.beginPath();ctx.moveTo(ex-ew/2,cy+hh);ctx.lineTo(ex+ew/2,cy+hh);
+    ctx.lineTo(ex+ew*0.35,cy+hh+eh);ctx.lineTo(ex-ew*0.35,cy+hh+eh);ctx.closePath();
+    ctx.fillStyle='#1e2530';ctx.fill();
+    engineGlow(ex,cy+hh,ew*0.65,eh);
+  }
+  // bridge window strip
+  const bw=nw*1.35,bh=Math.max(5,gh*0.036);
+  ctx.fillStyle='rgba(15,30,50,0.70)';ctx.fillRect(cx-bw/2,cy-hh+bh*0.4,bw,bh);
+  ctx.strokeStyle='rgba(70,100,130,0.8)';ctx.lineWidth=lw*0.6;ctx.strokeRect(cx-bw/2,cy-hh+bh*0.4,bw,bh);
+  ctx.fillStyle='#90c0e0';
+  for(let i=0;i<5;i++)ctx.fillRect(cx-bw/2+(i+0.15)*bw/5,cy-hh+bh*0.65,bw/5*0.7,bh*0.6);
+  // dual cargo bays
+  const cw=w*0.22,ch=h*0.26;
+  for(const ox of[-w*0.22,w*0.22]){
+    ctx.fillStyle='rgba(12,22,38,0.52)';ctx.fillRect(cx+ox-cw/2,cy+hh*0.05,cw,ch);
+    ctx.strokeStyle='rgba(50,70,95,0.70)';ctx.lineWidth=lw*0.6;ctx.strokeRect(cx+ox-cw/2,cy+hh*0.05,cw,ch);
+  }
+  panelSeams(cx,cy,hw,hh,3,5,0.27);
+}
+
+// Dreadnought — massive, quad engine, turrets, armoured bow
+function drawDreadnoughtHull(cx,cy,gw,gh,lw){
+  const w=gw*0.86,h=gh*0.86,hw=w/2,hh=h/2,nw=hw*0.36,cut=hw*0.10;
+  ctx.beginPath();
+  ctx.moveTo(cx-nw,cy-hh);ctx.lineTo(cx+nw,cy-hh);
+  ctx.lineTo(cx+hw,cy-hh*0.52);ctx.lineTo(cx+hw,cy+hh-cut);
+  ctx.lineTo(cx+hw-cut,cy+hh);ctx.lineTo(cx-hw+cut,cy+hh);
+  ctx.lineTo(cx-hw,cy+hh-cut);ctx.lineTo(cx-hw,cy-hh*0.52);
+  ctx.closePath();
+  ctx.fillStyle=hullGrad(cx-hw,cy,cx+hw,cy,'#a0a8b4','#b8c0cc','#747c88');
+  ctx.fill();ctx.strokeStyle='#384050';ctx.lineWidth=lw;ctx.stroke();
+  // armour bow plate
+  ctx.fillStyle='rgba(88,100,120,0.28)';ctx.fillRect(cx-nw,cy-hh,nw*2,hh*0.32);
+  ctx.strokeStyle='rgba(60,80,100,0.48)';ctx.lineWidth=lw*0.6;ctx.strokeRect(cx-nw,cy-hh,nw*2,hh*0.32);
+  // main wings
+  for(const s of[-1,1]){
+    ctx.beginPath();
+    ctx.moveTo(cx+s*hw,cy-hh*0.28);
+    ctx.lineTo(cx+s*(hw+w*0.37),cy+hh*0.12);
+    ctx.lineTo(cx+s*(hw+w*0.27),cy+hh*0.54);
+    ctx.lineTo(cx+s*hw,cy+hh*0.44);
+    ctx.closePath();
+    ctx.fillStyle='#303844';ctx.fill();ctx.strokeStyle='#20283a';ctx.lineWidth=lw;ctx.stroke();
+    // forward spur
+    ctx.beginPath();
+    ctx.moveTo(cx+s*hw*0.68,cy-hh);ctx.lineTo(cx+s*hw,cy-hh*0.52);ctx.lineTo(cx+s*hw*0.70,cy-hh*0.32);
+    ctx.closePath();ctx.fillStyle='#3a4452';ctx.fill();
+  }
+  // quad engine
+  const ew=w*0.10,eh=h*0.06;
+  for(const ex of[cx-w*0.30,cx-w*0.10,cx+w*0.10,cx+w*0.30]){
+    ctx.beginPath();ctx.moveTo(ex-ew/2,cy+hh);ctx.lineTo(ex+ew/2,cy+hh);
+    ctx.lineTo(ex+ew*0.35,cy+hh+eh);ctx.lineTo(ex-ew*0.35,cy+hh+eh);ctx.closePath();
+    ctx.fillStyle='#181e28';ctx.fill();
+    engineGlow(ex,cy+hh,ew*0.6,eh);
+  }
+  // bridge tower
+  const btw=nw*0.58,bth=hh*0.26;
+  ctx.fillStyle='rgba(28,42,62,0.72)';ctx.fillRect(cx-btw/2,cy-hh+bth*0.08,btw,bth);
+  ctx.strokeStyle='rgba(70,100,140,0.80)';ctx.lineWidth=lw*0.6;ctx.strokeRect(cx-btw/2,cy-hh+bth*0.08,btw,bth);
+  ctx.fillStyle='#80b8e0';
+  for(let i=0;i<4;i++)ctx.fillRect(cx-btw/2+(i+0.15)*btw/4,cy-hh+bth*0.45,btw/4*0.72,bth*0.42);
+  // command section
+  const csw=w*0.50,csh=h*0.34;
+  ctx.fillStyle='rgba(10,20,38,0.48)';ctx.fillRect(cx-csw/2,cy-csh*0.28,csw,csh);
+  ctx.strokeStyle='rgba(50,70,100,0.68)';ctx.lineWidth=lw*0.7;ctx.strokeRect(cx-csw/2,cy-csh*0.28,csw,csh);
+  // weapon turrets
+  const tr=Math.max(4,gw*0.020);
+  for(const[tx,ty]of[[cx-hw*0.50,cy-hh*0.42],[cx+hw*0.50,cy-hh*0.42],[cx-hw*0.54,cy+hh*0.16],[cx+hw*0.54,cy+hh*0.16]]){
+    ctx.beginPath();ctx.arc(tx,ty,tr*1.4,0,Math.PI*2);
+    ctx.fillStyle='rgba(20,35,55,0.62)';ctx.fill();
+    ctx.strokeStyle='rgba(70,90,120,0.72)';ctx.lineWidth=lw*0.6;ctx.stroke();
+    ctx.beginPath();ctx.arc(tx,ty,tr*0.58,0,Math.PI*2);ctx.fillStyle='#3e5060';ctx.fill();
+  }
+  panelSeams(cx,cy,hw,hh,5,7,0.26);
 }
 
 function renderTokensOnCanvas(cs,gmView){
@@ -782,8 +1029,10 @@ canvas.addEventListener('mousedown',e=>{
 canvas.addEventListener('mousemove',e=>{
   const{x:cx,y:cy}=canvasToCell(e.clientX,e.clientY);
   if(isPanning){offsetX=e.clientX-panStart.x;offsetY=e.clientY-panStart.y;render();return;}
-  if(isDraggingToken&&inBounds(cx,cy)){dragCell={x:cx,y:cy};render();return;}
+  if(isDraggingToken&&inBounds(cx,cy)){dragCell={x:cx,y:cy};canvas.style.cursor='grabbing';render();return;}
   hoverCx=cx;hoverCy=cy;
+  const hovTk=inBounds(cx,cy)&&tokens.find(t=>t.grid_x===cx&&t.grid_y===cy);
+  if(!isPanning&&!isDraggingToken)canvas.style.cursor=spaceDown?'grab':hovTk?'grab':'crosshair';
   if(activeTool==='ruler'&&rulerStart){rulerEnd={x:cx,y:cy};render();return;}
   if(isPainting&&inBounds(cx,cy)){
     const i=idx(cx,cy);
@@ -847,7 +1096,7 @@ canvas.addEventListener('touchmove',e=>{
 canvas.addEventListener('touchend',()=>{isPainting=false;scheduleSave();});
 
 function applyCell(x,y,forceType,forcePaint){
-  if(!inBounds(x,y))return;
+  if(!isGM||!inBounds(x,y))return;
   const i=idx(x,y);
   let nt=VOID,np=0;
   if(forceType!==undefined){nt=forceType;np=forcePaint||0;}
@@ -865,7 +1114,7 @@ function applyCell(x,y,forceType,forcePaint){
   render();
 }
 
-function applyFog(x,y,state){if(!inBounds(x,y))return;fog[idx(x,y)]=state;render();}
+function applyFog(x,y,state){if(!isGM||!inBounds(x,y))return;fog[idx(x,y)]=state;render();}
 
 // ── Labels ─────────────────────────────────────────────────────
 function openLabelPopup(cx,cy,mx,my){
