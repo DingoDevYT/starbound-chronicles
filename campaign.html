@@ -638,6 +638,25 @@ let shipScale = 1, shipOffX = 0, shipOffY = 0;
 let slotRects = {};
 const CELL = 28;
 
+// Ship sprite art — body/wing/thruster keyed by hull size (capital reuses the Large body at bigger scale)
+const SHIP_SIZE_ASSET = {
+  small:   { body: 'assets/ship/Body_Small.png',  wing: 'assets/ship/Wing_Small.png',  thruster: 'assets/ship/Thruster_Small.png' },
+  medium:  { body: 'assets/ship/Body_Medium.png', wing: 'assets/ship/Wing_Medium.png', thruster: 'assets/ship/Thruster_Medium.png' },
+  large:   { body: 'assets/ship/Body_Large.png',  wing: 'assets/ship/Wing_Large.png',  thruster: 'assets/ship/Thruster_Large.png' },
+  capital: { body: 'assets/ship/Body_Large.png',  wing: 'assets/ship/Wing_XLarge.png', thruster: 'assets/ship/Thruster_XLarge.png' },
+};
+let shipSpriteImgs = {};
+function getSpriteImg(path) {
+  if (!shipSpriteImgs[path]) {
+    const img = new Image();
+    img.onload = () => drawShipMap();
+    img.src = path;
+    shipSpriteImgs[path] = img;
+  }
+  return shipSpriteImgs[path];
+}
+function spriteReady(img) { return img && img.complete && img.naturalWidth > 0; }
+
 function drawShipMap() {
   const W = shipCanvas.offsetWidth || 800;
   shipCanvas.width  = W;
@@ -662,7 +681,8 @@ function drawShipMap() {
   const rwSlot  = shipType.right_wing_slot || { x: gridW, y: 3, w: 3, h: 3 };
   const thrSlot = shipType.thruster_slot   || { x: 3, y: gridH, w: 4, h: 3 };
 
-  // Total bounding box including slots
+  // Total bounding box including slots (approximate — wings/thruster get their real
+  // footprint from the sprite's native aspect ratio once loaded, see below)
   const totalMinX = lwSlot.x;
   const totalMaxX = Math.max(gridW, rwSlot.x + rwSlot.w);
   const totalMinY = 0;
@@ -684,47 +704,71 @@ function drawShipMap() {
   function gx(cx) { return shipOffX + cx * cs; }
   function gy(cy) { return shipOffY + cy * cs; }
 
-  // Draw floor tiles
-  for (let y = 0; y < gridH; y++) {
-    const row = rows[y] || '';
-    for (let x = 0; x < gridW; x++) {
-      if (row[x] !== 'X') continue;
-      const px = gx(x), py = gy(y);
-      shipCtx.fillStyle = '#0e1a2e';
-      shipCtx.fillRect(px + .5, py + .5, cs - 1, cs - 1);
-      shipCtx.strokeStyle = '#1a2d4a';
-      shipCtx.lineWidth = .5;
-      shipCtx.strokeRect(px + .5, py + .5, cs - 1, cs - 1);
-    }
+  // Draw hull body sprite — contain-fit (aspect preserved) within the floor_rows bounding box
+  const sizeAssets = SHIP_SIZE_ASSET[shipType.size] || SHIP_SIZE_ASSET.medium;
+  const bodyImg = getSpriteImg(sizeAssets.body);
+  const boxX = gx(0), boxY = gy(0), boxW = gridW * cs, boxH = gridH * cs;
+  const bodyNW = bodyImg.naturalWidth  || 384;
+  const bodyNH = bodyImg.naturalHeight || 512;
+  const fitScale = Math.min(boxW / bodyNW, boxH / bodyNH);
+  const bodyW = bodyNW * fitScale, bodyH = bodyNH * fitScale;
+  const bodyX = boxX + (boxW - bodyW) / 2;
+  const bodyY = boxY + (boxH - bodyH) / 2;
+
+  if (spriteReady(bodyImg)) {
+    shipCtx.drawImage(bodyImg, bodyX, bodyY, bodyW, bodyH);
+  } else {
+    shipCtx.fillStyle = '#0e1a2e';
+    shipCtx.fillRect(bodyX, bodyY, bodyW, bodyH);
   }
 
-  // Draw hull outline glow
-  shipCtx.strokeStyle = '#2a5080';
-  shipCtx.lineWidth = 1.5;
-  for (let y = 0; y < gridH; y++) {
-    const row = rows[y] || '';
-    for (let x = 0; x < gridW; x++) {
-      if (row[x] !== 'X') continue;
-      const px = gx(x), py = gy(y);
-      const neighbors = [
-        [x-1,y],[x+1,y],[x,y-1],[x,y+1]
-      ];
-      neighbors.forEach(([nx,ny]) => {
-        const nrow = rows[ny] || '';
-        if (ny < 0 || ny >= gridH || nrow[nx] !== 'X') {
-          const ex1 = nx > x ? px+cs : nx < x ? px : px;
-          const ey1 = ny > y ? py+cs : ny < y ? py : py;
-          const ex2 = nx > x ? px+cs : nx < x ? px : px+cs;
-          const ey2 = ny > y ? py+cs : ny < y ? py : ny > y ? py+cs : py;
+  // Wings and thruster share the body's native-to-canvas scale, so their built-in anchor
+  // edges land flush against the body regardless of which hull size is active.
+  const wingImg = getSpriteImg(sizeAssets.wing);
+  const wingW = (wingImg.naturalWidth  || 256) * fitScale;
+  const wingH = (wingImg.naturalHeight || 512) * fitScale;
+  const lwX = bodyX - wingW, lwY = bodyY + (bodyH - wingH) / 2;
+  const rwX = bodyX + bodyW, rwY = lwY;
 
-          shipCtx.beginPath();
-          if (nx > x)       { shipCtx.moveTo(px+cs, py);    shipCtx.lineTo(px+cs, py+cs); }
-          else if (nx < x)  { shipCtx.moveTo(px,    py);    shipCtx.lineTo(px,    py+cs); }
-          else if (ny > y)  { shipCtx.moveTo(px,    py+cs); shipCtx.lineTo(px+cs, py+cs); }
-          else               { shipCtx.moveTo(px,    py);    shipCtx.lineTo(px+cs, py);    }
-          shipCtx.stroke();
-        }
-      });
+  if (spriteReady(wingImg)) {
+    shipCtx.drawImage(wingImg, lwX, lwY, wingW, wingH);
+    shipCtx.save();
+    shipCtx.translate(rwX + wingW, rwY);
+    shipCtx.scale(-1, 1);
+    shipCtx.drawImage(wingImg, 0, 0, wingW, wingH);
+    shipCtx.restore();
+  }
+  slotRects.left_wing  = { x: lwX, y: lwY, w: wingW, h: wingH };
+  slotRects.right_wing = { x: rwX, y: rwY, w: wingW, h: wingH };
+
+  const thrImg = getSpriteImg(sizeAssets.thruster);
+  const thrW = (thrImg.naturalWidth  || 256) * fitScale;
+  const thrH = (thrImg.naturalHeight || 256) * fitScale;
+  const thrX = bodyX + (bodyW - thrW) / 2, thrY = bodyY + bodyH;
+  if (spriteReady(thrImg)) shipCtx.drawImage(thrImg, thrX, thrY, thrW, thrH);
+  slotRects.thruster = { x: thrX, y: thrY, w: thrW, h: thrH };
+
+  // Component name labels (GM click targets — the sprite itself is the visual, this is just info)
+  labelSlot(slotRects.left_wing,  shipComponents.left_wing?.name,  'left');
+  labelSlot(slotRects.right_wing, shipComponents.right_wing?.name, 'right');
+  labelSlot(slotRects.thruster,   shipComponents.thruster?.name,   'bottom');
+
+  function labelSlot(rect, name, side) {
+    const text = name || (isGM ? '+ Equip' : 'Empty');
+    shipCtx.font = `${name ? '600 ' : ''}11px system-ui, sans-serif`;
+    shipCtx.fillStyle = name ? '#d0e4ff' : 'rgba(122,174,255,.55)';
+    if (side === 'bottom') {
+      shipCtx.textAlign = 'center';
+      shipCtx.textBaseline = 'top';
+      shipCtx.fillText(text, rect.x + rect.w / 2, rect.y + rect.h + 3);
+    } else if (side === 'left') {
+      shipCtx.textAlign = 'right';
+      shipCtx.textBaseline = 'middle';
+      shipCtx.fillText(text, rect.x - 4, rect.y + rect.h / 2);
+    } else {
+      shipCtx.textAlign = 'left';
+      shipCtx.textBaseline = 'middle';
+      shipCtx.fillText(text, rect.x + rect.w + 4, rect.y + rect.h / 2);
     }
   }
 
@@ -742,11 +786,6 @@ function drawShipMap() {
     shipCtx.textBaseline = 'middle';
     shipCtx.fillText(st.label, px, py);
   });
-
-  // Draw wing slots
-  drawSlot('left_wing',  lwSlot,  'L Wing',   '#2a4a7a', '#3a6aaa', shipComponents.left_wing?.name);
-  drawSlot('right_wing', rwSlot,  'R Wing',   '#2a4a7a', '#3a6aaa', shipComponents.right_wing?.name);
-  drawSlot('thruster',   thrSlot, 'Thruster', '#1a3a5a', '#2a5a8a', shipComponents.thruster?.name);
 
   // Draw tokens
   shipTokens.forEach(tok => {
@@ -787,26 +826,6 @@ function drawShipMap() {
     }
   });
 
-  function drawSlot(key, slot, label, bg, border, equippedName) {
-    const px = gx(slot.x), py = gy(slot.y);
-    const sw = slot.w * cs, sh = slot.h * cs;
-    slotRects[key] = { x: px, y: py, w: sw, h: sh };
-
-    shipCtx.fillStyle = equippedName ? border + '33' : bg + '44';
-    shipCtx.strokeStyle = border;
-    shipCtx.lineWidth = 1;
-    shipCtx.setLineDash(equippedName ? [] : [4, 3]);
-    shipCtx.fillRect(px, py, sw, sh);
-    shipCtx.strokeRect(px + .5, py + .5, sw - 1, sh - 1);
-    shipCtx.setLineDash([]);
-    shipCtx.fillStyle = equippedName ? '#d0e4ff' : border;
-    shipCtx.font = `${equippedName ? '600 ' : ''}${Math.max(9, cs * .28)}px system-ui, sans-serif`;
-    shipCtx.textAlign = 'center';
-    shipCtx.textBaseline = 'middle';
-    const text = equippedName || label;
-    const maxChars = Math.max(4, Math.floor(sw / (cs * .22)));
-    shipCtx.fillText(text.length > maxChars ? text.slice(0, maxChars - 1) + '…' : text, px + sw / 2, py + sh / 2);
-  }
 }
 
 // Token drag support
