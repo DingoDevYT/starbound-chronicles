@@ -9,7 +9,42 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 .camp-layout { display:grid; grid-template-columns:220px 1fr 250px; margin-top:58px; min-height:calc(100vh - 58px); }
-.camp-main { padding:32px 36px; overflow-y:auto; background:var(--bg); }
+.camp-main { padding:0 0 48px 0; overflow-y:auto; background:var(--bg); }
+
+/* ── Ship Map (top) ── */
+.ship-section {
+  position:relative; background:#020810; border-bottom:1px solid var(--border);
+}
+#ship-canvas {
+  display:block; width:100%; cursor:default;
+}
+.ship-stat-bar {
+  display:flex; align-items:center; gap:0; border-top:1px solid var(--border);
+  background:var(--surface); flex-wrap:wrap;
+}
+.ship-stat {
+  flex:1; min-width:80px; display:flex; flex-direction:column; align-items:center;
+  padding:10px 12px; border-right:1px solid var(--border);
+}
+.ship-stat:last-child { border-right:none; }
+.ship-stat-label { font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
+.ship-stat-val   { font-size:19px; font-weight:800; color:#d0e4ff; margin-top:3px; line-height:1; }
+.ship-stat-val.danger  { color:#ff8888; }
+.ship-stat-val.ok      { color:#4acc7a; }
+.ship-stat-sub   { font-size:10px; color:var(--text-faint); }
+.ship-name-bar {
+  padding:10px 18px; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between; background:var(--surface);
+}
+.ship-name-bar h2 { font-size:16px; font-weight:800; color:#e0ecff; }
+.ship-name-bar small { font-size:11px; color:var(--text-faint); }
+.no-ship-msg {
+  display:flex; align-items:center; justify-content:center;
+  height:220px; color:var(--text-faint); font-size:14px; flex-direction:column; gap:10px;
+}
+
+/* ── Inner content ── */
+.camp-inner { padding:28px 32px; }
 
 /* ── Dice Panel ── */
 .dice-panel {
@@ -39,14 +74,6 @@
 .camp-section { margin-bottom:44px; scroll-margin-top:80px; }
 .camp-section-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
 .camp-section-title { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
-
-/* ── Ship preview ── */
-.ship-preview-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px; display:flex; align-items:center; gap:18px; text-decoration:none; transition:all .15s; cursor:pointer; }
-.ship-preview-card:hover { background:var(--surface2); border-color:var(--border2); }
-.ship-canvas-prev { border-radius:8px; border:1px solid var(--border); background:#050a10; flex-shrink:0; }
-.ship-info h3 { font-size:16px; font-weight:700; color:#d0e4ff; margin-bottom:4px; }
-.ship-info p  { font-size:13px; color:var(--text-dim); }
-.open-btn { margin-top:10px; display:inline-block; background:rgba(58,120,212,.15); border:1px solid var(--accent); color:#7aaeff; font-size:12px; padding:6px 14px; border-radius:6px; font-weight:600; }
 
 /* ── Crew ── */
 .crew-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(175px,1fr)); gap:8px; }
@@ -100,7 +127,7 @@
 .npc-card:hover { background:var(--surface2); border-color:var(--border2); }
 .npc-dead { opacity:.45; }
 .npc-hdr { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
-.npc-icon { width:38px; height:38px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:18px; background:var(--surface3); border:1px solid var(--border); flex-shrink:0; }
+.npc-icon { width:38px; height:38px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; background:var(--surface3); border:1px solid var(--border); flex-shrink:0; overflow:hidden; color:#d0e4ff; }
 .npc-name { font-size:14px; font-weight:700; color:#d0e4ff; }
 .npc-faction { font-size:11px; color:var(--text-faint); margin-top:2px; }
 .disposition-friendly { color:#4acc7a; }
@@ -120,6 +147,19 @@
 .lb-event { background:rgba(80,180,80,.15); color:#80cc80; }
 .lb-combat { background:rgba(200,60,60,.15); color:#ff8888; }
 .lb-discovery { background:rgba(212,175,55,.15); color:#d4af37; }
+
+/* ── Hull picker ── */
+.hull-card {
+  background:var(--surface2); border:2px solid var(--border); border-radius:10px;
+  padding:14px; cursor:pointer; transition:all .15s;
+}
+.hull-card:hover { border-color:var(--border2); background:var(--surface3); }
+.hull-card.selected { border-color:var(--accent); background:rgba(58,120,212,.1); }
+.hull-card-name { font-size:15px; font-weight:700; color:#d0e4ff; }
+.hull-card-size { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:6px; }
+.hull-card-desc { font-size:12px; color:var(--text-dim); line-height:1.5; margin-bottom:10px; }
+.hull-card-stats { display:flex; gap:8px; flex-wrap:wrap; }
+.hull-card-stats span { font-size:11px; background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:2px 7px; color:var(--text-faint); }
 </style>
 </head>
 <body>
@@ -138,7 +178,7 @@
     <div class="user-avatar" id="uav" style="background:#3a78d4">?</div>
     <div class="user-info"><span class="user-name" id="uname">…</span></div>
     <div class="user-dropdown" id="udrop">
-      <button class="dropdown-item danger" onclick="Auth.signOut()">→ Sign Out</button>
+      <button class="dropdown-item danger" onclick="Auth.signOut()">Sign Out</button>
     </div>
   </div>
 </header>
@@ -149,13 +189,19 @@
   <aside class="dash-sidebar">
     <div class="sidebar-section">
       <div class="sidebar-heading">Campaign</div>
-      <a class="sidebar-link active" href="#overview">🚀 Overview</a>
-      <a class="sidebar-link" href="#ship">🗺️ Ship Map</a>
-      <a class="sidebar-link" href="#crew">👥 Crew</a>
-      <a class="sidebar-link" href="#initiative">⚔️ Initiative</a>
-      <a class="sidebar-link" href="#quests">📋 Quests</a>
-      <a class="sidebar-link" href="#npcs">🧑‍🤝‍🧑 NPCs</a>
-      <a class="sidebar-link" href="#log">📝 Ship Log</a>
+      <a class="sidebar-link active" href="#ship">Ship</a>
+      <a class="sidebar-link" href="#crew">Crew</a>
+      <a class="sidebar-link" href="#initiative">Initiative</a>
+      <a class="sidebar-link" href="#quests">Quests</a>
+      <a class="sidebar-link" href="#npcs">NPCs</a>
+      <a class="sidebar-link" href="#log">Ship Log</a>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Campaign Info</div>
+      <div style="padding:6px 14px;">
+        <div style="font-size:11px; color:var(--text-faint); margin-bottom:6px;" id="camp-title-side">—</div>
+      </div>
     </div>
     <div class="sidebar-divider"></div>
     <div class="sidebar-section">
@@ -173,7 +219,7 @@
       <button class="sidebar-link" style="all:unset;width:100%;box-sizing:border-box;cursor:pointer;" onclick="leaveCampaign()">
         <span style="display:flex;align-items:center;gap:10px;padding:7px 20px;color:#ff8888;font-size:13px;"
               onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''">
-          🚪 Leave Campaign
+          Leave Campaign
         </span>
       </button>
     </div>
@@ -182,42 +228,47 @@
   <!-- MAIN -->
   <main class="camp-main">
 
-    <!-- OVERVIEW -->
-    <section class="camp-section" id="overview">
-      <div style="margin-bottom:24px;">
-        <h1 id="camp-title" style="font-size:28px; font-weight:800; color:#e0ecff; margin-bottom:4px;">Loading…</h1>
-        <p id="camp-desc" style="color:var(--text-dim); font-size:14px; line-height:1.6; max-width:600px;"></p>
+    <!-- SHIP MAP (top) -->
+    <section class="ship-section" id="ship">
+      <div class="ship-name-bar">
+        <h2 id="ship-name">Loading ship…</h2>
+        <div>
+          <small id="ship-class" style="margin-right:16px;">—</small>
+          <a id="ship-editor-link" href="#" style="font-size:11px; color:var(--accent); font-weight:600; text-decoration:none; border:1px solid var(--accent-dim); padding:4px 10px; border-radius:5px;">Edit Ship</a>
+        </div>
       </div>
-      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">
-        <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px;">
-          <div style="font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700;">Crew</div>
-          <div style="font-size:28px; font-weight:800; color:#7aaeff; margin-top:4px;" id="stat-crew">—</div>
+      <canvas id="ship-canvas" height="360"></canvas>
+      <div class="ship-stat-bar">
+        <div class="ship-stat">
+          <div class="ship-stat-label">Hull</div>
+          <div class="ship-stat-val" id="stat-hp">—</div>
+          <div class="ship-stat-sub" id="stat-hp-max"></div>
         </div>
-        <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px;">
-          <div style="font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700;">Active Quests</div>
-          <div style="font-size:28px; font-weight:800; color:#7aaeff; margin-top:4px;" id="stat-quests">—</div>
+        <div class="ship-stat">
+          <div class="ship-stat-label">Armor</div>
+          <div class="ship-stat-val" id="stat-armor">—</div>
         </div>
-        <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px;">
-          <div style="font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700;">Round</div>
-          <div style="font-size:28px; font-weight:800; color:#7aaeff; margin-top:4px;" id="stat-round">—</div>
+        <div class="ship-stat">
+          <div class="ship-stat-label">Speed</div>
+          <div class="ship-stat-val" id="stat-speed">—</div>
+        </div>
+        <div class="ship-stat">
+          <div class="ship-stat-label">Fuel</div>
+          <div class="ship-stat-val" id="stat-fuel">—</div>
+          <div class="ship-stat-sub" id="stat-fuel-max"></div>
+        </div>
+        <div class="ship-stat">
+          <div class="ship-stat-label">Crew</div>
+          <div class="ship-stat-val" id="stat-crew">—</div>
+        </div>
+        <div class="ship-stat">
+          <div class="ship-stat-label">Round</div>
+          <div class="ship-stat-val" id="stat-round">—</div>
         </div>
       </div>
     </section>
 
-    <!-- SHIP MAP -->
-    <section class="camp-section" id="ship">
-      <div class="camp-section-hdr">
-        <span class="camp-section-title">Ship Map</span>
-      </div>
-      <a class="ship-preview-card" id="ship-link" href="#">
-        <canvas class="ship-canvas-prev" id="prev-canvas" width="220" height="150"></canvas>
-        <div class="ship-info">
-          <h3 id="ship-name">Loading…</h3>
-          <p  id="ship-class">—</p>
-          <span class="open-btn">Open Ship Editor →</span>
-        </div>
-      </a>
-    </section>
+    <div class="camp-inner">
 
     <!-- CREW -->
     <section class="camp-section" id="crew">
@@ -235,7 +286,7 @@
         <div style="display:flex; gap:8px;">
           <span class="round-badge" id="round-lbl">Round 0</span>
           <button class="btn-secondary" onclick="openModal('modal-add-init')" style="font-size:11px; padding:5px 12px;">+ Combatant</button>
-          <button class="btn-ghost"     onclick="nextTurn()"    style="font-size:11px; padding:5px 12px;">Next Turn →</button>
+          <button class="btn-ghost"     onclick="nextTurn()"    style="font-size:11px; padding:5px 12px;">Next Turn</button>
           <button class="btn-ghost"     onclick="clearInit()"   style="font-size:11px; padding:5px 12px; color:#ff8888;">Clear All</button>
         </div>
       </div>
@@ -252,7 +303,7 @@
         <span class="camp-section-title">Quest Tracker</span>
         <button class="btn-secondary" onclick="openModal('modal-add-quest')" style="font-size:11px; padding:5px 12px;">+ Quest</button>
       </div>
-      <div class="quest-list" id="quest-list"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No quests yet</div></div></div>
+      <div class="quest-list" id="quest-list"><div class="empty-state"><div class="empty-title">No quests yet</div></div></div>
     </section>
 
     <!-- NPCs -->
@@ -261,7 +312,7 @@
         <span class="camp-section-title">NPC Roster</span>
         <button class="btn-secondary" onclick="openModal('modal-add-npc')" style="font-size:11px; padding:5px 12px;">+ NPC</button>
       </div>
-      <div class="npc-grid" id="npc-grid"><div class="empty-state"><div class="empty-icon">🧑‍🤝‍🧑</div><div class="empty-title">No NPCs yet</div></div></div>
+      <div class="npc-grid" id="npc-grid"><div class="empty-state"><div class="empty-title">No NPCs yet</div></div></div>
     </section>
 
     <!-- LOG -->
@@ -270,16 +321,17 @@
       <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
         <input class="form-input" id="log-txt" placeholder="Add log entry…" style="flex:1; min-width:180px;">
         <select class="form-select" id="log-type" style="width:130px;">
-          <option value="note">📝 Note</option>
-          <option value="event">⚡ Event</option>
-          <option value="combat">⚔️ Combat</option>
-          <option value="discovery">🌟 Discovery</option>
+          <option value="note">Note</option>
+          <option value="event">Event</option>
+          <option value="combat">Combat</option>
+          <option value="discovery">Discovery</option>
         </select>
         <button class="btn-secondary" onclick="addLog()">Add</button>
       </div>
       <div id="log-list"></div>
     </section>
 
+    </div><!-- .camp-inner -->
   </main>
 
   <!-- RIGHT: DICE ROLLER -->
@@ -311,6 +363,29 @@
 </div>
 
 <!-- MODALS -->
+
+<!-- Setup Ship (GM only) -->
+<div class="modal-backdrop" id="modal-setup-ship">
+  <div class="modal" style="max-width:620px;">
+    <div class="modal-header"><span class="modal-title">Assign Campaign Ship</span><button class="modal-close" onclick="closeModal('modal-setup-ship')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:18px;">
+        <label class="form-label">Ship Name</label>
+        <input class="form-input" id="setup-ship-name" placeholder="e.g. The Iron Meridian">
+      </div>
+      <div class="form-label" style="margin-bottom:10px;">Choose Hull</div>
+      <div id="hull-picker" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-height:340px;overflow-y:auto;">
+        <div style="color:var(--text-faint);font-size:13px;grid-column:1/-1;">Loading hulls…</div>
+      </div>
+      <div class="form-error" id="setup-ship-error" style="margin-top:10px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('modal-setup-ship')">Cancel</button>
+      <button class="btn-primary" onclick="createCampaignShip()" style="width:auto;padding:10px 24px;">Assign Ship</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-add-init">
   <div class="modal" style="max-width:420px;">
     <div class="modal-header"><span class="modal-title">Add Combatant</span><button class="modal-close" onclick="closeModal('modal-add-init')">✕</button></div>
@@ -340,9 +415,9 @@
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
         <div class="form-group"><label class="form-label">Priority</label>
           <select class="form-select" id="quest-priority-inp">
-            <option value="main">⭐ Main Quest</option>
+            <option value="main">Main Quest</option>
             <option value="side">Side Quest</option>
-            <option value="urgent">🔴 Urgent</option>
+            <option value="urgent">Urgent</option>
           </select>
         </div>
         <div class="form-group"><label class="form-label">Status</label>
@@ -367,16 +442,21 @@
         <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="npc-name-inp" placeholder="e.g. Veksha Orr"></div>
         <div class="form-group"><label class="form-label">Species</label>
           <select class="form-select" id="npc-species-inp">
-            <option value="human">🧑 Human</option><option value="kragol">🪨 Kragol</option>
-            <option value="skitterling">🐾 Skitterling</option><option value="myxos">🫧 Myxos</option>
-            <option value="arboran">🌿 Arboran</option><option value="kaelen">💠 Kaelen</option>
+            <option value="human">Human</option>
+            <option value="kragol">Kragol</option>
+            <option value="skitterling">Skitterling</option>
+            <option value="myxos">Myxos</option>
+            <option value="arboran">Arboran</option>
+            <option value="kaelen">Kaelen</option>
           </select>
         </div>
         <div class="form-group"><label class="form-label">Faction</label><input class="form-input" id="npc-faction-inp" placeholder="e.g. Syndicate"></div>
         <div class="form-group"><label class="form-label">Disposition</label>
           <select class="form-select" id="npc-disp-inp">
-            <option value="friendly">✅ Friendly</option><option value="neutral" selected>😐 Neutral</option>
-            <option value="hostile">❌ Hostile</option><option value="unknown">❓ Unknown</option>
+            <option value="friendly">Friendly</option>
+            <option value="neutral" selected>Neutral</option>
+            <option value="hostile">Hostile</option>
+            <option value="unknown">Unknown</option>
           </select>
         </div>
       </div>
@@ -394,18 +474,33 @@
 <script src="js/config.js"></script>
 <script src="js/auth.js?v=2"></script>
 <script>
-const SPECIES_ICONS = { human:'assets/NN_Species_Human.png', kragol:'assets/NN_Species_Kragol.png',
-                        skitterling:'assets/NN_Species_Skitterling.png', myxos:'assets/NN_Species_Myxos.png',
-                        arboran:'assets/NN_Species_Arboran.png' };
-const ROOM_COLORS   = ['','#1a3a6b','#4a1a0a','#1a3a2a','#0a2a3a','#2a2a1a','#3a1a1a','#1a2a0a','#1a1a3a','#1a2430'];
+const SPECIES_IMGS = {
+  human:'assets/NN_Species_Human.png', kragol:'assets/NN_Species_Kragol.png',
+  skitterling:'assets/NN_Species_Skitterling.png', myxos:'assets/NN_Species_Myxos.png',
+  arboran:'assets/NN_Species_Arboran.png'
+};
+const AVATAR_COLORS = ['#1e4a9a','#4a1a0a','#1a3a2a','#0a2a3a','#2a2a1a','#3a1a1a','#1a2a0a','#1a1a3a','#1a2430'];
 
-const params = new URLSearchParams(location.search);
+const params     = new URLSearchParams(location.search);
 const campaignId = params.get('id');
 let currentUser, campaign, isGM = false, activeTurn = 0;
+let shipData = null, shipType = null, shipTokens = [];
+let tokenImages = {};  // species → HTMLImageElement
 
 if (!campaignId) location.href = 'dashboard.html';
 
+// ── Image preload ───────────────────────────────────────────────
+function preloadImages() {
+  Object.entries(SPECIES_IMGS).forEach(([key, src]) => {
+    const img = new Image();
+    img.src = src;
+    tokenImages[key] = img;
+  });
+}
+
+// ── Init ────────────────────────────────────────────────────────
 (async () => {
+  preloadImages();
   const sess = await Auth.requireAuth(); if (!sess) return;
   currentUser = sess.user;
   const profile = await Auth.getProfile(currentUser.id);
@@ -419,55 +514,316 @@ if (!campaignId) location.href = 'dashboard.html';
   campaign = c; isGM = c.owner_id === currentUser.id;
 
   document.title = c.name + ' — Starbound Chronicles';
-  document.getElementById('camp-title').textContent = c.name;
-  document.getElementById('camp-desc').textContent  = c.description || '';
-  document.getElementById('topbar-name').textContent = c.name;
-  document.getElementById('invite-disp').textContent = c.invite_code;
-  document.getElementById('ship-name').textContent   = c.ship_name || 'Unnamed Vessel';
-  document.getElementById('ship-class').textContent  = c.ship_class || 'Frigate';
-  document.getElementById('ship-link').href = 'ship-editor.html?id=' + campaignId;
-  document.getElementById('stat-round').textContent  = c.round_num || 0;
+  document.getElementById('topbar-name').textContent  = c.name;
+  document.getElementById('camp-title-side').textContent = c.name;
+  document.getElementById('invite-disp').textContent  = c.invite_code;
+  document.getElementById('stat-round').textContent   = c.round_num || 0;
+  document.getElementById('round-lbl').textContent    = 'Round ' + (c.round_num || 0);
+  document.getElementById('ship-editor-link').href    = 'ship-editor.html?id=' + campaignId;
 
-  drawPreview(c.ship_layout);
   try {
-    await Promise.all([loadCrew(), loadInitiative(), loadQuests(), loadNPCs(), loadLog(), loadDiceHistory()]);
+    await Promise.all([loadShip(), loadCrew(), loadInitiative(), loadQuests(), loadNPCs(), loadLog(), loadDiceHistory()]);
   } catch (err) {
     console.error('Campaign load error:', err);
     const errBanner = document.createElement('div');
     errBanner.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#c84040;color:#fff;padding:12px 18px;border-radius:8px;font-size:13px;z-index:9999;max-width:340px;';
-    errBanner.textContent = 'Some sections failed to load. Try refreshing, or run schema-v3.sql in Supabase if you haven\'t.';
+    errBanner.textContent = 'Some sections failed to load. Try refreshing, or run schema-v3.sql and schema-v5.sql in Supabase if you haven\'t.';
     document.body.appendChild(errBanner);
     setTimeout(() => errBanner.remove(), 8000);
   }
 
   // Realtime
   db.channel('camp-' + campaignId)
-    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'campaigns', filter:`id=eq.${campaignId}` },
-      p => { drawPreview(p.new.ship_layout); document.getElementById('stat-round').textContent = p.new.round_num || 0; })
-    .on('postgres_changes', { event:'*', schema:'public', table:'initiative_tracker', filter:`campaign_id=eq.${campaignId}` }, loadInitiative)
-    .on('postgres_changes', { event:'*', schema:'public', table:'campaign_quests',    filter:`campaign_id=eq.${campaignId}` }, loadQuests)
-    .on('postgres_changes', { event:'*', schema:'public', table:'campaign_npcs',      filter:`campaign_id=eq.${campaignId}` }, loadNPCs)
-    .on('postgres_changes', { event:'*', schema:'public', table:'ship_log',           filter:`campaign_id=eq.${campaignId}` }, loadLog)
-    .on('postgres_changes', { event:'INSERT', schema:'public', table:'dice_rolls',    filter:`campaign_id=eq.${campaignId}` }, loadDiceHistory)
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'campaigns',         filter:`id=eq.${campaignId}` },
+      p => { document.getElementById('stat-round').textContent = p.new.round_num || 0; document.getElementById('round-lbl').textContent = 'Round ' + (p.new.round_num || 0); })
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'campaign_ships',    filter:`campaign_id=eq.${campaignId}` }, async p => { await loadShip(); })
+    .on('postgres_changes', { event:'*',      schema:'public', table:'ship_tokens',       filter:`campaign_id=eq.${campaignId}` }, async () => { await loadTokens(); drawShipMap(); })
+    .on('postgres_changes', { event:'*',      schema:'public', table:'initiative_tracker',filter:`campaign_id=eq.${campaignId}` }, loadInitiative)
+    .on('postgres_changes', { event:'*',      schema:'public', table:'campaign_quests',   filter:`campaign_id=eq.${campaignId}` }, loadQuests)
+    .on('postgres_changes', { event:'*',      schema:'public', table:'campaign_npcs',     filter:`campaign_id=eq.${campaignId}` }, loadNPCs)
+    .on('postgres_changes', { event:'*',      schema:'public', table:'ship_log',          filter:`campaign_id=eq.${campaignId}` }, loadLog)
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'dice_rolls',        filter:`campaign_id=eq.${campaignId}` }, loadDiceHistory)
     .subscribe();
 })();
 
-// ── Ship preview ────────────────────────────────────────────────
-function drawPreview(layout) {
-  const canvas = document.getElementById('prev-canvas'), ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#050a10'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-  if (!layout?.cells) return;
-  const { width:gw, height:gh, cells, paint } = layout;
-  const cs = Math.min(canvas.width/gw, canvas.height/gh);
-  const ox = (canvas.width - gw*cs)/2, oy = (canvas.height - gh*cs)/2;
-  for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
-    const t = cells[y*gw+x], p = paint?.[y*gw+x]||0;
-    if (!t) continue;
-    const px = ox+x*cs, py = oy+y*cs;
-    ctx.fillStyle = t===1 ? (p?ROOM_COLORS[p]||'#1e2838':'#1e2838') : t===2 ? '#3a4050' : '#1a6080';
-    ctx.fillRect(px, py, Math.max(1,cs-.5), Math.max(1,cs-.5));
+// ── Ship Map ────────────────────────────────────────────────────
+const shipCanvas = document.getElementById('ship-canvas');
+const shipCtx    = shipCanvas.getContext('2d');
+
+async function loadShip() {
+  const { data: sd } = await db.from('campaign_ships')
+    .select('*, ship_types(*), left_wing:ship_components!left_wing_id(*), right_wing:ship_components!right_wing_id(*), thruster:ship_components!thruster_id(*)')
+    .eq('campaign_id', campaignId)
+    .maybeSingle();
+
+  shipData = sd || null;
+  shipType = sd?.ship_types || null;
+
+  if (shipData) {
+    document.getElementById('ship-name').textContent  = shipData.ship_name || 'Unnamed Vessel';
+    document.getElementById('ship-class').textContent = shipType ? `${shipType.name} — ${shipType.size}` : '—';
+    document.getElementById('stat-hp').textContent    = shipData.hp_current ?? '—';
+    document.getElementById('stat-hp-max').textContent = shipData.hp_max ? '/ ' + shipData.hp_max : '';
+    document.getElementById('stat-armor').textContent = shipData.armor ?? '—';
+    document.getElementById('stat-speed').textContent = shipData.speed ?? '—';
+    document.getElementById('stat-fuel').textContent  = shipData.fuel_current ?? '—';
+    document.getElementById('stat-fuel-max').textContent = shipData.fuel_max ? '/ ' + shipData.fuel_max : '';
+
+    const hpPct = shipData.hp_max ? shipData.hp_current / shipData.hp_max : 1;
+    document.getElementById('stat-hp').className = 'ship-stat-val ' + (hpPct < .3 ? 'danger' : hpPct > .6 ? 'ok' : '');
+    const fuelPct = shipData.fuel_max ? shipData.fuel_current / shipData.fuel_max : 1;
+    document.getElementById('stat-fuel').className = 'ship-stat-val ' + (fuelPct < .2 ? 'danger' : fuelPct > .5 ? 'ok' : '');
+  } else {
+    document.getElementById('ship-name').textContent = 'No Ship Assigned';
+    if (isGM) {
+      document.getElementById('ship-class').innerHTML = '<button class="btn-secondary" onclick="openSetupShip()" style="font-size:11px;padding:4px 12px;">+ Assign Ship</button>';
+    } else {
+      document.getElementById('ship-class').textContent = 'Waiting for GM to assign a ship.';
+    }
+  }
+
+  await loadTokens();
+  drawShipMap();
+}
+
+async function loadTokens() {
+  const { data } = await db.from('ship_tokens').select('*').eq('campaign_id', campaignId);
+  shipTokens = data || [];
+}
+
+// Ship canvas rendering
+let shipScale = 1, shipOffX = 0, shipOffY = 0;
+const CELL = 28;
+
+function drawShipMap() {
+  const W = shipCanvas.offsetWidth || 800;
+  shipCanvas.width  = W;
+  shipCanvas.height = 360;
+
+  shipCtx.fillStyle = '#020810';
+  shipCtx.fillRect(0, 0, W, 360);
+
+  if (!shipType || !shipType.floor_rows) {
+    shipCtx.fillStyle = '#4a5568';
+    shipCtx.font = '14px system-ui, sans-serif';
+    shipCtx.textAlign = 'center';
+    shipCtx.fillText('No ship assigned to this campaign.', W / 2, 180);
+    return;
+  }
+
+  const rows   = shipType.floor_rows;
+  const gridH  = rows.length;
+  const gridW  = rows[0]?.length || 0;
+
+  const lwSlot  = shipType.left_wing_slot  || { x: -3, y: 3, w: 3, h: 3 };
+  const rwSlot  = shipType.right_wing_slot || { x: gridW, y: 3, w: 3, h: 3 };
+  const thrSlot = shipType.thruster_slot   || { x: 3, y: gridH, w: 4, h: 3 };
+
+  // Total bounding box including slots
+  const totalMinX = lwSlot.x;
+  const totalMaxX = Math.max(gridW, rwSlot.x + rwSlot.w);
+  const totalMinY = 0;
+  const totalMaxY = Math.max(gridH, thrSlot.y + thrSlot.h);
+  const totalW    = totalMaxX - totalMinX;
+  const totalH    = totalMaxY - totalMinY;
+
+  // Scale to fit canvas with padding
+  const PAD = 24;
+  const scaleX = (W - PAD * 2) / (totalW * CELL);
+  const scaleY = (360 - PAD * 2) / (totalH * CELL);
+  shipScale = Math.min(scaleX, scaleY, 1.4);
+  const cs  = CELL * shipScale;
+
+  // Center the hull in the canvas
+  shipOffX = (W - totalW * cs) / 2 - lwSlot.x * cs;
+  shipOffY = (360 - totalH * cs) / 2;
+
+  function gx(cx) { return shipOffX + cx * cs; }
+  function gy(cy) { return shipOffY + cy * cs; }
+
+  // Draw floor tiles
+  for (let y = 0; y < gridH; y++) {
+    const row = rows[y] || '';
+    for (let x = 0; x < gridW; x++) {
+      if (row[x] !== 'X') continue;
+      const px = gx(x), py = gy(y);
+      shipCtx.fillStyle = '#0e1a2e';
+      shipCtx.fillRect(px + .5, py + .5, cs - 1, cs - 1);
+      shipCtx.strokeStyle = '#1a2d4a';
+      shipCtx.lineWidth = .5;
+      shipCtx.strokeRect(px + .5, py + .5, cs - 1, cs - 1);
+    }
+  }
+
+  // Draw hull outline glow
+  shipCtx.strokeStyle = '#2a5080';
+  shipCtx.lineWidth = 1.5;
+  for (let y = 0; y < gridH; y++) {
+    const row = rows[y] || '';
+    for (let x = 0; x < gridW; x++) {
+      if (row[x] !== 'X') continue;
+      const px = gx(x), py = gy(y);
+      const neighbors = [
+        [x-1,y],[x+1,y],[x,y-1],[x,y+1]
+      ];
+      neighbors.forEach(([nx,ny]) => {
+        const nrow = rows[ny] || '';
+        if (ny < 0 || ny >= gridH || nrow[nx] !== 'X') {
+          const ex1 = nx > x ? px+cs : nx < x ? px : px;
+          const ey1 = ny > y ? py+cs : ny < y ? py : py;
+          const ex2 = nx > x ? px+cs : nx < x ? px : px+cs;
+          const ey2 = ny > y ? py+cs : ny < y ? py : ny > y ? py+cs : py;
+
+          shipCtx.beginPath();
+          if (nx > x)       { shipCtx.moveTo(px+cs, py);    shipCtx.lineTo(px+cs, py+cs); }
+          else if (nx < x)  { shipCtx.moveTo(px,    py);    shipCtx.lineTo(px,    py+cs); }
+          else if (ny > y)  { shipCtx.moveTo(px,    py+cs); shipCtx.lineTo(px+cs, py+cs); }
+          else               { shipCtx.moveTo(px,    py);    shipCtx.lineTo(px+cs, py);    }
+          shipCtx.stroke();
+        }
+      });
+    }
+  }
+
+  // Draw station labels (subtle)
+  const stations = shipType.station_positions || [];
+  stations.forEach(st => {
+    const px = gx(st.x) + cs/2, py = gy(st.y) + cs/2;
+    shipCtx.fillStyle = 'rgba(80,140,220,.18)';
+    shipCtx.beginPath();
+    shipCtx.arc(px, py, cs * .38, 0, Math.PI * 2);
+    shipCtx.fill();
+    shipCtx.fillStyle = 'rgba(100,160,255,.5)';
+    shipCtx.font = `${Math.max(8, cs * .28)}px system-ui, sans-serif`;
+    shipCtx.textAlign = 'center';
+    shipCtx.textBaseline = 'middle';
+    shipCtx.fillText(st.label, px, py);
+  });
+
+  // Draw wing slots
+  drawSlot(lwSlot, 'L Wing', '#2a4a7a', '#3a6aaa');
+  drawSlot(rwSlot, 'R Wing', '#2a4a7a', '#3a6aaa');
+  drawSlot(thrSlot, 'Thruster', '#1a3a5a', '#2a5a8a');
+
+  // Draw tokens
+  shipTokens.forEach(tok => {
+    if (tok.token_x == null || tok.token_y == null) return;
+    const px = gx(tok.token_x) + cs / 2;
+    const py = gy(tok.token_y) + cs / 2;
+    const r  = cs * .42;
+    const species = tok.species || 'human';
+    const img = tokenImages[species];
+
+    shipCtx.save();
+    shipCtx.beginPath();
+    shipCtx.arc(px, py, r, 0, Math.PI * 2);
+    shipCtx.clip();
+
+    if (img && img.complete && img.naturalWidth > 0) {
+      shipCtx.drawImage(img, px - r, py - r, r * 2, r * 2);
+    } else {
+      shipCtx.fillStyle = tok.color || '#3a78d4';
+      shipCtx.fill();
+    }
+    shipCtx.restore();
+
+    // Token border
+    shipCtx.strokeStyle = tok.color || '#5a98f4';
+    shipCtx.lineWidth   = 2;
+    shipCtx.beginPath();
+    shipCtx.arc(px, py, r, 0, Math.PI * 2);
+    shipCtx.stroke();
+
+    // Name label
+    if (tok.label) {
+      shipCtx.fillStyle = '#e0ecff';
+      shipCtx.font = `bold ${Math.max(9, cs * .25)}px system-ui, sans-serif`;
+      shipCtx.textAlign = 'center';
+      shipCtx.textBaseline = 'top';
+      shipCtx.fillText(tok.label.slice(0, 8), px, py + r + 2);
+    }
+  });
+
+  function drawSlot(slot, label, bg, border) {
+    const px = gx(slot.x), py = gy(slot.y);
+    const sw = slot.w * cs, sh = slot.h * cs;
+    shipCtx.fillStyle = bg + '44';
+    shipCtx.strokeStyle = border;
+    shipCtx.lineWidth = 1;
+    shipCtx.setLineDash([4, 3]);
+    shipCtx.fillRect(px, py, sw, sh);
+    shipCtx.strokeRect(px + .5, py + .5, sw - 1, sh - 1);
+    shipCtx.setLineDash([]);
+    shipCtx.fillStyle = border;
+    shipCtx.font = `${Math.max(9, cs * .3)}px system-ui, sans-serif`;
+    shipCtx.textAlign = 'center';
+    shipCtx.textBaseline = 'middle';
+    shipCtx.fillText(label, px + sw / 2, py + sh / 2);
   }
 }
+
+// Token drag support
+let dragToken = null, dragOffX = 0, dragOffY = 0;
+
+shipCanvas.addEventListener('mousedown', e => {
+  const rect = shipCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const cs = CELL * shipScale;
+
+  for (const tok of shipTokens) {
+    if (tok.token_x == null || tok.token_y == null) continue;
+    if (!isGM && tok.character_id !== currentUser?.id) continue;
+    const px = shipOffX + tok.token_x * cs + cs / 2;
+    const py = shipOffY + tok.token_y * cs + cs / 2;
+    if (Math.hypot(mx - px, my - py) < cs * .45) {
+      dragToken = tok;
+      dragOffX  = mx - px;
+      dragOffY  = my - py;
+      shipCanvas.style.cursor = 'grabbing';
+      break;
+    }
+  }
+});
+
+shipCanvas.addEventListener('mousemove', e => {
+  if (!dragToken) return;
+  const rect = shipCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left - dragOffX;
+  const my = e.clientY - rect.top  - dragOffY;
+  const cs = CELL * shipScale;
+  dragToken._liveX = (mx - shipOffX) / cs;
+  dragToken._liveY = (my - shipOffY) / cs;
+  drawShipMap();
+
+  // Draw preview at cursor position
+  const px = shipOffX + dragToken._liveX * cs + cs / 2;
+  const py = shipOffY + dragToken._liveY * cs + cs / 2;
+  const r  = cs * .42;
+  shipCtx.strokeStyle = '#7aaeff';
+  shipCtx.lineWidth   = 2;
+  shipCtx.setLineDash([4, 3]);
+  shipCtx.beginPath();
+  shipCtx.arc(px, py, r, 0, Math.PI * 2);
+  shipCtx.stroke();
+  shipCtx.setLineDash([]);
+});
+
+shipCanvas.addEventListener('mouseup', async e => {
+  if (!dragToken) return;
+  const cs = CELL * shipScale;
+  const rect = shipCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left - dragOffX;
+  const my = e.clientY - rect.top  - dragOffY;
+  const newX = Math.round((mx - shipOffX) / cs);
+  const newY = Math.round((my - shipOffY) / cs);
+  await db.from('ship_tokens').update({ token_x: newX, token_y: newY }).eq('id', dragToken.id);
+  dragToken = null;
+  shipCanvas.style.cursor = 'default';
+});
+
+// Resize / redraw
+const resizeObserver = new ResizeObserver(() => drawShipMap());
+resizeObserver.observe(shipCanvas);
 
 // ── Crew ────────────────────────────────────────────────────────
 async function loadCrew() {
@@ -479,13 +835,14 @@ async function loadCrew() {
   document.getElementById('stat-crew').textContent = data?.length || 0;
   if (!data?.length) { grid.innerHTML='<div style="color:var(--text-faint);font-size:13px;">No crew yet.</div>'; return; }
   grid.innerHTML = data.map(m => {
-    const name = m.profiles?.display_name||m.profiles?.username||'?';
+    const name = m.profiles?.display_name || m.profiles?.username || '?';
     const char = m.characters;
+    const specImg = char ? SPECIES_IMGS[char.species] : null;
     return `<div class="crew-card">
       <div class="crew-avatar" style="background:${m.profiles?.avatar_color||'#3a78d4'}">${getInitials(name)}</div>
       <div>
         <div class="crew-name">${esc(name)} ${m.member_role==='gm'?'<span class="gm-pip">GM</span>':''}</div>
-        <div class="crew-meta">${char ? (SPECIES_ICONS[char.species] ? `<img src="${SPECIES_ICONS[char.species]}" style="width:14px;height:14px;border-radius:2px;object-fit:cover;vertical-align:middle;margin-right:3px;" alt="${char.species}">` : '') + esc(char.name) : ''}</div>
+        <div class="crew-meta">${char ? (specImg?`<img src="${specImg}" style="width:14px;height:14px;border-radius:2px;object-fit:cover;vertical-align:middle;margin-right:3px;">`:'')+esc(char.name) : ''}</div>
       </div>
     </div>`;
   }).join('');
@@ -514,7 +871,7 @@ function renderInitiative() {
         <button class="hp-adj-btn" onclick="adjHP('${c.id}',+1)">+</button>
       </div></td>
       <td>${(c.conditions||[]).map(cd=>`<span class="cond-chip">${esc(cd)}</span>`).join('')||'<span style="color:var(--text-faint);font-size:12px;">—</span>'}</td>
-      <td><button class="del-btn" onclick="removeCombatant('${c.id}')">🗑</button></td>
+      <td><button class="del-btn" onclick="removeCombatant('${c.id}')">✕</button></td>
     </tr>`;
   }).join('');
 }
@@ -533,8 +890,7 @@ async function addCombatant() {
 
 async function adjHP(id, delta) {
   const c = combatants.find(x => x.id === id); if (!c) return;
-  const newHP = (c.hp_current || 0) + delta;
-  await db.from('initiative_tracker').update({ hp_current: newHP }).eq('id', id);
+  await db.from('initiative_tracker').update({ hp_current: (c.hp_current || 0) + delta }).eq('id', id);
 }
 
 async function removeCombatant(id) {
@@ -566,8 +922,7 @@ async function loadQuests() {
   const { data } = await db.from('campaign_quests').select('*').eq('campaign_id', campaignId).order('created_at');
   const list = document.getElementById('quest-list');
   const active = (data||[]).filter(q => q.status === 'active').length;
-  document.getElementById('stat-quests').textContent = active;
-  if (!data?.length) { list.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No quests yet</div></div>'; return; }
+  if (!data?.length) { list.innerHTML='<div class="empty-state"><div class="empty-title">No quests yet</div></div>'; return; }
   const PRIORITY_COLORS = { main:'#7aaeff', side:'#4acc7a', urgent:'#ff8888' };
   list.innerHTML = data.map(q => `
     <div class="quest-card priority-${q.priority}" style="--quest-color:${PRIORITY_COLORS[q.priority]||'#7aaeff'}">
@@ -578,9 +933,9 @@ async function loadQuests() {
       </div>
       ${q.description?`<div class="quest-desc">${esc(q.description)}</div>`:''}
       <div class="quest-actions">
-        ${q.status!=='active'    ?`<button class="quest-btn" onclick="setQuestStatus('${q.id}','active')">▶ Activate</button>`:''}
-        ${q.status!=='completed' ?`<button class="quest-btn" onclick="setQuestStatus('${q.id}','completed')" style="color:#4acc7a;">✓ Complete</button>`:''}
-        ${q.status!=='failed'    ?`<button class="quest-btn" onclick="setQuestStatus('${q.id}','failed')" style="color:#ff8888;">✕ Fail</button>`:''}
+        ${q.status!=='active'    ?`<button class="quest-btn" onclick="setQuestStatus('${q.id}','active')">Activate</button>`:''}
+        ${q.status!=='completed' ?`<button class="quest-btn" onclick="setQuestStatus('${q.id}','completed')" style="color:#4acc7a;">Complete</button>`:''}
+        ${q.status!=='failed'    ?`<button class="quest-btn" onclick="setQuestStatus('${q.id}','failed')" style="color:#ff8888;">Fail</button>`:''}
         <button class="quest-btn" onclick="deleteQuest('${q.id}')" style="color:#ff8888;margin-left:auto;">Delete</button>
       </div>
     </div>`).join('');
@@ -602,25 +957,29 @@ async function deleteQuest(id) { if (confirm('Delete quest?')) await db.from('ca
 async function loadNPCs() {
   const { data } = await db.from('campaign_npcs').select('*').eq('campaign_id', campaignId).order('created_at');
   const grid = document.getElementById('npc-grid');
-  if (!data?.length) { grid.innerHTML='<div class="empty-state"><div class="empty-icon">🧑‍🤝‍🧑</div><div class="empty-title">No NPCs yet</div></div>'; return; }
+  if (!data?.length) { grid.innerHTML='<div class="empty-state"><div class="empty-title">No NPCs yet</div></div>'; return; }
   const DISP_COLORS = { friendly:'#4acc7a', neutral:'var(--text-dim)', hostile:'#ff8888', unknown:'var(--text-faint)' };
-  const DISP_ICONS  = { friendly:'✅', neutral:'😐', hostile:'❌', unknown:'❓' };
-  grid.innerHTML = data.map(n => `
-    <div class="npc-card ${n.is_alive?'':'npc-dead'}">
+  grid.innerHTML = data.map(n => {
+    const img = SPECIES_IMGS[n.species];
+    const iconHtml = img
+      ? `<img src="${img}" style="width:38px;height:38px;border-radius:8px;object-fit:cover;display:block;">`
+      : cap(n.species?.[0] || '?');
+    return `<div class="npc-card ${n.is_alive?'':'npc-dead'}">
       <div class="npc-hdr">
-        <div class="npc-icon">${SPECIES_ICONS[n.species]||'🧑'}</div>
+        <div class="npc-icon">${iconHtml}</div>
         <div>
           <div class="npc-name">${esc(n.name)}</div>
-          <div class="npc-faction" style="color:${DISP_COLORS[n.disposition]}">${DISP_ICONS[n.disposition]} ${n.faction||cap(n.disposition)}</div>
+          <div class="npc-faction" style="color:${DISP_COLORS[n.disposition]}">${cap(n.disposition)} — ${esc(n.faction||'')}</div>
         </div>
       </div>
       ${n.description?`<div style="font-size:12px;color:var(--text-faint);margin-bottom:8px;line-height:1.5;">${esc(n.description)}</div>`:''}
-      ${n.hp_max?`<div class="npc-hp-row">❤️ ${n.hp_current||0} / ${n.hp_max}</div>`:''}
+      ${n.hp_max?`<div class="npc-hp-row">HP: ${n.hp_current||0} / ${n.hp_max}</div>`:''}
       <div style="display:flex;gap:6px;margin-top:10px;">
-        <button class="quest-btn" onclick="toggleNPCAlive('${n.id}',${!n.is_alive})">${n.is_alive?'💀 KO':'🔄 Revive'}</button>
+        <button class="quest-btn" onclick="toggleNPCAlive('${n.id}',${!n.is_alive})">${n.is_alive?'KO':'Revive'}</button>
         <button class="quest-btn" onclick="deleteNPC('${n.id}')" style="color:#ff8888;margin-left:auto;">Delete</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 async function addNPC() {
@@ -638,7 +997,7 @@ async function deleteNPC(id) { if (confirm('Delete NPC?')) await db.from('campai
 async function loadLog() {
   const { data } = await db.from('ship_log').select('*,profiles(username,display_name)').eq('campaign_id',campaignId).order('created_at',{ascending:false}).limit(40);
   const list = document.getElementById('log-list');
-  if (!data?.length) { list.innerHTML='<div class="empty-state"><div class="empty-icon">📝</div><div class="empty-title">No log entries</div></div>'; return; }
+  if (!data?.length) { list.innerHTML='<div class="empty-state"><div class="empty-title">No log entries</div></div>'; return; }
   list.innerHTML = data.map(e => {
     const author = e.profiles?.display_name||e.profiles?.username||'?';
     const time   = new Date(e.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
@@ -657,7 +1016,7 @@ async function addLog() {
 
 // ── Dice Roller ──────────────────────────────────────────────────
 function parseDice(expr) {
-  let total = 0; const parts = []; let cleaned = expr.replace(/\s/g,'');
+  let total = 0; const parts = []; const cleaned = expr.replace(/\s/g,'');
   const regex = /([+\-]?)(\d*)d(\d+)|([+\-]?\d+)/gi; let m;
   while ((m = regex.exec(cleaned)) !== null) {
     if (m[3]) {
@@ -679,10 +1038,7 @@ async function rollAndLog() {
   await db.from('dice_rolls').insert({ campaign_id:campaignId, user_id:currentUser.id, expression:expr, result, breakdown:parts });
 }
 
-function quickRoll(expr) {
-  document.getElementById('dice-expr').value = expr;
-  rollAndLog();
-}
+function quickRoll(expr) { document.getElementById('dice-expr').value = expr; rollAndLog(); }
 
 function showDiceResult(expr, result, parts) {
   const breakdown = parts.map(p => {
@@ -708,9 +1064,69 @@ async function loadDiceHistory() {
   }).join('');
 }
 
-// Handle Enter key on dice input
 document.getElementById('dice-expr').addEventListener('keydown', e => { if (e.key==='Enter') rollAndLog(); });
-document.getElementById('log-txt').addEventListener('keydown', e => { if (e.key==='Enter') addLog(); });
+document.getElementById('log-txt').addEventListener('keydown',  e => { if (e.key==='Enter') addLog(); });
+
+// ── Ship Setup (GM) ──────────────────────────────────────────────
+let allHullTypes = [], selectedHullId = null;
+
+async function openSetupShip() {
+  selectedHullId = null;
+  const picker = document.getElementById('hull-picker');
+  picker.innerHTML = '<div style="color:var(--text-faint);font-size:13px;grid-column:1/-1;">Loading hulls…</div>';
+  openModal('modal-setup-ship');
+
+  const { data, error } = await db.from('ship_types').select('*').order('crew_capacity');
+  if (error || !data?.length) {
+    picker.innerHTML = '<div style="color:#ff8888;font-size:13px;grid-column:1/-1;">Could not load ship types. Make sure schema-v5.sql has been run in Supabase.</div>';
+    return;
+  }
+  allHullTypes = data;
+
+  picker.innerHTML = data.map(h => `
+    <div class="hull-card" id="hull-${h.id}" onclick="selectHull('${h.id}')">
+      <div class="hull-card-name">${esc(h.name)}</div>
+      <div class="hull-card-size">${cap(h.size)}</div>
+      <div class="hull-card-desc">${esc(h.description)}</div>
+      <div class="hull-card-stats">
+        <span>HP ${h.hp_base}</span>
+        <span>Speed ${h.speed_base}</span>
+        <span>Fuel ${h.fuel_capacity}</span>
+        <span>Crew ${h.crew_capacity}</span>
+      </div>
+    </div>`).join('');
+}
+
+function selectHull(id) {
+  selectedHullId = id;
+  document.querySelectorAll('.hull-card').forEach(el => el.classList.remove('selected'));
+  document.getElementById('hull-' + id)?.classList.add('selected');
+}
+
+async function createCampaignShip() {
+  const name = document.getElementById('setup-ship-name').value.trim() || 'The Unnamed';
+  showError('setup-ship-error', '');
+  if (!selectedHullId) return showError('setup-ship-error', 'Select a hull type.');
+
+  const hull = allHullTypes.find(h => h.id === selectedHullId);
+  if (!hull) return;
+
+  const { error } = await db.from('campaign_ships').insert({
+    campaign_id:  campaignId,
+    ship_type_id: hull.id,
+    ship_name:    name,
+    hp_current:   hull.hp_base,
+    hp_max:       hull.hp_base,
+    armor:        hull.armor_base,
+    speed:        hull.speed_base,
+    fuel_current: hull.fuel_capacity,
+    fuel_max:     hull.fuel_capacity,
+  });
+
+  if (error) return showError('setup-ship-error', 'Failed to create ship: ' + error.message);
+  closeModal('modal-setup-ship');
+  await loadShip();
+}
 
 // ── Misc ────────────────────────────────────────────────────────
 function copyCode() {
