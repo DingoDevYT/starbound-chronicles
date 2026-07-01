@@ -502,7 +502,7 @@ const AVATAR_COLORS = ['#1e4a9a','#4a1a0a','#1a3a2a','#0a2a3a','#2a2a1a','#3a1a1
 
 const params     = new URLSearchParams(location.search);
 const campaignId = params.get('id');
-let currentUser, campaign, isGM = false, activeTurn = 0;
+let currentUser, campaign, isGM = false, activeTurn = 0, myCharacterId = null;
 let shipData = null, shipType = null, shipTokens = [];
 let shipComponents = { left_wing: null, right_wing: null, thruster: null };
 let tokenImages = {};  // species → HTMLImageElement
@@ -532,6 +532,10 @@ function preloadImages() {
   const { data: c } = await db.from('campaigns').select('*').eq('id', campaignId).single();
   if (!c) return location.href = 'dashboard.html';
   campaign = c; isGM = c.owner_id === currentUser.id;
+
+  const { data: myMembership } = await db.from('campaign_members')
+    .select('character_id').eq('campaign_id', campaignId).eq('user_id', currentUser.id).maybeSingle();
+  myCharacterId = myMembership?.character_id || null;
 
   document.title = c.name + ' — Starbound Chronicles';
   document.getElementById('topbar-name').textContent  = c.name;
@@ -625,12 +629,42 @@ async function loadShip() {
   }
 
   await loadTokens();
+  await ensureCrewTokens();
   drawShipMap();
 }
 
 async function loadTokens() {
-  const { data } = await db.from('ship_tokens').select('*').eq('campaign_id', campaignId);
+  const { data } = await db.from('ship_tokens').select('*, characters(species)').eq('campaign_id', campaignId);
   shipTokens = data || [];
+}
+
+// Make sure every crew member with a character has a token on the ship map
+async function ensureCrewTokens() {
+  if (!isGM) return;
+  const { data: members } = await db.from('campaign_members')
+    .select('character_id, profiles(avatar_color), characters(name)')
+    .eq('campaign_id', campaignId)
+    .not('character_id', 'is', null);
+  if (!members?.length) return;
+
+  const existingCharIds = new Set(shipTokens.map(t => t.character_id).filter(Boolean));
+  const missing = members.filter(m => !existingCharIds.has(m.character_id));
+  if (!missing.length) return;
+
+  const gridCenterX = shipType?.floor_rows?.[0]?.length ? Math.round(shipType.floor_rows[0].length / 2) : 5;
+  const gridCenterY = shipType?.floor_rows?.length ? Math.round(shipType.floor_rows.length / 2) : 5;
+
+  const inserts = missing.map((m, i) => ({
+    campaign_id:  campaignId,
+    character_id: m.character_id,
+    label:        m.characters?.name || 'Crew',
+    color:        m.profiles?.avatar_color || '#3a78d4',
+    grid_x:       gridCenterX + (i % 3) - 1,
+    grid_y:       gridCenterY + Math.floor(i / 3) - 1,
+  }));
+
+  await db.from('ship_tokens').insert(inserts);
+  await loadTokens();
 }
 
 // Ship canvas rendering
@@ -789,11 +823,11 @@ function drawShipMap() {
 
   // Draw tokens
   shipTokens.forEach(tok => {
-    if (tok.token_x == null || tok.token_y == null) return;
-    const px = gx(tok.token_x) + cs / 2;
-    const py = gy(tok.token_y) + cs / 2;
+    if (tok.grid_x == null || tok.grid_y == null) return;
+    const px = gx(tok.grid_x) + cs / 2;
+    const py = gy(tok.grid_y) + cs / 2;
     const r  = cs * .42;
-    const species = tok.species || 'human';
+    const species = tok.characters?.species || 'human';
     const img = tokenImages[species];
 
     shipCtx.save();
@@ -837,10 +871,10 @@ shipCanvas.addEventListener('mousedown', e => {
   const cs = CELL * shipScale;
 
   for (const tok of shipTokens) {
-    if (tok.token_x == null || tok.token_y == null) continue;
-    if (!isGM && tok.character_id !== currentUser?.id) continue;
-    const px = shipOffX + tok.token_x * cs + cs / 2;
-    const py = shipOffY + tok.token_y * cs + cs / 2;
+    if (tok.grid_x == null || tok.grid_y == null) continue;
+    if (!isGM && tok.character_id !== myCharacterId) continue;
+    const px = shipOffX + tok.grid_x * cs + cs / 2;
+    const py = shipOffY + tok.grid_y * cs + cs / 2;
     if (Math.hypot(mx - px, my - py) < cs * .45) {
       dragToken = tok;
       dragOffX  = mx - px;
@@ -882,7 +916,7 @@ shipCanvas.addEventListener('mouseup', async e => {
   const my = e.clientY - rect.top  - dragOffY;
   const newX = Math.round((mx - shipOffX) / cs);
   const newY = Math.round((my - shipOffY) / cs);
-  await db.from('ship_tokens').update({ token_x: newX, token_y: newY }).eq('id', dragToken.id);
+  await db.from('ship_tokens').update({ grid_x: newX, grid_y: newY }).eq('id', dragToken.id);
   dragToken = null;
   justDraggedToken = true;
   shipCanvas.style.cursor = 'default';
@@ -1319,8 +1353,15 @@ async function createCampaignShip() {
 
   const payload = { campaign_id: campaignId, ship_type_id: hull.id, ship_name: name };
   if (hullChanged) {
+    // Auto-equip a default wing/thruster compatible with the new hull so slots aren't left empty
+    const [{ data: defaultWing }, { data: defaultThruster }] = await Promise.all([
+      db.from('ship_components').select('id').eq('type', 'wing').contains('compatible_sizes', [hull.size]).limit(1).maybeSingle(),
+      db.from('ship_components').select('id').eq('type', 'thruster').contains('compatible_sizes', [hull.size]).limit(1).maybeSingle(),
+    ]);
     Object.assign(payload, {
-      left_wing_id: null, right_wing_id: null, thruster_id: null,
+      left_wing_id: defaultWing?.id || null,
+      right_wing_id: defaultWing?.id || null,
+      thruster_id: defaultThruster?.id || null,
       hp_current: hull.hp_base, hp_max: hull.hp_base,
       armor: hull.armor_base, speed: hull.speed_base,
       fuel_current: hull.fuel_capacity, fuel_max: hull.fuel_capacity,
@@ -1331,7 +1372,8 @@ async function createCampaignShip() {
 
   if (error) return showError('setup-ship-error', 'Failed to save ship: ' + error.message);
   closeModal('modal-setup-ship');
-  await loadShip();
+  if (hullChanged) await recomputeShipStats();
+  else await loadShip();
 }
 
 // ── Component slots (GM) ─────────────────────────────────────────
