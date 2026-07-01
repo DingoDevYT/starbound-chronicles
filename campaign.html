@@ -43,6 +43,41 @@
   height:220px; color:var(--text-faint); font-size:14px; flex-direction:column; gap:10px;
 }
 
+/* ── Ship / Map view toggle ── */
+.view-toggle { display:flex; background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:2px; gap:2px; }
+.view-toggle-btn { background:none; border:none; color:var(--text-dim); font-size:11px; font-weight:600; padding:5px 12px; border-radius:5px; cursor:pointer; font-family:inherit; transition:all .12s; }
+.view-toggle-btn:hover { color:var(--text); }
+.view-toggle-btn.active { background:var(--accent); color:#fff; }
+
+/* ── Space map ── */
+.map-toolbar { display:flex; align-items:center; gap:12px; padding:8px 18px; background:var(--surface); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+.map-search-wrap { position:relative; flex:1; min-width:220px; max-width:420px; }
+.map-search { width:100%; box-sizing:border-box; background:var(--surface2); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:7px 12px; font-size:12px; font-family:inherit; outline:none; }
+.map-search:focus { border-color:var(--accent); }
+.map-search-results {
+  display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:20;
+  background:var(--surface2); border:1px solid var(--border2); border-radius:8px; overflow:hidden;
+  max-height:260px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,.4);
+}
+.map-search-results.open { display:block; }
+.map-result-item { padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border); }
+.map-result-item:last-child { border-bottom:none; }
+.map-result-item:hover, .map-result-item.hl { background:var(--surface3); }
+.map-result-name { font-size:12px; font-weight:700; color:#d0e4ff; }
+.map-result-addr { font-size:10px; color:var(--text-faint); margin-top:1px; }
+.map-breadcrumb { font-size:11px; color:var(--text-faint); flex:1; text-align:center; min-width:140px; }
+.map-zoom-controls { display:flex; gap:4px; }
+#space-map-canvas { display:block; width:100%; cursor:grab; }
+#space-map-canvas:active { cursor:grabbing; }
+.map-info-card {
+  position:absolute; bottom:16px; left:16px; right:16px; max-width:320px;
+  background:var(--surface2); border:1px solid var(--border2); border-radius:10px; padding:14px;
+  box-shadow:0 8px 24px rgba(0,0,0,.4);
+}
+.map-info-card h4 { font-size:13px; font-weight:800; color:#d0e4ff; margin-bottom:4px; }
+.map-info-card .addr { font-size:10px; color:var(--text-faint); margin-bottom:8px; }
+.map-info-card p { font-size:12px; color:var(--text-dim); line-height:1.5; margin-bottom:10px; }
+
 /* ── Inner content ── */
 .camp-inner { padding:28px 32px; }
 
@@ -196,7 +231,7 @@
       <a class="sidebar-link" href="#quests">Quests</a>
       <a class="sidebar-link" href="#npcs">NPCs</a>
       <a class="sidebar-link" href="#log">Ship Log</a>
-      <a class="sidebar-link" id="space-map-link" href="#">Space Map</a>
+      <a class="sidebar-link" href="#ship" onclick="setShipViewMode('map')">Space Map</a>
     </div>
     <div class="sidebar-divider"></div>
     <div class="sidebar-section">
@@ -236,39 +271,64 @@
         <h2 id="ship-name">Loading ship…</h2>
         <div style="display:flex; align-items:center; gap:12px;">
           <small id="ship-class">—</small>
-          <a id="space-map-btn" class="btn-ghost" href="#" style="font-size:11px; padding:4px 12px; text-decoration:none; display:inline-block;">Space Map</a>
+          <div class="view-toggle">
+            <button class="view-toggle-btn active" id="view-btn-ship" onclick="setShipViewMode('ship')">Ship</button>
+            <button class="view-toggle-btn" id="view-btn-map" onclick="setShipViewMode('map')">Space Map</button>
+          </div>
           <button id="ship-manage-btn" class="btn-secondary" style="font-size:11px; padding:4px 12px; display:none;" onclick="openSetupShip()">Edit Ship</button>
         </div>
       </div>
-      <canvas id="ship-canvas" height="360"></canvas>
-      <div id="ship-hint" style="display:none; padding:6px 18px; font-size:11px; color:var(--text-faint); background:var(--surface); border-top:1px solid var(--border);">Click a wing or thruster slot to equip a component. Drag crew tokens to reposition them.</div>
-      <div class="ship-stat-bar">
-        <div class="ship-stat">
-          <div class="ship-stat-label">Hull</div>
-          <div class="ship-stat-val" id="stat-hp">—</div>
-          <div class="ship-stat-sub" id="stat-hp-max"></div>
+
+      <!-- SHIP VIEW -->
+      <div id="ship-view-panel">
+        <canvas id="ship-canvas" height="360"></canvas>
+        <div id="ship-hint" style="display:none; padding:6px 18px; font-size:11px; color:var(--text-faint); background:var(--surface); border-top:1px solid var(--border);">Click a wing or thruster slot to equip a component. Drag crew tokens to reposition them.</div>
+        <div class="ship-stat-bar">
+          <div class="ship-stat">
+            <div class="ship-stat-label">Hull</div>
+            <div class="ship-stat-val" id="stat-hp">—</div>
+            <div class="ship-stat-sub" id="stat-hp-max"></div>
+          </div>
+          <div class="ship-stat">
+            <div class="ship-stat-label">Armor</div>
+            <div class="ship-stat-val" id="stat-armor">—</div>
+          </div>
+          <div class="ship-stat">
+            <div class="ship-stat-label">Speed</div>
+            <div class="ship-stat-val" id="stat-speed">—</div>
+          </div>
+          <div class="ship-stat">
+            <div class="ship-stat-label">Fuel</div>
+            <div class="ship-stat-val" id="stat-fuel">—</div>
+            <div class="ship-stat-sub" id="stat-fuel-max"></div>
+          </div>
+          <div class="ship-stat">
+            <div class="ship-stat-label">Crew</div>
+            <div class="ship-stat-val" id="stat-crew">—</div>
+          </div>
+          <div class="ship-stat">
+            <div class="ship-stat-label">Round</div>
+            <div class="ship-stat-val" id="stat-round">—</div>
+          </div>
         </div>
-        <div class="ship-stat">
-          <div class="ship-stat-label">Armor</div>
-          <div class="ship-stat-val" id="stat-armor">—</div>
+      </div>
+
+      <!-- SPACE MAP VIEW -->
+      <div id="map-view-panel" style="display:none;">
+        <div class="map-toolbar">
+          <div class="map-search-wrap">
+            <input class="map-search" id="map-search" placeholder="Search an address — planet, system, galaxy, or sector…" autocomplete="off">
+            <div class="map-search-results" id="map-search-results"></div>
+          </div>
+          <div class="map-breadcrumb" id="map-breadcrumb">Galaxy View</div>
+          <div class="map-zoom-controls">
+            <button class="btn-ghost" onclick="mapZoomStep(1.6)" style="padding:4px 10px;">+</button>
+            <button class="btn-ghost" onclick="mapZoomStep(1/1.6)" style="padding:4px 10px;">−</button>
+            <button class="btn-ghost" onclick="mapResetView()" style="padding:4px 10px; font-size:11px;">Reset</button>
+          </div>
         </div>
-        <div class="ship-stat">
-          <div class="ship-stat-label">Speed</div>
-          <div class="ship-stat-val" id="stat-speed">—</div>
-        </div>
-        <div class="ship-stat">
-          <div class="ship-stat-label">Fuel</div>
-          <div class="ship-stat-val" id="stat-fuel">—</div>
-          <div class="ship-stat-sub" id="stat-fuel-max"></div>
-        </div>
-        <div class="ship-stat">
-          <div class="ship-stat-label">Crew</div>
-          <div class="ship-stat-val" id="stat-crew">—</div>
-        </div>
-        <div class="ship-stat">
-          <div class="ship-stat-label">Round</div>
-          <div class="ship-stat-val" id="stat-round">—</div>
-        </div>
+        <canvas id="space-map-canvas" height="360"></canvas>
+        <div id="map-info-card" class="map-info-card" style="display:none;"></div>
       </div>
     </section>
 
@@ -573,8 +633,6 @@ function preloadImages() {
   document.title = c.name + ' — Starbound Chronicles';
   document.getElementById('topbar-name').textContent  = c.name;
   document.getElementById('camp-title-side').textContent = c.name;
-  document.getElementById('space-map-link').href = 'space-map.html?id=' + campaignId;
-  document.getElementById('space-map-btn').href  = 'space-map.html?id=' + campaignId;
   document.getElementById('invite-disp').textContent  = c.invite_code;
   document.getElementById('stat-round').textContent   = c.round_num || 0;
   document.getElementById('round-lbl').textContent    = 'Round ' + (c.round_num || 0);
@@ -593,7 +651,11 @@ function preloadImages() {
   // Realtime
   db.channel('camp-' + campaignId)
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'campaigns',         filter:`id=eq.${campaignId}` },
-      p => { document.getElementById('stat-round').textContent = p.new.round_num || 0; document.getElementById('round-lbl').textContent = 'Round ' + (p.new.round_num || 0); })
+      p => {
+        campaign = p.new;
+        document.getElementById('stat-round').textContent = p.new.round_num || 0; document.getElementById('round-lbl').textContent = 'Round ' + (p.new.round_num || 0);
+        if (shipViewMode === 'map') redrawSpaceMap();
+      })
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'campaign_ships',    filter:`campaign_id=eq.${campaignId}` }, async p => { await loadShip(); })
     .on('postgres_changes', { event:'*',      schema:'public', table:'ship_tokens',       filter:`campaign_id=eq.${campaignId}` }, async () => { await loadTokens(); drawShipMap(); })
     .on('postgres_changes', { event:'*',      schema:'public', table:'initiative_tracker',filter:`campaign_id=eq.${campaignId}` }, loadInitiative)
@@ -1007,6 +1069,329 @@ shipCanvas.addEventListener('click', e => {
 // Resize / redraw
 const resizeObserver = new ResizeObserver(() => drawShipMap());
 resizeObserver.observe(shipCanvas);
+
+// ── View toggle (Ship / Space Map) ───────────────────────────────
+let shipViewMode = 'ship';
+function setShipViewMode(mode) {
+  shipViewMode = mode;
+  document.getElementById('view-btn-ship').classList.toggle('active', mode === 'ship');
+  document.getElementById('view-btn-map').classList.toggle('active', mode === 'map');
+  document.getElementById('ship-view-panel').style.display = mode === 'ship' ? 'block' : 'none';
+  document.getElementById('map-view-panel').style.display  = mode === 'map'  ? 'block' : 'none';
+  document.getElementById('ship').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (mode === 'map') { mapResizeCanvas(); drawSpaceMap(); }
+}
+
+// ── Space Map: universe data ──────────────────────────────────────
+// World space: 10x10 sectors (A-J, 0-9), each SECTOR_SIZE world-units square.
+const SECTOR_SIZE = 1000;
+const SECTOR_COLS = ['A','B','C','D','E','F','G','H','I','J'];
+function sectorColRow(coord) { return { col: SECTOR_COLS.indexOf(coord[0]), row: parseInt(coord.slice(1)) }; }
+function sectorZoneColor(col) { return col <= 2 ? '#8a6a3a' : col <= 4 ? '#3a78d4' : col <= 6 ? '#2a90a0' : '#5a6a80'; }
+
+const UNIVERSE = {
+  'B2': { region: 'Krag System, The Great Ring', systems: [
+    { name: 'Mintonas', sx: 500, sy: 500, planets: [
+      { name: 'Mintonas', img: 'Baren', ox: 0, oy: 0, desc: 'Kragol homeworld. Rock, crystal, and gemstone deposits as far as sensors can read. KEC mining rigs dominate the orbital lanes.' },
+    ]},
+  ]},
+  'C3': { region: 'Nomadic Drift, Mobile Warrens', systems: [
+    { name: 'Mobile Warren Cluster', sx: 300, sy: 700, planets: [
+      { name: 'Warren Cluster', img: 'Lava', ox: 0, oy: 0, desc: 'A shifting cloud of scavenged hab-modules. Home to nomadic Skitterling clans. Coordinates change monthly.' },
+    ]},
+  ]},
+  'E4': { region: 'Sol System, Milky Way', systems: [
+    { name: 'Sol', sx: 500, sy: 500, planets: [
+      { name: 'Earth', img: 'Terran', ox: -40, oy: 0, desc: 'GAC founding world, dense population, heaviest patrol coverage in the sector.' },
+    ]},
+    { name: 'Jupiter System (The Moon Colonies)', sx: 650, sy: 350, planets: [
+      { name: 'The Moon Colonies', img: 'Ice', ox: 0, oy: 0, desc: 'SNA founding territory. Loosely governed colony worlds, popular with scavenger crews.' },
+    ]},
+    { name: 'The Rust Belts', sx: 300, sy: 650, planets: [
+      { name: 'Rust Belt Debris Field', img: 'Baren', ox: 0, oy: 0, desc: 'Human Renegade territory — a Void Pirate stronghold hiding in the debris fields.' },
+    ]},
+  ]},
+  'F3': { region: 'Calamitus Field', systems: [
+    { name: 'Arkanos System', sx: 500, sy: 400, planets: [
+      { name: 'Arkanos', img: 'Terran', ox: 0, oy: 0, desc: 'Arboran homeworld. Lush, high-UV, and a founding GAC world.' },
+    ]},
+  ]},
+  'G5': { region: 'Myx System, Nebulous Way', systems: [
+    { name: 'Myx System', sx: 500, sy: 500, planets: [
+      { name: 'Juniper', img: 'Ice', ox: 0, oy: 0, desc: 'Myxos homeworld. Chemical seas and gelatinous ecosystems — bring a suit.' },
+    ]},
+  ]},
+  'B1': { region: 'Outer Rim, Obsidian Fringe', systems: [
+    { name: 'Obsidian Fringe', sx: 500, sy: 500, planets: [
+      { name: 'The Obsidian Fringe', img: 'Black_hole', ox: 0, oy: 0, desc: 'Kaelen Outcast territory. Void Pirate crews operate freely; GAC patrols rarely bother.' },
+    ]},
+  ]},
+};
+
+function systemWorldPos(coord, sys) {
+  const { col, row } = sectorColRow(coord);
+  return { x: col * SECTOR_SIZE + sys.sx, y: row * SECTOR_SIZE + sys.sy };
+}
+function planetWorldPos(coord, sys, planet) {
+  const sp = systemWorldPos(coord, sys);
+  return { x: sp.x + planet.ox, y: sp.y + planet.oy };
+}
+
+// Flat searchable index of every addressable place
+function buildSearchIndex() {
+  const idx = [];
+  Object.entries(UNIVERSE).forEach(([coord, sector]) => {
+    idx.push({ type:'sector', name:`Sector ${coord}`, addr:`${sector.region} — SECTOR ${coord}`, coord });
+    sector.systems.forEach(sys => {
+      idx.push({ type:'system', name:sys.name, addr:`${sys.name}, ${sector.region} — SECTOR ${coord}`, coord, system:sys.name });
+      sys.planets.forEach(p => {
+        idx.push({ type:'planet', name:p.name, addr:`${p.name}, ${sys.name}, ${sector.region} — SECTOR ${coord}`, coord, system:sys.name, planet:p.name });
+      });
+    });
+  });
+  return idx;
+}
+const SEARCH_INDEX = buildSearchIndex();
+
+// ── Space Map: camera + rendering ─────────────────────────────────
+let mapCenterX = 5000, mapCenterY = 5000, mapScale = 0.06;
+const mapCanvas = document.getElementById('space-map-canvas');
+const mapCtx = mapCanvas.getContext('2d');
+
+function mapResizeCanvas() {
+  mapCanvas.width  = mapCanvas.offsetWidth || 800;
+  mapCanvas.height = 360;
+}
+
+function drawSpaceMap() {
+  const W = mapCanvas.width || 800, H = mapCanvas.height || 360;
+  mapCtx.fillStyle = '#03040a';
+  mapCtx.fillRect(0, 0, W, H);
+
+  const worldW = W / mapScale;
+  const left = mapCenterX - worldW / 2, top = mapCenterY - (H / mapScale) / 2;
+  const wx = x => (x - left) * mapScale;
+  const wy = y => (y - top) * mapScale;
+
+  let tier;
+  if (worldW > 2200) tier = 'galaxy';
+  else if (worldW > 260) tier = 'sector';
+  else tier = 'system';
+
+  document.getElementById('map-breadcrumb').textContent =
+    tier === 'galaxy' ? 'Galaxy View' : tier === 'sector' ? 'Sector View' : 'System View';
+
+  if (tier === 'galaxy') {
+    for (let row = 0; row < 10; row++) for (let col = 0; col < 10; col++) {
+      const x0 = wx(col*SECTOR_SIZE), y0 = wy(row*SECTOR_SIZE), size = SECTOR_SIZE*mapScale;
+      if (x0+size < 0 || x0 > W || y0+size < 0 || y0 > H) continue;
+      mapCtx.fillStyle = sectorZoneColor(col) + '30';
+      mapCtx.fillRect(x0, y0, size, size);
+      mapCtx.strokeStyle = 'rgba(255,255,255,.06)';
+      mapCtx.strokeRect(x0, y0, size, size);
+      if (size > 18) {
+        mapCtx.fillStyle = 'rgba(255,255,255,.4)';
+        mapCtx.font = '10px system-ui, sans-serif';
+        mapCtx.textAlign = 'left'; mapCtx.textBaseline = 'top';
+        mapCtx.fillText(SECTOR_COLS[col] + row, x0 + 4, y0 + 4);
+      }
+    }
+  } else {
+    // sector boundaries, faint, for context
+    mapCtx.strokeStyle = 'rgba(255,255,255,.04)';
+    const startCol = Math.floor(left / SECTOR_SIZE), endCol = Math.ceil((left+worldW) / SECTOR_SIZE);
+    for (let col = startCol; col <= endCol; col++) {
+      const x = wx(col * SECTOR_SIZE);
+      mapCtx.beginPath(); mapCtx.moveTo(x, 0); mapCtx.lineTo(x, H); mapCtx.stroke();
+    }
+  }
+
+  // Systems (dots at galaxy/sector tier, or expanded to planets at system tier)
+  Object.entries(UNIVERSE).forEach(([coord, sector]) => {
+    sector.systems.forEach(sys => {
+      const sp = systemWorldPos(coord, sys);
+      const px = wx(sp.x), py = wy(sp.y);
+      if (px < -50 || px > W+50 || py < -50 || py > H+50) return;
+
+      if (tier === 'system' && worldW < 260) {
+        // Close enough to render the star + orbiting planets
+        mapCtx.fillStyle = '#ffe07a';
+        mapCtx.beginPath(); mapCtx.arc(px, py, 5, 0, Math.PI*2); mapCtx.fill();
+        mapCtx.fillStyle = 'rgba(255,224,122,.8)';
+        mapCtx.font = '11px system-ui, sans-serif'; mapCtx.textAlign='center'; mapCtx.textBaseline='bottom';
+        mapCtx.fillText(sys.name, px, py - 10);
+
+        sys.planets.forEach(p => {
+          const pp = planetWorldPos(coord, sys, p);
+          const ppx = wx(pp.x), ppy = wy(pp.y);
+          const r = Math.max(14, Math.min(26, mapScale * 30));
+          const img = getSpriteImg(`assets/map/planets/${p.img}.png`);
+          mapCtx.save();
+          mapCtx.beginPath(); mapCtx.arc(ppx, ppy, r, 0, Math.PI*2); mapCtx.clip();
+          if (spriteReady(img)) mapCtx.drawImage(img, ppx-r, ppy-r, r*2, r*2);
+          else { mapCtx.fillStyle = '#3a4050'; mapCtx.fill(); }
+          mapCtx.restore();
+          mapCtx.strokeStyle = 'rgba(255,255,255,.3)';
+          mapCtx.beginPath(); mapCtx.arc(ppx, ppy, r, 0, Math.PI*2); mapCtx.stroke();
+
+          const isHere = campaign.current_sector === coord && campaign.current_system === sys.name && campaign.current_planet === p.name;
+          if (isHere) {
+            mapCtx.strokeStyle = '#ffd23a'; mapCtx.lineWidth = 2;
+            mapCtx.beginPath(); mapCtx.arc(ppx, ppy, r+4, 0, Math.PI*2); mapCtx.stroke();
+            mapCtx.lineWidth = 1;
+          }
+
+          mapCtx.fillStyle = '#e0ecff';
+          mapCtx.font = '10px system-ui, sans-serif'; mapCtx.textAlign='center'; mapCtx.textBaseline='top';
+          mapCtx.fillText(p.name, ppx, ppy + r + 3);
+
+          mapPlanetHitboxes.push({ x:ppx, y:ppy, r, coord, system:sys.name, planet:p.name });
+        });
+      } else {
+        const r = tier === 'galaxy' ? 2.5 : 5;
+        mapCtx.fillStyle = '#ffd23a';
+        mapCtx.beginPath(); mapCtx.arc(px, py, r, 0, Math.PI*2); mapCtx.fill();
+        if (tier === 'sector') {
+          mapCtx.fillStyle = 'rgba(255,255,255,.6)';
+          mapCtx.font = '10px system-ui, sans-serif'; mapCtx.textAlign='center'; mapCtx.textBaseline='top';
+          mapCtx.fillText(sys.name, px, py + 6);
+        }
+      }
+    });
+  });
+}
+let mapPlanetHitboxes = [];
+function redrawSpaceMap() { mapPlanetHitboxes = []; drawSpaceMap(); }
+
+// Pan + zoom
+let mapDragging = false, mapDragStartX = 0, mapDragStartY = 0, mapDragCenterX = 0, mapDragCenterY = 0, mapDidDrag = false;
+mapCanvas.addEventListener('mousedown', e => {
+  mapDragging = true; mapDidDrag = false;
+  mapDragStartX = e.clientX; mapDragStartY = e.clientY;
+  mapDragCenterX = mapCenterX; mapDragCenterY = mapCenterY;
+});
+window.addEventListener('mousemove', e => {
+  if (!mapDragging) return;
+  const dx = e.clientX - mapDragStartX, dy = e.clientY - mapDragStartY;
+  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) mapDidDrag = true;
+  mapCenterX = mapDragCenterX - dx / mapScale;
+  mapCenterY = mapDragCenterY - dy / mapScale;
+  redrawSpaceMap();
+});
+window.addEventListener('mouseup', () => { mapDragging = false; });
+
+mapCanvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = mapCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const worldW = mapCanvas.width / mapScale;
+  const left = mapCenterX - worldW/2, top = mapCenterY - (mapCanvas.height/mapScale)/2;
+  const cursorWorldX = left + mx / mapScale, cursorWorldY = top + my / mapScale;
+  const factor = e.deltaY < 0 ? 1.3 : 1/1.3;
+  mapScale = Math.max(0.005, Math.min(4, mapScale * factor));
+  const newWorldW = mapCanvas.width / mapScale;
+  const newLeft = cursorWorldX - mx / mapScale, newTop = cursorWorldY - my / mapScale;
+  mapCenterX = newLeft + newWorldW/2;
+  mapCenterY = newTop + (mapCanvas.height/mapScale)/2;
+  redrawSpaceMap();
+}, { passive:false });
+
+mapCanvas.addEventListener('click', e => {
+  if (mapDidDrag) return;
+  const rect = mapCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  for (const hb of mapPlanetHitboxes) {
+    if (Math.hypot(mx - hb.x, my - hb.y) <= hb.r) return showPlanetInfo(hb.coord, hb.system, hb.planet);
+  }
+  document.getElementById('map-info-card').style.display = 'none';
+});
+
+function showPlanetInfo(coord, systemName, planetName) {
+  const sector = UNIVERSE[coord];
+  const sys = sector.systems.find(s => s.name === systemName);
+  const planet = sys.planets.find(p => p.name === planetName);
+  const isHere = campaign.current_sector === coord && campaign.current_system === systemName && campaign.current_planet === planetName;
+  const card = document.getElementById('map-info-card');
+  card.style.display = 'block';
+  card.innerHTML = `
+    <h4>${esc(planet.name)}</h4>
+    <div class="addr">${esc(planet.name)}, ${esc(sys.name)}, ${esc(sector.region)} — SECTOR ${esc(coord)}</div>
+    <p>${esc(planet.desc)}</p>
+    ${isGM ? `<button class="btn-secondary" style="font-size:11px;padding:5px 12px;" onclick="setPartyLocation('${coord}','${systemName.replace(/'/g,"\\'")}','${planetName.replace(/'/g,"\\'")}')">${isHere?'Currently Here':'Set Party Location'}</button>`
+          : (isHere ? '<div style="color:#ffd23a;font-size:11px;font-weight:700;">★ Party is here</div>' : '')}
+  `;
+}
+
+async function setPartyLocation(sector, systemName, planetName) {
+  await db.from('campaigns').update({
+    current_sector: sector, current_system: systemName, current_planet: planetName,
+  }).eq('id', campaignId);
+}
+
+function mapZoomStep(factor) {
+  mapScale = Math.max(0.005, Math.min(4, mapScale * factor));
+  redrawSpaceMap();
+}
+function mapResetView() {
+  mapCenterX = 5000; mapCenterY = 5000; mapScale = 0.06;
+  document.getElementById('map-info-card').style.display = 'none';
+  redrawSpaceMap();
+}
+
+function jumpToMapTarget(item) {
+  let cx, cy, scale;
+  if (item.type === 'sector') {
+    const { col, row } = sectorColRow(item.coord);
+    cx = col*SECTOR_SIZE + 500; cy = row*SECTOR_SIZE + 500;
+    scale = mapCanvas.width / 1400;
+  } else if (item.type === 'system') {
+    const sector = UNIVERSE[item.coord];
+    const sys = sector.systems.find(s => s.name === item.system);
+    const p = systemWorldPos(item.coord, sys);
+    cx = p.x; cy = p.y;
+    scale = mapCanvas.width / 350;
+  } else {
+    const sector = UNIVERSE[item.coord];
+    const sys = sector.systems.find(s => s.name === item.system);
+    const planet = sys.planets.find(pl => pl.name === item.planet);
+    const p = planetWorldPos(item.coord, sys, planet);
+    cx = p.x; cy = p.y;
+    scale = mapCanvas.width / 150;
+  }
+  mapCenterX = cx; mapCenterY = cy; mapScale = scale;
+  redrawSpaceMap();
+  if (item.type === 'planet') showPlanetInfo(item.coord, item.system, item.planet);
+  else document.getElementById('map-info-card').style.display = 'none';
+}
+
+// Search with autocomplete
+const mapSearchInput = document.getElementById('map-search');
+const mapSearchResults = document.getElementById('map-search-results');
+mapSearchInput.addEventListener('input', () => {
+  const q = mapSearchInput.value.trim().toLowerCase();
+  if (!q) { mapSearchResults.classList.remove('open'); mapSearchResults.innerHTML = ''; return; }
+  const matches = SEARCH_INDEX.filter(it => it.name.toLowerCase().includes(q) || it.addr.toLowerCase().includes(q)).slice(0, 8);
+  if (!matches.length) { mapSearchResults.innerHTML = '<div class="map-result-item" style="color:var(--text-faint);">No matches</div>'; mapSearchResults.classList.add('open'); return; }
+  mapSearchResults.innerHTML = matches.map((m, i) => `
+    <div class="map-result-item" data-idx="${i}" onclick='jumpToSearchResult(${i})'>
+      <div class="map-result-name">${esc(m.name)}</div>
+      <div class="map-result-addr">${esc(m.addr)}</div>
+    </div>`).join('');
+  mapSearchResults.classList.add('open');
+  mapSearchResults._matches = matches;
+});
+mapSearchInput.addEventListener('focus', () => { if (mapSearchResults.innerHTML) mapSearchResults.classList.add('open'); });
+document.addEventListener('click', e => {
+  if (!e.target.closest('.map-search-wrap')) mapSearchResults.classList.remove('open');
+});
+function jumpToSearchResult(i) {
+  const item = mapSearchResults._matches[i];
+  mapSearchInput.value = item.name;
+  mapSearchResults.classList.remove('open');
+  jumpToMapTarget(item);
+}
+
+new ResizeObserver(() => { if (shipViewMode === 'map') { mapResizeCanvas(); redrawSpaceMap(); } }).observe(mapCanvas);
 
 // ── Crew ────────────────────────────────────────────────────────
 async function loadCrew() {
