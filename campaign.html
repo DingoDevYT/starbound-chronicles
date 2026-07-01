@@ -1191,9 +1191,11 @@ function sectorColRow(coord) { return { col: SECTOR_COLS.indexOf(coord[0]), row:
 // Every icon is drawn at its sprite's *native pixel resolution* converted into world units via
 // a per-category multiplier — a black hole (512px) is still enormous next to a planet (48px),
 // but each category gets its own dial so relative feel can be tuned independently.
-const OBJECT_ICON_MULTIPLIER = 2;      // asteroid belts / nebulae / black holes
-const PLANET_ICON_MULTIPLIER = 2 / 8;  // planets — 8x smaller than the original 2x
-const DOCK_ICON_MULTIPLIER   = 3;      // space docks — small source art (64px), needs a bigger multiplier to read clearly
+// GLOBAL_ICON_SCALE is the one dial to turn if "everything" needs to shrink/grow together again.
+const GLOBAL_ICON_SCALE = 0.5;
+const OBJECT_ICON_MULTIPLIER = 0.3  * GLOBAL_ICON_SCALE; // asteroid belts / nebulae / black holes
+const PLANET_ICON_MULTIPLIER = 0.05 * GLOBAL_ICON_SCALE; // planets/moons — tiny dots until you're really close
+const DOCK_ICON_MULTIPLIER   = 0.4  * GLOBAL_ICON_SCALE; // space docks — much smaller than a galaxy, not 3x bigger
 
 const OBJECT_SPRITES = {
   black_hole:          { path: 'assets/map/misc/Black_hole.png',         fallback: 512, fallbackColor: '#1a1a2a' },
@@ -1206,9 +1208,9 @@ const FACTION_COLORS = { GAC:'#3a78d4', KEC:'#c87820', SNA:'#4acc7a', VP:'#c8404
 // Galaxy icon sprites are all the same 100x100 source regardless of the galaxy's "true" scale, so
 // galaxies get a fixed, deliberately small world footprint instead — a sector should comfortably
 // hold a dozen-plus galaxies, not just 2-3.
-const GALAXY_RADIUS_WORLD = 35;
+const GALAXY_RADIUS_WORLD = 35 * GLOBAL_ICON_SCALE;
 const GALAXY_EXPAND_PX = 90;     // once a galaxy's icon would render bigger than this, open it into systems
-const SYSTEM_RADIUS_WORLD = 7;   // systems are a plain star-dot, not a sprite — halved (2x smaller) per feedback
+const SYSTEM_RADIUS_WORLD = 7 * GLOBAL_ICON_SCALE; // systems are a plain star-dot, not a sprite
 const SYSTEM_EXPAND_PX = 70;     // once a system's dot would render bigger than this, open it into planets
 const SECTOR_CONTENT_SCALE = 0.1; // mapScale above which a sector's galaxies/objects render individually
 const MAP_MIN_SCALE = 0.005, MAP_MAX_SCALE = 80; // shared zoom clamp — must allow reaching the system-expand threshold above
@@ -1794,15 +1796,21 @@ mapCanvas.addEventListener('click', e => {
   if (mapDidDrag) return;
   const rect = mapCanvas.getBoundingClientRect();
   const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+  // When icons overlap, pick whichever center is closest to the cursor rather than
+  // whichever happened to be drawn (and therefore hit-tested) first.
+  let best = null, bestDist = Infinity;
   for (const hb of mapHitboxes) {
-    if (Math.hypot(mx - hb.x, my - hb.y) > hb.r) continue;
-    if (hb.kind === 'planet') return showLeafInfo('planet', hb.coord, hb.galaxy, hb.system, hb.planet);
-    if (hb.kind === 'object') return showLeafInfo('object', hb.coord, null, null, null, hb.object);
-    if (hb.kind === 'dock')   return showLeafInfo('dock', hb.coord, null, null, null, null, hb.dock);
-    if (hb.kind === 'system') return jumpToMapTarget({ type:'system', coord:hb.coord, galaxy:hb.galaxy, system:hb.system });
-    if (hb.kind === 'galaxy') return jumpToMapTarget({ type:'galaxy', coord:hb.coord, galaxy:hb.galaxy });
+    const dist = Math.hypot(mx - hb.x, my - hb.y);
+    if (dist <= hb.r && dist < bestDist) { best = hb; bestDist = dist; }
   }
-  document.getElementById('map-info-card').style.display = 'none';
+  if (!best) { document.getElementById('map-info-card').style.display = 'none'; return; }
+
+  if (best.kind === 'planet') return showLeafInfo('planet', best.coord, best.galaxy, best.system, best.planet);
+  if (best.kind === 'object') return showLeafInfo('object', best.coord, null, null, null, best.object);
+  if (best.kind === 'dock')   return showLeafInfo('dock', best.coord, null, null, null, null, best.dock);
+  if (best.kind === 'system') return jumpToMapTarget({ type:'system', coord:best.coord, galaxy:best.galaxy, system:best.system });
+  if (best.kind === 'galaxy') return jumpToMapTarget({ type:'galaxy', coord:best.coord, galaxy:best.galaxy });
 });
 
 const OBJECT_TYPE_LABELS = { black_hole:'Black Hole', asteroid_belt:'Asteroid Belt', small_asteroid_belt:'Asteroid Field', nebula:'Nebula' };
