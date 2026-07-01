@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS ship_walls (
   campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
   cell_x      INTEGER NOT NULL,
   cell_y      INTEGER NOT NULL,
-  dir         TEXT NOT NULL CHECK (dir IN ('r','b')),
+  dir         TEXT NOT NULL CHECK (dir IN ('r','b','d','a')),
   created_at  TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(campaign_id, cell_x, cell_y, dir)
 );

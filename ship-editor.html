@@ -16,23 +16,30 @@ body{background:#050a10;color:#c0d0e0;font-family:'Inter',system-ui,sans-serif;o
 .canvas-wrap{position:relative;overflow:hidden;background:#050a10;}
 canvas#main-canvas{display:block;width:100%;height:100%;cursor:crosshair;}
 
-.editor-topbar{position:absolute;top:0;left:0;right:0;height:46px;background:rgba(5,10,16,.92);border-bottom:1px solid var(--border);backdrop-filter:blur(8px);display:flex;align-items:center;gap:8px;padding:0 14px;z-index:100;}
+/* Topbar */
+.editor-topbar{position:absolute;top:0;left:0;right:0;height:46px;background:rgba(5,10,16,.94);border-bottom:1px solid var(--border);backdrop-filter:blur(8px);display:flex;align-items:center;gap:7px;padding:0 14px;z-index:100;}
 .etb-brand{font-size:13px;font-weight:700;color:#8ab8ff;text-decoration:none;white-space:nowrap;}
-.etb-sep{width:1px;height:22px;background:var(--border);margin:0 2px;}
-.etb-name{font-size:13px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;}
+.etb-sep{width:1px;height:20px;background:var(--border);margin:0 2px;flex-shrink:0;}
+.etb-name{font-size:13px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;}
+.etb-coords{font-size:11px;color:var(--text-faint);font-variant-numeric:tabular-nums;min-width:60px;}
+.save-badge{font-size:10px;padding:2px 8px;border-radius:4px;white-space:nowrap;transition:all .2s;}
+.save-saved{background:rgba(40,160,80,.12);border:1px solid rgba(40,160,80,.25);color:#4acc7a;}
+.save-saving{background:rgba(212,175,55,.12);border:1px solid rgba(212,175,55,.25);color:var(--gold);}
 .live-pip{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-faint);margin-left:auto;transition:opacity .3s;}
 .live-dot{width:7px;height:7px;border-radius:50%;background:#4acc7a;animation:pulse 2s infinite;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.zoom-display{font-size:10px;color:var(--text-faint);font-variant-numeric:tabular-nums;min-width:36px;text-align:right;}
 
-.sb-section{padding:10px 10px 8px;border-bottom:1px solid var(--border);}
+/* Sidebar */
+.sb-section{padding:8px 10px;border-bottom:1px solid var(--border);}
 .sb-label{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-faint);font-weight:700;margin-bottom:7px;padding:0 3px;display:flex;align-items:center;gap:6px;}
 .tool-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px;}
 .tool-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);padding:7px 4px;border-radius:6px;cursor:pointer;font-size:11px;font-family:inherit;transition:all .12s;text-align:center;user-select:none;}
 .tool-btn:hover{background:var(--surface3);color:var(--text);border-color:var(--border2);}
 .tool-btn.active{background:rgba(58,120,212,.2);border-color:var(--accent);color:#7aaeff;}
 .key-hint{font-size:9px;color:var(--text-faint);display:block;margin-top:1px;}
-.tool-btn.active .key-hint{color:rgba(122,174,255,.5);}
-.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:3px 3px;margin-bottom:2px;}
+.tool-btn.active .key-hint{color:rgba(122,174,255,.4);}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:2px 3px;margin-bottom:2px;}
 .toggle-row label{font-size:11px;color:var(--text-dim);}
 .toggle-switch{position:relative;width:30px;height:16px;}
 .toggle-switch input{opacity:0;width:0;height:0;position:absolute;}
@@ -40,18 +47,26 @@ canvas#main-canvas{display:block;width:100%;height:100%;cursor:crosshair;}
 .toggle-switch input:checked+.toggle-track{background:rgba(58,120,212,.4);border-color:var(--accent);}
 .toggle-track::after{content:'';position:absolute;left:1px;top:50%;transform:translateY(-50%);width:12px;height:12px;border-radius:50%;background:var(--text-faint);transition:all .2s;}
 .toggle-switch input:checked+.toggle-track::after{left:calc(100% - 13px);background:#7aaeff;}
-.token-item{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:5px;cursor:default;margin-bottom:2px;}
+.tpl-btn{display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);padding:5px 8px;border-radius:5px;cursor:pointer;font-size:11px;font-family:inherit;width:100%;margin-bottom:3px;transition:all .12s;}
+.tpl-btn:hover{background:var(--surface3);color:var(--text);border-color:var(--border2);}
+.tpl-size{font-size:9px;color:var(--text-faint);}
+.token-item{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:5px;margin-bottom:2px;}
 .token-item:hover{background:var(--surface2);}
 .token-dot{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;}
 .token-name{font-size:11px;color:var(--text-dim);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.tok-remove{background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:12px;padding:2px;line-height:1;border-radius:3px;transition:color .1s;}
+.tok-remove{background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:12px;padding:2px;border-radius:3px;transition:color .1s;line-height:1;}
 .tok-remove:hover{color:#ff8888;}
-.sb-add-btn{background:none;border:none;color:var(--accent);cursor:pointer;font-size:10px;font-family:inherit;padding:0;line-height:1;}
+.sb-add-btn{background:none;border:none;color:var(--accent);cursor:pointer;font-size:10px;font-family:inherit;padding:0;}
 .sb-add-btn:hover{color:#7aaeff;}
 .danger-btn{display:flex;align-items:center;gap:6px;background:none;border:1px solid rgba(160,30,30,.3);color:#ff8888;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-family:inherit;width:100%;transition:all .12s;}
 .danger-btn:hover{background:rgba(160,30,30,.15);border-color:rgba(160,30,30,.5);}
-.player-banner{padding:56px 12px 16px;font-size:11px;color:var(--text-faint);line-height:1.5;border-bottom:1px solid var(--border);}
-.player-banner strong{color:var(--text-dim);display:block;margin-bottom:4px;}
+.player-banner{padding:56px 12px 14px;font-size:11px;color:var(--text-faint);line-height:1.5;border-bottom:1px solid var(--border);}
+.player-banner strong{color:var(--text-dim);display:block;margin-bottom:3px;}
+
+/* Hint bar at bottom of canvas */
+.hint-bar{position:absolute;bottom:0;left:0;right:0;height:26px;background:rgba(5,10,16,.85);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:16px;font-size:10px;color:var(--text-faint);z-index:90;}
+.hint-bar span{display:flex;align-items:center;gap:4px;}
+kbd{background:var(--surface2);border:1px solid var(--border2);border-radius:3px;padding:0px 4px;font-size:9px;font-family:inherit;}
 
 /* Modal */
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(3px);}
@@ -67,26 +82,21 @@ canvas#main-canvas{display:block;width:100%;height:100%;cursor:crosshair;}
 .form-label{display:block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);font-weight:700;margin-bottom:5px;}
 .form-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color .15s;}
 .form-input:focus{border-color:var(--accent);}
-.btn-primary{background:linear-gradient(135deg,#1e4a9a,#2a70d4);border:1px solid #3a80e4;color:#e8f0ff;padding:9px 18px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:all .15s;}
+.btn-primary{background:linear-gradient(135deg,#1e4a9a,#2a70d4);border:1px solid #3a80e4;color:#e8f0ff;padding:9px 18px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;}
 .btn-primary:hover{box-shadow:0 0 14px rgba(58,120,212,.35);}
-.btn-ghost{background:none;border:1px solid var(--border);color:var(--text-dim);padding:8px 14px;border-radius:7px;cursor:pointer;font-size:13px;font-family:inherit;transition:all .12s;}
+.btn-ghost{background:none;border:1px solid var(--border);color:var(--text-dim);padding:8px 14px;border-radius:7px;cursor:pointer;font-size:13px;font-family:inherit;}
 .btn-ghost:hover{background:var(--surface2);color:var(--text);}
 </style>
 </head>
 <body>
-
 <div class="editor-wrap">
 
-  <!-- Sidebar -->
   <aside class="sidebar">
-
-    <!-- Player banner (non-GM) -->
     <div class="player-banner" id="player-banner" style="display:none;">
       <strong>Player View</strong>
-      Click your token on the map to drag it.
+      Click your token to drag it on the map.
     </div>
 
-    <!-- GM Tools -->
     <div class="sb-section" id="sb-tools" style="padding-top:56px;">
       <div class="sb-label">Tools</div>
       <div class="tool-grid">
@@ -97,7 +107,14 @@ canvas#main-canvas{display:block;width:100%;height:100%;cursor:crosshair;}
       </div>
     </div>
 
-    <!-- Grid options -->
+    <div class="sb-section" id="sb-templates">
+      <div class="sb-label">Templates</div>
+      <button class="tpl-btn" onclick="loadTemplate('scout')">Scout <span class="tpl-size">10×9</span></button>
+      <button class="tpl-btn" onclick="loadTemplate('frigate')">Frigate <span class="tpl-size">16×12</span></button>
+      <button class="tpl-btn" onclick="loadTemplate('cruiser')">Cruiser <span class="tpl-size">22×14</span></button>
+      <button class="tpl-btn" onclick="loadTemplate('dreadnought')">Dreadnought <span class="tpl-size">30×20</span></button>
+    </div>
+
     <div class="sb-section">
       <div class="sb-label">View</div>
       <div class="toggle-row">
@@ -106,7 +123,6 @@ canvas#main-canvas{display:block;width:100%;height:100%;cursor:crosshair;}
       </div>
     </div>
 
-    <!-- Tokens -->
     <div class="sb-section" style="flex:1;">
       <div class="sb-label">
         Tokens
@@ -115,24 +131,31 @@ canvas#main-canvas{display:block;width:100%;height:100%;cursor:crosshair;}
       <div id="token-list-sb"></div>
     </div>
 
-    <!-- Clear (GM) -->
     <div class="sb-section" id="sb-clear" style="border-bottom:none;">
       <button class="danger-btn" onclick="clearAll()">🗑 Clear Map</button>
     </div>
-
   </aside>
 
-  <!-- Canvas area -->
   <div class="canvas-wrap" id="canvas-wrap">
     <div class="editor-topbar">
       <a class="etb-brand" id="camp-back" href="dashboard.html">✦ Starbound</a>
       <div class="etb-sep"></div>
       <span class="etb-name" id="camp-name">Loading…</span>
+      <div class="etb-sep"></div>
+      <span class="save-badge save-saved" id="save-badge">● Saved</span>
+      <div class="etb-sep"></div>
+      <span class="etb-coords" id="etb-coords"></span>
       <div class="live-pip" id="live-pip"><div class="live-dot"></div>Live</div>
+      <div class="etb-sep"></div>
+      <span class="zoom-display" id="zoom-display">100%</span>
     </div>
     <canvas id="main-canvas"></canvas>
+    <div class="hint-bar" id="hint-bar">
+      <span><kbd>F</kbd>Floor &nbsp;<kbd>W</kbd>Wall &nbsp;<kbd>E</kbd>Erase &nbsp;<kbd>V</kbd>Move</span>
+      <span><kbd>Ctrl+Z</kbd>Undo</span>
+      <span>Scroll: Zoom &nbsp; Right-drag / Space+drag: Pan</span>
+    </div>
   </div>
-
 </div>
 
 <!-- Add Token Modal -->
@@ -167,31 +190,113 @@ canvas#main-canvas{display:block;width:100%;height:100%;cursor:crosshair;}
 <script src="js/auth.js?v=2"></script>
 <script>
 // ── Constants ────────────────────────────────────────────────
-const CELL      = 32;   // pixels per grid cell
-const EDGE_SNAP = 7;    // pixels from edge to snap to wall
-const TOPBAR    = 46;   // topbar height in px
+const CELL     = 32;   // base cell size in "world" pixels
+const TOPBAR   = 46;
+const HINTBAR  = 26;
+const EDGE_PX  = 7;   // screen-pixel snap radius for wall edge detection
 
-// ── State ────────────────────────────────────────────────────
-let campaignId = null;
-let isGM       = false;
-let currentUser = null;
-let myCharId   = null;
+// ── View state ───────────────────────────────────────────────
+let scale = 1.0;   // zoom multiplier
+let panX  = 48;    // world→screen: screenX = worldX * scale + panX
+let panY  = 16;
 
-let floorTiles = new Set(); // "x,y"
-let walls      = new Set(); // "x,y,r" or "x,y,b"
+// ── App state ────────────────────────────────────────────────
+let campaignId = null, isGM = false, currentUser = null, myCharId = null;
+let floorTiles = new Set();   // "x,y"
+let walls      = new Set();   // "x,y,dir"  dir ∈ {r, b, d, a}
 let tokens     = [];
-
 let activeTool = 'floor';
-let panX = 48, panY = 16;
+
+// ── Interaction state ────────────────────────────────────────
 let isDrawing  = false;
 let lastCell   = null;
-let dragToken  = null;   // {token, curX, curY}
+let dragToken  = null;
 let hoverTgt   = null;
 let panState   = null;   // {startX, startY, origPanX, origPanY}
+let spaceDown  = false;
+
+// ── Undo ─────────────────────────────────────────────────────
+let currentStroke = [];   // ops accumulated during current drag
+const undoStack   = [];   // array of stroke arrays (max 40)
 
 // ── Canvas ───────────────────────────────────────────────────
 const canvas = document.getElementById('main-canvas');
 const ctx    = canvas.getContext('2d');
+
+// ── Ship templates ───────────────────────────────────────────
+const TEMPLATES = {
+  scout: {
+    rows: [
+      '    XX    ',
+      '  XXXXXX  ',
+      ' XXXXXXXX ',
+      'XXXXXXXXXX',
+      'XXXXXXXXXX',
+      'XXXXXXXXXX',
+      ' XXXXXXXX ',
+      '  XXXXXX  ',
+      '    XX    ',
+    ]
+  },
+  frigate: {
+    rows: [
+      '     XXXXXX     ',
+      '   XXXXXXXXXX   ',
+      '  XXXXXXXXXXXX  ',
+      ' XXXXXXXXXXXXXX ',
+      'XXXXXXXXXXXXXXXX',
+      'XXXXXXXXXXXXXXXX',
+      'XXXXXXXXXXXXXXXX',
+      'XXXXXXXXXXXXXXXX',
+      ' XXXXXXXXXXXXXX ',
+      '  XXXXXXXXXXXX  ',
+      '   XXXXXXXXXX   ',
+      '     XXXXXX     ',
+    ]
+  },
+  cruiser: {
+    rows: [
+      '       XXXXXXXX       ',
+      '     XXXXXXXXXXXX     ',
+      '    XXXXXXXXXXXXXX    ',
+      '   XXXXXXXXXXXXXXXX   ',
+      '  XXXXXXXXXXXXXXXXXX  ',
+      'XXXXXXXXXXXXXXXXXXXXXX',
+      'XXXXXXXXXXXXXXXXXXXXXX',
+      'XXXXXXXXXXXXXXXXXXXXXX',
+      'XXXXXXXXXXXXXXXXXXXXXX',
+      'XXXXXXXXXXXXXXXXXXXXXX',
+      '  XXXXXXXXXXXXXXXXXX  ',
+      '   XXXXXXXXXXXXXXXX   ',
+      '    XXXXXXXXXXXXXX    ',
+      '       XXXXXXXX       ',
+    ]
+  },
+  dreadnought: {
+    rows: [
+      '             XX             ',
+      '           XXXXXX           ',
+      '         XXXXXXXXXX         ',
+      '       XXXXXXXXXXXXXX       ',
+      '      XXXXXXXXXXXXXXXX      ',
+      '     XXXXXXXXXXXXXXXXXX     ',
+      '    XXXXXXXXXXXXXXXXXXXX    ',
+      '   XXXXXXXXXXXXXXXXXXXXXX   ',
+      '  XXXXXXXXXXXXXXXXXXXXXXXX  ',
+      ' XXXXXXXXXXXXXXXXXXXXXXXXXX ',
+      'XXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+      'XXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+      'XXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+      'XXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+      ' XXXXXXXXXXXXXXXXXXXXXXXXXX ',
+      '  XXXXXXXXXXXXXXXXXXXXXXXX  ',
+      '   XXXXXXXXXXXXXXXXXXXXXX   ',
+      '    XXXXXXXXXXXXXXXXXXXX    ',
+      '      XXXXXXXXXXXXXXXX      ',
+      '        XXXXXXXXXX          ',
+    ]
+  }
+};
 
 // ── Init ─────────────────────────────────────────────────────
 async function init() {
@@ -211,10 +316,12 @@ async function init() {
   document.getElementById('camp-back').href = `campaign.html?id=${campaignId}`;
 
   if (!isGM) {
-    document.getElementById('sb-tools').style.display   = 'none';
-    document.getElementById('sb-clear').style.display   = 'none';
-    document.getElementById('add-tok-btn').style.display = 'none';
+    document.getElementById('sb-tools').style.display    = 'none';
+    document.getElementById('sb-templates').style.display = 'none';
+    document.getElementById('sb-clear').style.display    = 'none';
+    document.getElementById('add-tok-btn').style.display  = 'none';
     document.getElementById('player-banner').style.display = 'block';
+    document.getElementById('hint-bar').style.display     = 'none';
     activeTool = 'move';
     const { data: mem } = await db.from('campaign_members')
       .select('character_id').eq('campaign_id', campaignId).eq('user_id', currentUser.id).single();
@@ -225,26 +332,23 @@ async function init() {
 
   await Promise.all([loadFloor(), loadWalls(), loadTokens()]);
   subscribeRealtime();
-
   resizeCanvas();
   new ResizeObserver(resizeCanvas).observe(document.getElementById('canvas-wrap'));
 }
 
-// ── Load data ────────────────────────────────────────────────
+// ── Data loaders ─────────────────────────────────────────────
 async function loadFloor() {
   const { data } = await db.from('ship_grid').select('cell_x,cell_y').eq('campaign_id', campaignId);
   floorTiles.clear();
   (data || []).forEach(r => floorTiles.add(`${r.cell_x},${r.cell_y}`));
   render();
 }
-
 async function loadWalls() {
   const { data } = await db.from('ship_walls').select('cell_x,cell_y,dir').eq('campaign_id', campaignId);
   walls.clear();
   (data || []).forEach(r => walls.add(`${r.cell_x},${r.cell_y},${r.dir}`));
   render();
 }
-
 async function loadTokens() {
   const { data } = await db.from('ship_tokens').select('*').eq('campaign_id', campaignId);
   tokens = data || [];
@@ -269,8 +373,8 @@ function subscribeRealtime() {
         p => { const i = tokens.findIndex(t => t.id === p.new.id); if (i >= 0) tokens[i] = p.new; renderTokenList(); render(); })
     .on('postgres_changes', {event:'DELETE', schema:'public', table:'ship_tokens', filter:`campaign_id=eq.${campaignId}`},
         p => { tokens = tokens.filter(t => t.id !== p.old.id); renderTokenList(); render(); })
-    .subscribe(status => {
-      document.getElementById('live-pip').style.opacity = status === 'SUBSCRIBED' ? '1' : '0.4';
+    .subscribe(s => {
+      document.getElementById('live-pip').style.opacity = s === 'SUBSCRIBED' ? '1' : '0.4';
     });
 }
 
@@ -282,53 +386,115 @@ function resizeCanvas() {
   render();
 }
 
+// ── Coordinate helpers ───────────────────────────────────────
+// World → screen:  sx = wx * scale + panX,  sy = wy * scale + panY + TOPBAR
+// Screen → world:  wx = (sx - panX) / scale
+function toGrid(mx, my) {
+  const gx    = (mx - panX) / (CELL * scale);
+  const gy    = (my - panY - TOPBAR) / (CELL * scale);
+  const cellX = Math.floor(gx);
+  const cellY = Math.floor(gy);
+  return { gx, gy, cellX, cellY, fracX: gx - cellX, fracY: gy - cellY };
+}
+
+function mouseToCanvas(e) {
+  const r = canvas.getBoundingClientRect();
+  return { mx: e.clientX - r.left, my: e.clientY - r.top };
+}
+
+// ── Target detection ─────────────────────────────────────────
+function getTarget(mx, my) {
+  const { cellX, cellY, fracX, fracY } = toGrid(mx, my);
+  const snap = EDGE_PX / (CELL * scale); // fraction
+
+  if (activeTool === 'wall' || activeTool === 'erase') {
+    // Edge walls
+    if (fracX < snap && cellX > 0) return { type:'wall', x:cellX-1, y:cellY,   dir:'r' };
+    if (fracX > 1-snap)            return { type:'wall', x:cellX,   y:cellY,   dir:'r' };
+    if (fracY < snap && cellY > 0) return { type:'wall', x:cellX,   y:cellY-1, dir:'b' };
+    if (fracY > 1-snap)            return { type:'wall', x:cellX,   y:cellY,   dir:'b' };
+
+    if (activeTool === 'wall') {
+      // Diagonal walls: which diagonal is mouse closer to?
+      const dBackslash = Math.abs(fracX - fracY);         // \ diagonal
+      const dSlash     = Math.abs(fracX - (1 - fracY));   // / diagonal
+      const dir = dBackslash < dSlash ? 'd' : 'a';
+      return { type:'wall', x:cellX, y:cellY, dir };
+    }
+
+    if (activeTool === 'erase') {
+      // Erase whichever diagonal is present; fallthrough to cell erase otherwise
+      if (walls.has(`${cellX},${cellY},d`)) return { type:'wall', x:cellX, y:cellY, dir:'d' };
+      if (walls.has(`${cellX},${cellY},a`)) return { type:'wall', x:cellX, y:cellY, dir:'a' };
+    }
+  }
+
+  return { type:'cell', x:cellX, y:cellY };
+}
+
+function getTokenAt(mx, my) {
+  const r2 = (CELL * scale * 0.42) ** 2;
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const tok = tokens[i];
+    const cx = panX + (tok.grid_x * CELL + CELL/2) * scale;
+    const cy = panY + TOPBAR + (tok.grid_y * CELL + CELL/2) * scale;
+    if ((mx-cx)**2 + (my-cy)**2 <= r2) return tok;
+  }
+  return null;
+}
+
 // ── Render ───────────────────────────────────────────────────
 function render() {
   const W = canvas.width, H = canvas.height;
-  ctx.clearRect(0, 0, W, H);
-
-  // Background
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#050a10';
   ctx.fillRect(0, 0, W, H);
 
-  const ox = panX;
-  const oy = panY + TOPBAR;
+  // Clip drawing to below topbar / above hintbar
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, TOPBAR, W, H - TOPBAR - HINTBAR);
+  ctx.clip();
+
+  // Apply view transform
+  ctx.setTransform(scale, 0, 0, scale, panX, panY + TOPBAR);
 
   // Floor tiles
   ctx.fillStyle = '#0c1828';
   for (const key of floorTiles) {
     const [x, y] = key.split(',').map(Number);
-    ctx.fillRect(ox + x*CELL + 0.5, oy + y*CELL + 0.5, CELL - 1, CELL - 1);
+    ctx.fillRect(x*CELL + 0.5, y*CELL + 0.5, CELL - 1, CELL - 1);
   }
 
   // Grid lines
   if (document.getElementById('grid-toggle')?.checked !== false) {
-    ctx.strokeStyle = 'rgba(30,50,70,0.6)';
-    ctx.lineWidth = 0.5;
-    const x0 = Math.floor(-ox / CELL) - 1;
-    const x1 = Math.ceil((W - ox) / CELL) + 1;
-    const y0 = Math.floor((-oy + TOPBAR) / CELL) - 1;
-    const y1 = Math.ceil((H - oy) / CELL) + 1;
+    ctx.strokeStyle = 'rgba(30,50,70,0.65)';
+    ctx.lineWidth   = 0.5 / scale;
+    const x0 = Math.floor(-panX / (scale * CELL)) - 1;
+    const x1 = Math.ceil((W - panX) / (scale * CELL)) + 1;
+    const y0 = Math.floor((-panY - TOPBAR) / (scale * CELL)) - 1;
+    const y1 = Math.ceil((H - panY - TOPBAR) / (scale * CELL)) + 1;
     ctx.beginPath();
-    for (let x = x0; x <= x1; x++) { ctx.moveTo(ox + x*CELL, TOPBAR); ctx.lineTo(ox + x*CELL, H); }
-    for (let y = y0; y <= y1; y++) { ctx.moveTo(0, oy + y*CELL); ctx.lineTo(W, oy + y*CELL); }
+    for (let x = x0; x <= x1; x++) { ctx.moveTo(x*CELL, y0*CELL); ctx.lineTo(x*CELL, y1*CELL); }
+    for (let y = y0; y <= y1; y++) { ctx.moveTo(x0*CELL, y*CELL); ctx.lineTo(x1*CELL, y*CELL); }
     ctx.stroke();
   }
 
   // Hover highlight
-  if (hoverTgt && isGM && !dragToken) {
+  if (hoverTgt && isGM && !dragToken && !panState) {
+    ctx.globalAlpha = 0.3;
     if (hoverTgt.type === 'cell') {
-      ctx.globalAlpha = 0.25;
       ctx.fillStyle = activeTool === 'erase' ? '#aa3333' : '#3a78d4';
-      ctx.fillRect(ox + hoverTgt.x*CELL, oy + hoverTgt.y*CELL, CELL, CELL);
-      ctx.globalAlpha = 1;
-    } else if (hoverTgt.type === 'wall') {
-      ctx.globalAlpha = 0.6;
+      ctx.fillRect(hoverTgt.x*CELL, hoverTgt.y*CELL, CELL, CELL);
+    }
+    ctx.globalAlpha = 1;
+    if (hoverTgt.type === 'wall') {
+      ctx.globalAlpha = 0.65;
       ctx.strokeStyle = '#7aaeff';
-      ctx.lineWidth = 4;
+      ctx.lineWidth   = 4 / scale;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      drawEdgePath(hoverTgt.x, hoverTgt.y, hoverTgt.dir, ox, oy);
+      strokeWall(hoverTgt.x, hoverTgt.y, hoverTgt.dir);
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
@@ -336,118 +502,78 @@ function render() {
 
   // Walls
   ctx.strokeStyle = '#9abcd8';
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth   = 2.5 / scale;
   ctx.lineCap = 'round';
+  ctx.beginPath();
   for (const key of walls) {
     const [xs, ys, dir] = key.split(',');
-    ctx.beginPath();
-    drawEdgePath(+xs, +ys, dir, ox, oy);
-    ctx.stroke();
+    strokeWall(+xs, +ys, dir);
   }
+  ctx.stroke();
 
   // Tokens (skip dragging one)
   for (const tok of tokens) {
     if (dragToken && dragToken.token.id === tok.id) continue;
-    drawToken(tok, ox + tok.grid_x*CELL + CELL/2, oy + tok.grid_y*CELL + CELL/2);
+    const cx = tok.grid_x * CELL + CELL/2;
+    const cy = tok.grid_y * CELL + CELL/2;
+    drawToken(tok, cx, cy);
   }
   if (dragToken) {
-    // Snap preview cell highlight
-    const {cellX, cellY} = canvasToGrid(dragToken.curX, dragToken.curY);
-    ctx.globalAlpha = 0.2;
+    // Snap-preview highlight
+    const { cellX, cellY } = toGrid(dragToken.curX, dragToken.curY);
+    ctx.globalAlpha = 0.22;
     ctx.fillStyle = '#4acc7a';
-    ctx.fillRect(ox + cellX*CELL, oy + cellY*CELL, CELL, CELL);
+    ctx.fillRect(cellX*CELL, cellY*CELL, CELL, CELL);
     ctx.globalAlpha = 1;
-    drawToken(dragToken.token, dragToken.curX, dragToken.curY);
+    // Draw token at mouse in world coords
+    const wx = (dragToken.curX - panX) / scale;
+    const wy = (dragToken.curY - panY - TOPBAR) / scale;
+    drawToken(dragToken.token, wx, wy);
   }
+
+  ctx.restore();
 }
 
-function drawEdgePath(x, y, dir, ox, oy) {
-  if (dir === 'r') {
-    ctx.moveTo(ox + (x+1)*CELL, oy + y*CELL);
-    ctx.lineTo(ox + (x+1)*CELL, oy + (y+1)*CELL);
-  } else {
-    ctx.moveTo(ox + x*CELL,     oy + (y+1)*CELL);
-    ctx.lineTo(ox + (x+1)*CELL, oy + (y+1)*CELL);
-  }
+function strokeWall(x, y, dir) {
+  if      (dir === 'r') { ctx.moveTo((x+1)*CELL, y*CELL);     ctx.lineTo((x+1)*CELL, (y+1)*CELL); }
+  else if (dir === 'b') { ctx.moveTo(x*CELL,     (y+1)*CELL); ctx.lineTo((x+1)*CELL, (y+1)*CELL); }
+  else if (dir === 'd') { ctx.moveTo(x*CELL,     y*CELL);     ctx.lineTo((x+1)*CELL, (y+1)*CELL); } // backslash
+  else if (dir === 'a') { ctx.moveTo((x+1)*CELL, y*CELL);     ctx.lineTo(x*CELL,     (y+1)*CELL); } // forward slash
 }
 
-function drawToken(tok, cx, cy) {
+function drawToken(tok, wx, wy) {
   const r = CELL * 0.38;
-  // Shadow
-  ctx.shadowColor = 'rgba(0,0,0,0.5)';
-  ctx.shadowBlur = 6;
+  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur  = 6 / scale;
   ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI*2);
+  ctx.arc(wx, wy, r, 0, Math.PI*2);
   ctx.fillStyle = tok.color || '#3a78d4';
   ctx.fill();
   ctx.shadowBlur = 0;
   ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 1.5 / scale;
   ctx.stroke();
   ctx.fillStyle = '#fff';
-  ctx.font = `bold ${Math.round(r * 0.9)}px Inter,system-ui,sans-serif`;
+  ctx.font = `bold ${Math.round(r * 0.88)}px Inter,system-ui,sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText((tok.label || '?').slice(0, 2).toUpperCase(), cx, cy);
-}
-
-// ── Coordinate helpers ───────────────────────────────────────
-function mouseToCanvas(e) {
-  const rect = canvas.getBoundingClientRect();
-  return { mx: e.clientX - rect.left, my: e.clientY - rect.top };
-}
-
-function canvasToGrid(mx, my) {
-  const gx    = (mx - panX) / CELL;
-  const gy    = (my - panY - TOPBAR) / CELL;
-  const cellX = Math.floor(gx);
-  const cellY = Math.floor(gy);
-  return { gx, gy, cellX, cellY, fracX: gx - cellX, fracY: gy - cellY };
-}
-
-// Returns {type:'cell',x,y} or {type:'wall',x,y,dir} based on active tool
-function getTarget(mx, my) {
-  const { cellX, cellY, fracX, fracY } = canvasToGrid(mx, my);
-  const snap = EDGE_SNAP / CELL;
-
-  if (activeTool === 'wall' || activeTool === 'erase') {
-    if (fracX < snap && cellX > 0) return { type:'wall', x:cellX-1, y:cellY,   dir:'r' };
-    if (fracX > 1-snap)            return { type:'wall', x:cellX,   y:cellY,   dir:'r' };
-    if (fracY < snap && cellY > 0) return { type:'wall', x:cellX,   y:cellY-1, dir:'b' };
-    if (fracY > 1-snap)            return { type:'wall', x:cellX,   y:cellY,   dir:'b' };
-  }
-
-  return { type:'cell', x:cellX, y:cellY };
-}
-
-function getTokenAt(mx, my) {
-  const r2 = (CELL * 0.42) ** 2;
-  for (let i = tokens.length - 1; i >= 0; i--) {
-    const tok = tokens[i];
-    const cx = panX + tok.grid_x*CELL + CELL/2;
-    const cy = panY + TOPBAR + tok.grid_y*CELL + CELL/2;
-    if ((mx-cx)**2 + (my-cy)**2 <= r2) return tok;
-  }
-  return null;
+  ctx.fillText((tok.label || '?').slice(0, 2).toUpperCase(), wx, wy);
 }
 
 // ── Mouse events ─────────────────────────────────────────────
 canvas.addEventListener('mousedown', e => {
   const { mx, my } = mouseToCanvas(e);
-  if (my < TOPBAR) return;
+  if (my < TOPBAR || my > canvas.height - HINTBAR) return;
 
-  // Right/middle click = pan
-  if (e.button === 1 || e.button === 2) {
+  if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceDown)) {
     panState = { startX: e.clientX, startY: e.clientY, origPanX: panX, origPanY: panY };
     canvas.style.cursor = 'grabbing';
     return;
   }
   if (e.button !== 0) return;
 
-  // Token hit check (anyone can move their own; GM can move all)
   const tok = getTokenAt(mx, my);
-  const canDrag = tok && (isGM || tok.character_id === myCharId);
-  if (canDrag) {
+  if (tok && (isGM || tok.character_id === myCharId)) {
     dragToken = { token: tok, curX: mx, curY: my };
     render();
     return;
@@ -455,8 +581,9 @@ canvas.addEventListener('mousedown', e => {
 
   if (!isGM || activeTool === 'move') return;
 
-  isDrawing = true;
-  lastCell  = null;
+  isDrawing     = true;
+  lastCell      = null;
+  currentStroke = [];
   applyTool(mx, my, true);
 });
 
@@ -477,6 +604,12 @@ canvas.addEventListener('mousemove', e => {
     return;
   }
 
+  // Update coords display
+  if (my >= TOPBAR) {
+    const { cellX, cellY } = toGrid(mx, my);
+    document.getElementById('etb-coords').textContent = `${cellX}, ${cellY}`;
+  }
+
   hoverTgt = (isGM && my >= TOPBAR && activeTool !== 'move') ? getTarget(mx, my) : null;
 
   if (isDrawing && my >= TOPBAR) applyTool(mx, my, false);
@@ -484,27 +617,44 @@ canvas.addEventListener('mousemove', e => {
 });
 
 canvas.addEventListener('mouseup', async e => {
-  panState = null;
-  canvas.style.cursor = activeTool === 'move' ? 'default' : 'crosshair';
-  isDrawing = false;
-  lastCell  = null;
+  if (panState) {
+    panState = null;
+    canvas.style.cursor = spaceDown ? 'grab' : (activeTool === 'move' ? 'default' : 'crosshair');
+    return;
+  }
 
   if (dragToken) {
     const { mx, my } = mouseToCanvas(e);
-    const { cellX, cellY } = canvasToGrid(mx, my);
+    const { cellX, cellY } = toGrid(mx, my);
     const tok = dragToken.token;
     dragToken = null;
-    tok.grid_x = cellX;
-    tok.grid_y = cellY;
+    tok.grid_x = cellX; tok.grid_y = cellY;
     render();
+    setSaveStatus('saving');
     await db.from('ship_tokens').update({ grid_x: cellX, grid_y: cellY }).eq('id', tok.id);
+    setSaveStatus('saved');
+    return;
   }
+
+  if (currentStroke.length > 0) {
+    undoStack.push([...currentStroke]);
+    if (undoStack.length > 40) undoStack.shift();
+    currentStroke = [];
+  }
+  isDrawing = false;
+  lastCell  = null;
 });
 
 canvas.addEventListener('mouseleave', () => {
   hoverTgt  = null;
   isDrawing = false;
   panState  = null;
+  document.getElementById('etb-coords').textContent = '';
+  if (currentStroke.length > 0) {
+    undoStack.push([...currentStroke]);
+    if (undoStack.length > 40) undoStack.shift();
+    currentStroke = [];
+  }
   render();
 });
 
@@ -512,8 +662,15 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  panX -= e.deltaX;
-  panY -= e.deltaY;
+  const { mx, my } = mouseToCanvas(e);
+  if (my < TOPBAR) return;
+  const factor   = e.deltaY < 0 ? 1.1 : 1/1.1;
+  const newScale = Math.max(0.2, Math.min(5, scale * factor));
+  // Zoom toward cursor
+  panX = mx - (mx - panX) * (newScale / scale);
+  panY = (my - TOPBAR) - ((my - TOPBAR) - panY) * (newScale / scale);
+  scale = newScale;
+  document.getElementById('zoom-display').textContent = Math.round(scale * 100) + '%';
   render();
 }, { passive: false });
 
@@ -528,41 +685,185 @@ function applyTool(mx, my, isFirst) {
 
     if (activeTool === 'floor' && !floorTiles.has(key)) {
       floorTiles.add(key);
-      db.from('ship_grid').insert({ campaign_id: campaignId, cell_x: tgt.x, cell_y: tgt.y });
+      currentStroke.push({ op:'addFloor', x:tgt.x, y:tgt.y, key });
+      setSaveStatus('saving');
+      db.from('ship_grid').insert({ campaign_id:campaignId, cell_x:tgt.x, cell_y:tgt.y })
+        .then(() => setSaveStatus('saved'));
     } else if (activeTool === 'erase' && floorTiles.has(key)) {
       floorTiles.delete(key);
-      db.from('ship_grid').delete().eq('campaign_id', campaignId).eq('cell_x', tgt.x).eq('cell_y', tgt.y);
+      currentStroke.push({ op:'removeFloor', x:tgt.x, y:tgt.y, key });
+      setSaveStatus('saving');
+      db.from('ship_grid').delete().eq('campaign_id',campaignId).eq('cell_x',tgt.x).eq('cell_y',tgt.y)
+        .then(() => setSaveStatus('saved'));
     }
+
   } else if (tgt.type === 'wall' && isFirst) {
     const key = `${tgt.x},${tgt.y},${tgt.dir}`;
-    if (walls.has(key)) {
+    if (walls.has(key) || activeTool === 'erase') {
+      if (!walls.has(key)) return;
       walls.delete(key);
-      db.from('ship_walls').delete().eq('campaign_id', campaignId).eq('cell_x', tgt.x).eq('cell_y', tgt.y).eq('dir', tgt.dir);
+      currentStroke.push({ op:'removeWall', x:tgt.x, y:tgt.y, dir:tgt.dir, key });
+      setSaveStatus('saving');
+      db.from('ship_walls').delete().eq('campaign_id',campaignId).eq('cell_x',tgt.x).eq('cell_y',tgt.y).eq('dir',tgt.dir)
+        .then(() => setSaveStatus('saved'));
     } else {
       walls.add(key);
-      db.from('ship_walls').insert({ campaign_id: campaignId, cell_x: tgt.x, cell_y: tgt.y, dir: tgt.dir });
+      currentStroke.push({ op:'addWall', x:tgt.x, y:tgt.y, dir:tgt.dir, key });
+      setSaveStatus('saving');
+      db.from('ship_walls').insert({ campaign_id:campaignId, cell_x:tgt.x, cell_y:tgt.y, dir:tgt.dir })
+        .then(() => setSaveStatus('saved'));
     }
   }
 
   render();
 }
 
-// ── Tool selection ───────────────────────────────────────────
+// ── Undo ─────────────────────────────────────────────────────
+async function undo() {
+  const stroke = undoStack.pop();
+  if (!stroke) return;
+  setSaveStatus('saving');
+  for (const op of [...stroke].reverse()) {
+    if (op.op === 'addFloor') {
+      floorTiles.delete(op.key);
+      await db.from('ship_grid').delete().eq('campaign_id',campaignId).eq('cell_x',op.x).eq('cell_y',op.y);
+    } else if (op.op === 'removeFloor') {
+      floorTiles.add(op.key);
+      await db.from('ship_grid').insert({ campaign_id:campaignId, cell_x:op.x, cell_y:op.y });
+    } else if (op.op === 'addWall') {
+      walls.delete(op.key);
+      await db.from('ship_walls').delete().eq('campaign_id',campaignId).eq('cell_x',op.x).eq('cell_y',op.y).eq('dir',op.dir);
+    } else if (op.op === 'removeWall') {
+      walls.add(op.key);
+      await db.from('ship_walls').insert({ campaign_id:campaignId, cell_x:op.x, cell_y:op.y, dir:op.dir });
+    }
+  }
+  setSaveStatus('saved');
+  render();
+}
+
+// ── Save status ───────────────────────────────────────────────
+let saveTimer = null;
+function setSaveStatus(s) {
+  const el = document.getElementById('save-badge');
+  if (!el) return;
+  clearTimeout(saveTimer);
+  if (s === 'saving') {
+    el.className = 'save-badge save-saving';
+    el.textContent = '● Saving…';
+  } else {
+    el.className = 'save-badge save-saved';
+    el.textContent = '● Saved';
+  }
+}
+
+// ── Tool selection ────────────────────────────────────────────
 function setTool(t) {
   activeTool = t;
   ['floor','wall','erase','move'].forEach(id => {
     document.getElementById('t-' + id)?.classList.toggle('active', id === t);
   });
-  canvas.style.cursor = t === 'move' ? 'default' : 'crosshair';
+  canvas.style.cursor = (t === 'move' || spaceDown) ? (spaceDown ? 'grab' : 'default') : 'crosshair';
 }
 
+// ── Keyboard ─────────────────────────────────────────────────
 window.addEventListener('keydown', e => {
-  if (!isGM || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === ' ' && !spaceDown) {
+    spaceDown = true;
+    canvas.style.cursor = 'grab';
+  }
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); undo(); return; }
+
+  if (!isGM) return;
   const map = { f:'floor', w:'wall', e:'erase', v:'move' };
   if (map[e.key.toLowerCase()]) setTool(map[e.key.toLowerCase()]);
 });
 
-// ── Token UI ─────────────────────────────────────────────────
+window.addEventListener('keyup', e => {
+  if (e.key === ' ') {
+    spaceDown = false;
+    canvas.style.cursor = activeTool === 'move' ? 'default' : 'crosshair';
+  }
+});
+
+// ── Templates ─────────────────────────────────────────────────
+async function loadTemplate(name) {
+  if (!confirm(`Load ${name} template? This will replace the current floor and walls.`)) return;
+
+  const tpl = TEMPLATES[name];
+  if (!tpl) return;
+
+  // Parse tiles
+  const newFloor = new Set();
+  tpl.rows.forEach((row, y) => {
+    [...row].forEach((c, x) => { if (c === 'X') newFloor.add(`${x},${y}`); });
+  });
+
+  // Auto-generate boundary walls
+  const newWalls = new Set();
+  for (const key of newFloor) {
+    const [x, y] = key.split(',').map(Number);
+    if (!newFloor.has(`${x+1},${y}`)) newWalls.add(`${x},${y},r`);
+    if (!newFloor.has(`${x},${y+1}`)) newWalls.add(`${x},${y},b`);
+    if (x > 0 && !newFloor.has(`${x-1},${y}`)) newWalls.add(`${x-1},${y},r`);
+    if (y > 0 && !newFloor.has(`${x},${y-1}`)) newWalls.add(`${x},${y-1},b`);
+  }
+
+  setSaveStatus('saving');
+
+  // Clear DB
+  await Promise.all([
+    db.from('ship_grid').delete().eq('campaign_id', campaignId),
+    db.from('ship_walls').delete().eq('campaign_id', campaignId),
+  ]);
+
+  // Insert floor tiles (batch)
+  const floorRows = [...newFloor].map(k => {
+    const [x, y] = k.split(',').map(Number);
+    return { campaign_id: campaignId, cell_x: x, cell_y: y };
+  });
+  if (floorRows.length) await db.from('ship_grid').insert(floorRows);
+
+  // Insert walls (batch)
+  const wallRows = [...newWalls].map(k => {
+    const [x, y, dir] = k.split(',');
+    return { campaign_id: campaignId, cell_x: +x, cell_y: +y, dir };
+  });
+  if (wallRows.length) await db.from('ship_walls').insert(wallRows);
+
+  // Update local state
+  floorTiles = newFloor;
+  walls      = newWalls;
+  undoStack.length = 0;
+
+  // Center view on template
+  const maxX = Math.max(...[...newFloor].map(k => +k.split(',')[0]));
+  const maxY = Math.max(...[...newFloor].map(k => +k.split(',')[1]));
+  panX = (canvas.width  / 2) - ((maxX / 2) * CELL * scale);
+  panY = (canvas.height / 2 - TOPBAR) - ((maxY / 2) * CELL * scale);
+
+  setSaveStatus('saved');
+  render();
+}
+
+// ── Clear map ─────────────────────────────────────────────────
+async function clearAll() {
+  if (!confirm('Clear all floor tiles and walls? Tokens stay.')) return;
+  setSaveStatus('saving');
+  await Promise.all([
+    db.from('ship_grid').delete().eq('campaign_id', campaignId),
+    db.from('ship_walls').delete().eq('campaign_id', campaignId),
+  ]);
+  floorTiles.clear();
+  walls.clear();
+  undoStack.length = 0;
+  setSaveStatus('saved');
+  render();
+}
+
+// ── Token UI ──────────────────────────────────────────────────
 function renderTokenList() {
   const el = document.getElementById('token-list-sb');
   if (!el) return;
@@ -572,7 +873,7 @@ function renderTokenList() {
         <div class="token-item">
           <div class="token-dot" style="background:${t.color||'#3a78d4'}">${(t.label||'?')[0].toUpperCase()}</div>
           <span class="token-name">${t.label}${t.is_npc ? ' <span style="font-size:9px;color:#ff9999;">[NPC]</span>' : ''}</span>
-          ${isGM ? `<button class="tok-remove" onclick="removeToken('${t.id}')" title="Remove">✕</button>` : ''}
+          ${isGM ? `<button class="tok-remove" onclick="removeToken('${t.id}')">✕</button>` : ''}
         </div>`).join('');
 }
 
@@ -580,15 +881,16 @@ async function addToken() {
   const label = document.getElementById('tok-label').value.trim() || 'Token';
   const color = document.getElementById('tok-color').value;
   const isNpc = document.getElementById('tok-npc').checked;
-  const spawnX = Math.max(0, Math.round((canvas.width  / 2 - panX) / CELL));
-  const spawnY = Math.max(0, Math.round((canvas.height / 2 - panY - TOPBAR) / CELL));
+  const spawnX = Math.max(0, Math.round((canvas.width  / 2 - panX) / (CELL * scale)));
+  const spawnY = Math.max(0, Math.round((canvas.height / 2 - panY - TOPBAR) / (CELL * scale)));
 
+  setSaveStatus('saving');
   const { data, error } = await db.from('ship_tokens').insert({
     campaign_id: campaignId, label, color, is_npc: isNpc,
     grid_x: spawnX, grid_y: spawnY
   }).select().single();
-
   if (!error && data) { tokens.push(data); renderTokenList(); render(); }
+  setSaveStatus('saved');
   document.getElementById('modal-add-token').classList.remove('open');
   document.getElementById('tok-label').value = '';
   document.getElementById('tok-npc').checked = false;
@@ -596,25 +898,15 @@ async function addToken() {
 
 async function removeToken(id) {
   if (!confirm('Remove this token from the map?')) return;
+  setSaveStatus('saving');
   await db.from('ship_tokens').delete().eq('id', id);
   tokens = tokens.filter(t => t.id !== id);
+  setSaveStatus('saved');
   renderTokenList();
   render();
 }
 
-// ── Clear map ────────────────────────────────────────────────
-async function clearAll() {
-  if (!confirm('Clear all floor tiles and walls? Tokens will stay.')) return;
-  await Promise.all([
-    db.from('ship_grid').delete().eq('campaign_id', campaignId),
-    db.from('ship_walls').delete().eq('campaign_id', campaignId),
-  ]);
-  floorTiles.clear();
-  walls.clear();
-  render();
-}
-
-// ── Boot ─────────────────────────────────────────────────────
+// ── Boot ──────────────────────────────────────────────────────
 init();
 </script>
 </body>
