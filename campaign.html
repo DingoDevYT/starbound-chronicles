@@ -551,13 +551,21 @@ const shipCanvas = document.getElementById('ship-canvas');
 const shipCtx    = shipCanvas.getContext('2d');
 
 async function loadShip() {
-  const { data: sd } = await db.from('campaign_ships')
-    .select('*, ship_types(*), left_wing:ship_components!left_wing_id(*), right_wing:ship_components!right_wing_id(*), thruster:ship_components!thruster_id(*)')
+  const { data: sd, error: shipErr } = await db.from('campaign_ships')
+    .select('*')
     .eq('campaign_id', campaignId)
     .maybeSingle();
 
+  if (shipErr) console.error('loadShip error:', shipErr);
+
   shipData = sd || null;
-  shipType = sd?.ship_types || null;
+  shipType = null;
+
+  if (sd?.ship_type_id) {
+    const { data: ht, error: hullErr } = await db.from('ship_types').select('*').eq('id', sd.ship_type_id).maybeSingle();
+    if (hullErr) console.error('loadShipType error:', hullErr);
+    shipType = ht || null;
+  }
 
   if (shipData) {
     document.getElementById('ship-name').textContent  = shipData.ship_name || 'Unnamed Vessel';
