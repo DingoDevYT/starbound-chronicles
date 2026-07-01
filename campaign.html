@@ -160,6 +160,7 @@
 .hull-card-desc { font-size:12px; color:var(--text-dim); line-height:1.5; margin-bottom:10px; }
 .hull-card-stats { display:flex; gap:8px; flex-wrap:wrap; }
 .hull-card-stats span { font-size:11px; background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:2px 7px; color:var(--text-faint); }
+.cost-pill { margin-left:auto; background:rgba(212,175,55,.12) !important; border-color:rgba(212,175,55,.35) !important; color:#d4af37 !important; font-weight:600; }
 </style>
 </head>
 <body>
@@ -370,9 +371,15 @@
   <div class="modal" style="max-width:620px;">
     <div class="modal-header"><span class="modal-title">Assign Campaign Ship</span><button class="modal-close" onclick="closeModal('modal-setup-ship')">✕</button></div>
     <div class="modal-body">
-      <div class="form-group" style="margin-bottom:18px;">
-        <label class="form-label">Ship Name</label>
-        <input class="form-input" id="setup-ship-name" placeholder="e.g. The Iron Meridian">
+      <div style="display:grid; grid-template-columns:1fr auto; gap:12px; margin-bottom:18px;">
+        <div class="form-group">
+          <label class="form-label">Ship Name</label>
+          <input class="form-input" id="setup-ship-name" placeholder="e.g. The Iron Meridian">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hull Color</label>
+          <input type="color" id="setup-ship-color" value="#2a4a6a" style="width:52px; height:40px; padding:2px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; cursor:pointer;">
+        </div>
       </div>
       <div class="form-label" style="margin-bottom:10px;">Choose Hull</div>
       <div id="hull-picker" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-height:340px;overflow-y:auto;">
@@ -691,6 +698,37 @@ function getSpriteImg(path) {
 }
 function spriteReady(img) { return img && img.complete && img.naturalWidth > 0; }
 
+// A component can override the hull-size default art via sprite_key (a filename
+// in assets/ship/ without extension). Falls back to the default when unset.
+function resolveSprite(component, fallbackPath) {
+  return component?.sprite_key ? getSpriteImg(`assets/ship/${component.sprite_key}.png`) : getSpriteImg(fallbackPath);
+}
+
+// Tint a sprite with the ship's chosen color, preserving its shading/detail
+// (multiply the color over the art, then clip back to the original alpha shape).
+// Cached per image+color so repeated frames don't redo the compositing.
+let tintCache = {};
+function getTintedSprite(img, color) {
+  if (!spriteReady(img) || !color) return img;
+  const key = img.src + '|' + color;
+  if (tintCache[key]) return tintCache[key];
+
+  const off = document.createElement('canvas');
+  off.width = img.naturalWidth;
+  off.height = img.naturalHeight;
+  const octx = off.getContext('2d');
+  octx.drawImage(img, 0, 0);
+  octx.globalCompositeOperation = 'multiply';
+  octx.fillStyle = color;
+  octx.fillRect(0, 0, off.width, off.height);
+  octx.globalCompositeOperation = 'destination-in';
+  octx.drawImage(img, 0, 0);
+  octx.globalCompositeOperation = 'source-over';
+
+  tintCache[key] = off;
+  return off;
+}
+
 function drawShipMap() {
   const W = shipCanvas.offsetWidth || 800;
   shipCanvas.width  = W;
@@ -740,6 +778,7 @@ function drawShipMap() {
 
   // Draw hull body sprite — contain-fit (aspect preserved) within the floor_rows bounding box
   const sizeAssets = SHIP_SIZE_ASSET[shipType.size] || SHIP_SIZE_ASSET.medium;
+  const hullColor = shipData?.color || null;
   const bodyImg = getSpriteImg(sizeAssets.body);
   const boxX = gx(0), boxY = gy(0), boxW = gridW * cs, boxH = gridH * cs;
   const bodyNW = bodyImg.naturalWidth  || 384;
@@ -750,36 +789,38 @@ function drawShipMap() {
   const bodyY = boxY + (boxH - bodyH) / 2;
 
   if (spriteReady(bodyImg)) {
-    shipCtx.drawImage(bodyImg, bodyX, bodyY, bodyW, bodyH);
+    shipCtx.drawImage(getTintedSprite(bodyImg, hullColor), bodyX, bodyY, bodyW, bodyH);
   } else {
     shipCtx.fillStyle = '#0e1a2e';
     shipCtx.fillRect(bodyX, bodyY, bodyW, bodyH);
   }
 
   // Wings and thruster share the body's native-to-canvas scale, so their built-in anchor
-  // edges land flush against the body regardless of which hull size is active.
-  const wingImg = getSpriteImg(sizeAssets.wing);
-  const wingW = (wingImg.naturalWidth  || 256) * fitScale;
-  const wingH = (wingImg.naturalHeight || 512) * fitScale;
+  // edges land flush against the body regardless of which hull size is active. Each slot
+  // can carry a different equipped component, so left/right wings resolve independently.
+  const leftWingImg  = resolveSprite(shipComponents.left_wing,  sizeAssets.wing);
+  const rightWingImg = resolveSprite(shipComponents.right_wing, sizeAssets.wing);
+  const wingW = (leftWingImg.naturalWidth  || 256) * fitScale;
+  const wingH = (leftWingImg.naturalHeight || 512) * fitScale;
   const lwX = bodyX - wingW, lwY = bodyY + (bodyH - wingH) / 2;
   const rwX = bodyX + bodyW, rwY = lwY;
 
-  if (spriteReady(wingImg)) {
-    shipCtx.drawImage(wingImg, lwX, lwY, wingW, wingH);
+  if (spriteReady(leftWingImg))  shipCtx.drawImage(getTintedSprite(leftWingImg, hullColor), lwX, lwY, wingW, wingH);
+  if (spriteReady(rightWingImg)) {
     shipCtx.save();
     shipCtx.translate(rwX + wingW, rwY);
     shipCtx.scale(-1, 1);
-    shipCtx.drawImage(wingImg, 0, 0, wingW, wingH);
+    shipCtx.drawImage(getTintedSprite(rightWingImg, hullColor), 0, 0, wingW, wingH);
     shipCtx.restore();
   }
   slotRects.left_wing  = { x: lwX, y: lwY, w: wingW, h: wingH };
   slotRects.right_wing = { x: rwX, y: rwY, w: wingW, h: wingH };
 
-  const thrImg = getSpriteImg(sizeAssets.thruster);
+  const thrImg = resolveSprite(shipComponents.thruster, sizeAssets.thruster);
   const thrW = (thrImg.naturalWidth  || 256) * fitScale;
   const thrH = (thrImg.naturalHeight || 256) * fitScale;
   const thrX = bodyX + (bodyW - thrW) / 2, thrY = bodyY + bodyH;
-  if (spriteReady(thrImg)) shipCtx.drawImage(thrImg, thrX, thrY, thrW, thrH);
+  if (spriteReady(thrImg)) shipCtx.drawImage(getTintedSprite(thrImg, hullColor), thrX, thrY, thrW, thrH);
   slotRects.thruster = { x: thrX, y: thrY, w: thrW, h: thrH };
 
   // Component name labels (GM click targets — the sprite itself is the visual, this is just info)
@@ -1299,6 +1340,7 @@ let allHullTypes = [], selectedHullId = null;
 async function openSetupShip() {
   selectedHullId = shipData?.ship_type_id || null;
   document.getElementById('setup-ship-name').value = shipData?.ship_name || '';
+  document.getElementById('setup-ship-color').value = shipData?.color || '#2a4a6a';
   document.getElementById('modal-setup-ship').querySelector('.modal-title').textContent = shipData ? 'Edit Campaign Ship' : 'Assign Campaign Ship';
   document.getElementById('setup-ship-save-btn').textContent = shipData ? 'Save Changes' : 'Assign Ship';
   showError('setup-ship-error', '');
@@ -1324,6 +1366,7 @@ async function openSetupShip() {
         <span>Speed ${h.speed_base}</span>
         <span>Fuel ${h.fuel_capacity}</span>
         <span>Crew ${h.crew_capacity}</span>
+        <span class="cost-pill" title="Market value — GM sets the actual price">~${(h.cost_credits||0).toLocaleString()}¢</span>
       </div>
     </div>`).join('');
 
@@ -1350,8 +1393,9 @@ async function createCampaignShip() {
   if (!hull) return;
 
   const hullChanged = !shipData || shipData.ship_type_id !== selectedHullId;
+  const color = document.getElementById('setup-ship-color').value;
 
-  const payload = { campaign_id: campaignId, ship_type_id: hull.id, ship_name: name };
+  const payload = { campaign_id: campaignId, ship_type_id: hull.id, ship_name: name, color };
   if (hullChanged) {
     // Auto-equip a default wing/thruster compatible with the new hull so slots aren't left empty
     const [{ data: defaultWing }, { data: defaultThruster }] = await Promise.all([
@@ -1407,6 +1451,7 @@ async function openEquipSlot(slotKey) {
         ${c.hp_mod    ? `<span>HP ${c.hp_mod>0?'+':''}${c.hp_mod}</span>`          : ''}
         ${c.fuel_mod  ? `<span>Fuel ${c.fuel_mod>0?'+':''}${c.fuel_mod}</span>`    : ''}
         ${c.fuel_regen ? `<span>Regen +${c.fuel_regen}/turn</span>` : ''}
+        <span class="cost-pill" title="Market value — GM sets the actual price">~${(c.cost_credits||0).toLocaleString()}¢</span>
       </div>
     </div>`).join('');
 
