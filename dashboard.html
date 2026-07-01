@@ -314,7 +314,7 @@ const PB_MAX    = 14;
 const PB_BUDGET = 20;
 
 const SPECIES_LABELS = { human:'Human', kragol:'Kragol', skitterling:'Skitterling', myxos:'Myxos', arboran:'Arboran' };
-const SPECIES_ICONS  = { human:'assets/NN_Species_Human.png', kragol:'assets/NN_Species_Kragol.png',
+const SPECIES_IMGS   = { human:'assets/NN_Species_Human.png', kragol:'assets/NN_Species_Kragol.png',
                          skitterling:'assets/NN_Species_Skitterling.png', myxos:'assets/NN_Species_Myxos.png',
                          arboran:'assets/NN_Species_Arboran.png' };
 const ROLE_ICONS = { pilot:'🚀', gunsmith:'🔫', technician:'⚙️', smuggler:'🗣️' };
@@ -491,7 +491,7 @@ async function loadCharacters() {
   grid.innerHTML = chars.map(c => `
     <div class="char-card" style="--card-top:${speciesColor(c.species)};cursor:pointer;" onclick="window.location.href='character.html?id=${c.id}'">
       <div class="char-card-icon" style="padding:0;overflow:hidden;border-radius:10px;">
-        ${SPECIES_ICONS[c.species] ? `<img src="${SPECIES_ICONS[c.species]}" alt="${c.species}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">` : '🧑'}
+        ${SPECIES_IMGS[c.species] ? `<img src="${SPECIES_IMGS[c.species]}" alt="${c.species}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">` : '🧑'}
       </div>
       <div class="char-card-name">${esc(c.name)}</div>
       <div class="char-card-meta">

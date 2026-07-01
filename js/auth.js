@@ -72,22 +72,3 @@ function getInitials(name = '') {
   return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
 }
 
-// Species label map
-const SPECIES_LABELS = {
-  human:      'Human',
-  kragol:     'Kragol',
-  skitterling:'Skitterling',
-  myxos:      'Myxos',
-  arboran:    'Arboran',
-  kaelen:     'Kaelen',
-};
-
-const SPECIES_ICONS = {
-  human: '🧑', kragol: '🪨', skitterling: '🐾',
-  myxos: '🫧', arboran: '🌿', kaelen: '💠',
-};
-
-const ROLE_ICONS = {
-  pilot: '🚀', engineer: '⚙️', gunsmith: '🔧', face: '🗣️',
-  medic: '💊', navigator: '🧭', science: '🔭', heavy: '🛡️',
-};
