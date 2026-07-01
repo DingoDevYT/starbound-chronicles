@@ -77,6 +77,12 @@
 .map-info-card h4 { font-size:13px; font-weight:800; color:#d0e4ff; margin-bottom:4px; }
 .map-info-card .addr { font-size:10px; color:var(--text-faint); margin-bottom:8px; }
 .map-info-card p { font-size:12px; color:var(--text-dim); line-height:1.5; margin-bottom:10px; }
+.map-route-banner {
+  position:absolute; top:44px; left:16px; right:16px; max-width:360px;
+  background:rgba(30,50,80,.85); border:1px solid rgba(120,200,255,.4); border-radius:8px;
+  padding:8px 12px; font-size:12px; color:#bcdcff; backdrop-filter:blur(4px);
+}
+.map-route-banner strong { color:#fff; }
 
 /* ── Inner content ── */
 .camp-inner { padding:28px 32px; }
@@ -275,6 +281,7 @@
             <button class="view-toggle-btn active" id="view-btn-ship" onclick="setShipViewMode('ship')">Ship</button>
             <button class="view-toggle-btn" id="view-btn-map" onclick="setShipViewMode('map')">Space Map</button>
           </div>
+          <button id="place-tokens-btn" class="btn-ghost" style="font-size:11px; padding:4px 12px; display:none;" onclick="placeAllCrewTokens()">Place Crew Tokens</button>
           <button id="ship-manage-btn" class="btn-secondary" style="font-size:11px; padding:4px 12px; display:none;" onclick="openSetupShip()">Edit Ship</button>
         </div>
       </div>
@@ -328,6 +335,7 @@
           </div>
         </div>
         <canvas id="space-map-canvas" height="360"></canvas>
+        <div id="map-route-banner" class="map-route-banner" style="display:none;"></div>
         <div id="map-info-card" class="map-info-card" style="display:none;"></div>
       </div>
     </section>
@@ -353,6 +361,7 @@
         <div style="display:flex; gap:8px;">
           <span class="round-badge" id="round-lbl">Round 0</span>
           <button class="btn-secondary" onclick="openAddCombatant()" style="font-size:11px; padding:5px 12px;">+ Combatant</button>
+          <button class="btn-ghost"     onclick="autoPopulateCrew()" style="font-size:11px; padding:5px 12px;">Add All Crew</button>
           <button class="btn-ghost"     onclick="nextTurn()"    style="font-size:11px; padding:5px 12px;">Next Turn</button>
           <button class="btn-ghost"     onclick="clearInit()"   style="font-size:11px; padding:5px 12px; color:#ff8888;">Clear All</button>
         </div>
@@ -702,6 +711,7 @@ async function loadShip() {
   const manageBtn = document.getElementById('ship-manage-btn');
   manageBtn.style.display = isGM ? 'inline-block' : 'none';
   manageBtn.textContent   = shipData ? 'Edit Ship' : '+ Assign Ship';
+  document.getElementById('place-tokens-btn').style.display = isGM ? 'inline-block' : 'none';
 
   if (shipData) {
     document.getElementById('ship-name').textContent  = shipData.ship_name || 'Unnamed Vessel';
@@ -737,16 +747,17 @@ async function loadTokens() {
 
 // Make sure every crew member with a character has a token on the ship map
 async function ensureCrewTokens() {
-  if (!isGM) return;
-  const { data: members } = await db.from('campaign_members')
+  if (!isGM) return { created: 0, error: null };
+  const { data: members, error: memErr } = await db.from('campaign_members')
     .select('character_id, profiles(avatar_color), characters(name)')
     .eq('campaign_id', campaignId)
     .not('character_id', 'is', null);
-  if (!members?.length) return;
+  if (memErr) return { created: 0, error: memErr };
+  if (!members?.length) return { created: 0, error: null };
 
   const existingCharIds = new Set(shipTokens.map(t => t.character_id).filter(Boolean));
   const missing = members.filter(m => !existingCharIds.has(m.character_id));
-  if (!missing.length) return;
+  if (!missing.length) return { created: 0, error: null };
 
   const gridCenterX = shipType?.floor_rows?.[0]?.length ? Math.round(shipType.floor_rows[0].length / 2) : 5;
   const gridCenterY = shipType?.floor_rows?.length ? Math.round(shipType.floor_rows.length / 2) : 5;
@@ -760,8 +771,31 @@ async function ensureCrewTokens() {
     grid_y:       gridCenterY + Math.floor(i / 3) - 1,
   }));
 
-  await db.from('ship_tokens').insert(inserts);
+  const { error: insErr } = await db.from('ship_tokens').insert(inserts);
+  if (insErr) return { created: 0, error: insErr };
   await loadTokens();
+  return { created: missing.length, error: null };
+}
+
+// Manual trigger (GM) — same logic as the automatic ensureCrewTokens, but with visible feedback
+async function placeAllCrewTokens() {
+  const btn = document.getElementById('place-tokens-btn');
+  const original = btn.textContent;
+  btn.textContent = 'Placing…'; btn.disabled = true;
+
+  const { created, error } = await ensureCrewTokens();
+  drawShipMap();
+
+  btn.disabled = false;
+  if (error) {
+    console.error('placeAllCrewTokens error:', error);
+    btn.textContent = 'Failed — see console';
+  } else if (created > 0) {
+    btn.textContent = `Placed ${created}`;
+  } else {
+    btn.textContent = 'All crew placed';
+  }
+  setTimeout(() => { btn.textContent = original; }, 2200);
 }
 
 // Ship canvas rendering
@@ -1094,11 +1128,16 @@ function sectorColRow(coord) { return { col: SECTOR_COLS.indexOf(coord[0]), row:
 // Every icon is drawn at its sprite's *native pixel resolution* converted 1:1 into world
 // units (then doubled) — a black hole (512px) really is enormous next to a planet (48px).
 // Nothing is normalized to a common on-screen size; scale is whatever the art says it is.
-const ICON_SIZE_MULTIPLIER = 2;
-const GALAXY_EXPAND_PX = 110;    // once a galaxy's icon would render bigger than this, open it into systems
+const ICON_SIZE_MULTIPLIER = 2;  // applied to objects (asteroid belts/black holes) and planets, where true relative pixel size matters
+// Galaxy icon sprites are all the same 100x100 source regardless of the galaxy's "true" scale, so
+// galaxies get a fixed, deliberately small world footprint instead — a sector should comfortably
+// hold a dozen-plus galaxies, not just 2-3.
+const GALAXY_RADIUS_WORLD = 35;
+const GALAXY_EXPAND_PX = 90;     // once a galaxy's icon would render bigger than this, open it into systems
 const SYSTEM_RADIUS_WORLD = 14;  // systems are a plain star-dot, not a sprite, so this is a fixed world-unit size
 const SYSTEM_EXPAND_PX = 70;     // once a system's dot would render bigger than this, open it into planets
 const SECTOR_CONTENT_SCALE = 0.1; // mapScale above which a sector's galaxies/objects render individually
+const MAP_MIN_SCALE = 0.005, MAP_MAX_SCALE = 80; // shared zoom clamp — must allow reaching the system-expand threshold above
 
 const SECTORS = {
   'B2': { region: 'Krag System, The Great Ring',
@@ -1219,6 +1258,33 @@ function objectWorldPos(coord, obj) {
   return { x: col*SECTOR_SIZE + obj.x, y: row*SECTOR_SIZE + obj.y };
 }
 
+// Resolves a (sector, system, planet) location — at whatever granularity is set — to a world
+// position. Falls back to the sector's center if only a sector is known.
+function resolveLocationWorldPos(coord, systemName, planetName) {
+  if (!coord || !SECTORS[coord]) return null;
+  const sector = SECTORS[coord];
+  if (systemName) {
+    for (const gal of sector.galaxies) {
+      const sys = gal.systems.find(s => s.name === systemName);
+      if (!sys) continue;
+      if (planetName) {
+        const p = sys.planets.find(pl => pl.name === planetName);
+        if (p) return planetWorldPos(coord, gal, sys, p);
+      }
+      return systemWorldPos(coord, gal, sys);
+    }
+    return null;
+  }
+  const { col, row } = sectorColRow(coord);
+  return { x: col*SECTOR_SIZE + 500, y: row*SECTOR_SIZE + 500 };
+}
+
+// "Average sector travel is 3 days per 10 speed" — scales linearly with distance and inversely with speed.
+function computeTravelDays(distanceWorldUnits, speed) {
+  const sectors = distanceWorldUnits / SECTOR_SIZE;
+  return sectors * 3 * (10 / (speed || 10));
+}
+
 // Flat searchable index — every sector (even uncharted ones), plus every galaxy/system/planet/object
 function buildSearchIndex() {
   const idx = [];
@@ -1282,9 +1348,14 @@ function drawSpaceMap() {
   const wx = x => (x - left) * mapScale;
   const wy = y => (y - top) * mapScale;
 
-  // Backdrop: the pre-drawn 10x10 universe map, stretched over exactly the 10000x10000 world
+  // Backdrop: the pre-drawn 10x10 universe map, stretched over exactly the 10000x10000 world.
+  // Kept subtle (20% opacity) at rest, then fades further toward pure black as you zoom in.
   const bgImg = getSpriteImg('assets/UniverseMap.png');
-  if (spriteReady(bgImg)) mapCtx.drawImage(bgImg, wx(0), wy(0), SECTOR_SIZE*10*mapScale, SECTOR_SIZE*10*mapScale);
+  if (spriteReady(bgImg)) {
+    mapCtx.globalAlpha = 0.2;
+    mapCtx.drawImage(bgImg, wx(0), wy(0), SECTOR_SIZE*10*mapScale, SECTOR_SIZE*10*mapScale);
+    mapCtx.globalAlpha = 1;
+  }
   const fade = spaceFadeAlpha(mapScale);
   if (fade > 0) { mapCtx.fillStyle = `rgba(0,0,2,${fade})`; mapCtx.fillRect(0, 0, W, H); }
 
@@ -1356,7 +1427,7 @@ function drawSpaceMap() {
       const gp = galaxyWorldPos(coord, gal);
       const gpx = wx(gp.x), gpy = wy(gp.y);
       const galImg = getSpriteImg(`assets/map/galaxies/galaxy${gal.sprite}.png`);
-      const galR = iconWorldRadius(galImg, 100) * mapScale;
+      const galR = GALAXY_RADIUS_WORLD * mapScale;
       const galOffscreen = gpx < -galR-60 || gpx > W+galR+60 || gpy < -galR-60 || gpy > H+galR+60;
       // Skip entirely if off-screen AND still collapsed (a collapsed icon has nothing to show
       // off past its own edges). If it's expanded, its systems may still be on-screen even
@@ -1420,6 +1491,48 @@ function drawSpaceMap() {
       });
     });
   }
+
+  // Party location + destination route — drawn last so they're always on top, and at a fixed
+  // screen size (not world-scaled) so the party marker stays visible at any zoom level.
+  const curPos  = resolveLocationWorldPos(campaign?.current_sector, campaign?.current_system, campaign?.current_planet);
+  const destPos = resolveLocationWorldPos(campaign?.destination_sector, campaign?.destination_system, campaign?.destination_planet);
+
+  if (curPos && destPos) {
+    mapCtx.save();
+    mapCtx.strokeStyle = 'rgba(120,220,255,.7)';
+    mapCtx.lineWidth = 2;
+    mapCtx.setLineDash([7, 6]);
+    mapCtx.beginPath(); mapCtx.moveTo(wx(curPos.x), wy(curPos.y)); mapCtx.lineTo(wx(destPos.x), wy(destPos.y)); mapCtx.stroke();
+    mapCtx.restore();
+  }
+  function drawLocationMarker(pos, color, label) {
+    if (!pos) return;
+    const x = wx(pos.x), y = wy(pos.y);
+    if (x < -20 || x > W+20 || y < -20 || y > H+20) return;
+    mapCtx.save();
+    mapCtx.shadowColor = color; mapCtx.shadowBlur = 12;
+    mapCtx.fillStyle = color;
+    mapCtx.beginPath(); mapCtx.arc(x, y, 7, 0, Math.PI*2); mapCtx.fill();
+    mapCtx.restore();
+    mapCtx.strokeStyle = '#fff'; mapCtx.lineWidth = 1.5;
+    mapCtx.beginPath(); mapCtx.arc(x, y, 7, 0, Math.PI*2); mapCtx.stroke();
+    mapCtx.fillStyle = '#fff';
+    mapCtx.font = 'bold 12px system-ui, sans-serif'; mapCtx.textAlign = 'center'; mapCtx.textBaseline = 'bottom';
+    mapCtx.fillText(label, x, y - 10);
+  }
+  drawLocationMarker(destPos, '#ffb84a', 'Destination');
+  drawLocationMarker(curPos, '#4ad0ff', 'Party');
+
+  updateRouteBanner(curPos, destPos);
+}
+
+function updateRouteBanner(curPos, destPos) {
+  const banner = document.getElementById('map-route-banner');
+  if (!curPos || !destPos) { banner.style.display = 'none'; return; }
+  const dist = Math.hypot(destPos.x - curPos.x, destPos.y - curPos.y);
+  const days = computeTravelDays(dist, shipData?.speed);
+  banner.style.display = 'block';
+  banner.innerHTML = `En route to <strong>${esc(campaign.destination_planet || campaign.destination_system || campaign.destination_sector)}</strong> — est. <strong>${days.toFixed(1)} days</strong> at speed ${shipData?.speed ?? '—'}`;
 }
 let mapHitboxes = [];
 function redrawSpaceMap() { mapHitboxes = []; drawSpaceMap(); }
@@ -1457,7 +1570,7 @@ mapCanvas.addEventListener('wheel', e => {
   const left = mapCenterX - worldW/2, top = mapCenterY - (mapCanvas.height/mapScale)/2;
   const cursorWorldX = left + mx / mapScale, cursorWorldY = top + my / mapScale;
   const factor = e.deltaY < 0 ? 1.3 : 1/1.3;
-  mapScale = Math.max(0.005, Math.min(4, mapScale * factor));
+  mapScale = Math.max(MAP_MIN_SCALE, Math.min(MAP_MAX_SCALE, mapScale * factor));
   const newWorldW = mapCanvas.width / mapScale;
   const newLeft = cursorWorldX - mx / mapScale, newTop = cursorWorldY - my / mapScale;
   mapCenterX = newLeft + newWorldW/2;
@@ -1499,23 +1612,54 @@ function showLeafInfo(kind, coord, galaxyName, systemName, planetName, objectNam
   const sys = gal.systems.find(s => s.name === systemName);
   const planet = sys.planets.find(p => p.name === planetName);
   const isHere = campaign.current_sector === coord && campaign.current_system === systemName && campaign.current_planet === planetName;
+  const isDestination = campaign.destination_sector === coord && campaign.destination_system === systemName && campaign.destination_planet === planetName;
+
+  let etaHtml = '';
+  if (!isHere) {
+    const curPos = resolveLocationWorldPos(campaign.current_sector, campaign.current_system, campaign.current_planet);
+    const herePos = planetWorldPos(coord, gal, sys, planet);
+    if (curPos) {
+      const days = computeTravelDays(Math.hypot(herePos.x - curPos.x, herePos.y - curPos.y), shipData?.speed);
+      etaHtml = `<div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">Est. travel from current position: ~${days.toFixed(1)} days at speed ${shipData?.speed ?? '—'}</div>`;
+    }
+  }
+
+  const sArg = coord, yArg = systemName.replace(/'/g,"\\'"), pArg = planetName.replace(/'/g,"\\'");
   card.innerHTML = `
     <h4>${esc(planet.name)}</h4>
     <div class="addr">${esc(planet.name)}, ${esc(sys.name)}, ${esc(gal.name)} — SECTOR ${esc(coord)}</div>
     <p>${esc(planet.desc)}</p>
-    ${isGM ? `<button class="btn-secondary" style="font-size:11px;padding:5px 12px;" onclick="setPartyLocation('${coord}','${systemName.replace(/'/g,"\\'")}','${planetName.replace(/'/g,"\\'")}')">${isHere?'Currently Here':'Set Party Location'}</button>`
-          : (isHere ? '<div style="color:#ffd23a;font-size:11px;font-weight:700;">★ Party is here</div>' : '')}
+    ${etaHtml}
+    ${isHere ? '<div style="color:#ffd23a;font-size:11px;font-weight:700;margin-bottom:8px;">★ Party is here</div>' : ''}
+    ${isGM ? `<div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn-secondary" style="font-size:11px;padding:5px 12px;" onclick="setPartyLocation('${sArg}','${yArg}','${pArg}')">${isHere?'Currently Here':'Set Party Location'}</button>
+        ${!isHere ? `<button class="btn-ghost" style="font-size:11px;padding:5px 12px;" onclick="${isDestination?`clearDestination()`:`setDestination('${sArg}','${yArg}','${pArg}')`}">${isDestination?'Clear Course':'Plot Course Here'}</button>` : ''}
+      </div>` : ''}
   `;
 }
 
 async function setPartyLocation(sector, systemName, planetName) {
+  const updates = { current_sector: sector, current_system: systemName, current_planet: planetName };
+  // Arriving at the plotted destination clears the route automatically
+  if (campaign.destination_sector === sector && campaign.destination_system === systemName && campaign.destination_planet === planetName) {
+    Object.assign(updates, { destination_sector: null, destination_system: null, destination_planet: null });
+  }
+  await db.from('campaigns').update(updates).eq('id', campaignId);
+}
+
+async function setDestination(sector, systemName, planetName) {
   await db.from('campaigns').update({
-    current_sector: sector, current_system: systemName, current_planet: planetName,
+    destination_sector: sector, destination_system: systemName, destination_planet: planetName,
+  }).eq('id', campaignId);
+}
+async function clearDestination() {
+  await db.from('campaigns').update({
+    destination_sector: null, destination_system: null, destination_planet: null,
   }).eq('id', campaignId);
 }
 
 function mapZoomStep(factor) {
-  mapScale = Math.max(0.005, Math.min(8, mapScale * factor));
+  mapScale = Math.max(MAP_MIN_SCALE, Math.min(MAP_MAX_SCALE, mapScale * factor));
   redrawSpaceMap();
 }
 function mapResetView() {
@@ -1541,14 +1685,14 @@ function jumpToMapTarget(item) {
     const gal = sector.galaxies.find(g => g.name === item.galaxy);
     const p = galaxyWorldPos(item.coord, gal);
     cx = p.x; cy = p.y;
-    scale = (GALAXY_EXPAND_PX + 20) / GALAXY_RADIUS;
+    scale = (GALAXY_EXPAND_PX + 20) / GALAXY_RADIUS_WORLD;
   } else if (item.type === 'system') {
     const sector = SECTORS[item.coord];
     const gal = sector.galaxies.find(g => g.name === item.galaxy);
     const sys = gal.systems.find(s => s.name === item.system);
     const p = systemWorldPos(item.coord, gal, sys);
     cx = p.x; cy = p.y;
-    scale = (SYSTEM_EXPAND_PX + 30) / SYSTEM_RADIUS;
+    scale = (SYSTEM_EXPAND_PX + 30) / SYSTEM_RADIUS_WORLD;
   } else {
     const sector = SECTORS[item.coord];
     const gal = sector.galaxies.find(g => g.name === item.galaxy);
@@ -1748,6 +1892,31 @@ async function clearInit() {
   await db.from('initiative_tracker').delete().eq('campaign_id', campaignId);
   await db.from('campaigns').update({ round_num: 0 }).eq('id', campaignId);
   activeTurn = 0;
+}
+
+// Roll the whole crew into initiative at once — useful for non-combat scenarios
+// (skill challenges, chases) where the ship-combat station system doesn't apply.
+async function autoPopulateCrew() {
+  const { data: members, error } = await db.from('campaign_members')
+    .select('character_id, characters(name, hp_current, hp_max)')
+    .eq('campaign_id', campaignId)
+    .not('character_id', 'is', null);
+  if (error) return alert('Failed to load crew: ' + error.message);
+  if (!members?.length) return alert('No crew have characters assigned yet.');
+
+  const existingNames = new Set(combatants.map(c => c.combatant.toLowerCase()));
+  const toAdd = members.filter(m => m.characters?.name && !existingNames.has(m.characters.name.toLowerCase()));
+  if (!toAdd.length) return;
+
+  const inserts = toAdd.map(m => ({
+    campaign_id: campaignId,
+    combatant:   m.characters.name,
+    initiative:  Math.floor(Math.random() * 20) + 1,
+    hp_current:  m.characters.hp_current ?? m.characters.hp_max ?? null,
+    hp_max:      m.characters.hp_max ?? null,
+    is_npc:      false,
+  }));
+  await db.from('initiative_tracker').insert(inserts);
 }
 
 // ── Quests ──────────────────────────────────────────────────────
