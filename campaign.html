@@ -1191,8 +1191,18 @@ function sectorColRow(coord) { return { col: SECTOR_COLS.indexOf(coord[0]), row:
 // Every icon is drawn at its sprite's *native pixel resolution* converted into world units via
 // a per-category multiplier — a black hole (512px) is still enormous next to a planet (48px),
 // but each category gets its own dial so relative feel can be tuned independently.
-const OBJECT_ICON_MULTIPLIER = 2;      // asteroid belts / black holes
+const OBJECT_ICON_MULTIPLIER = 2;      // asteroid belts / nebulae / black holes
 const PLANET_ICON_MULTIPLIER = 2 / 8;  // planets — 8x smaller than the original 2x
+const DOCK_ICON_MULTIPLIER   = 3;      // space docks — small source art (64px), needs a bigger multiplier to read clearly
+
+const OBJECT_SPRITES = {
+  black_hole:          { path: 'assets/map/misc/Black_hole.png',         fallback: 512, fallbackColor: '#1a1a2a' },
+  asteroid_belt:       { path: 'assets/map/misc/asteroid_belt.png',       fallback: 256, fallbackColor: '#5a3a2a' },
+  small_asteroid_belt: { path: 'assets/map/misc/small_asteroid_belt.png', fallback: 128, fallbackColor: '#5a3a2a' },
+  nebula:              { path: 'assets/map/misc/nebulous_cloud.png',      fallback: 128, fallbackColor: '#6a5a8a' },
+};
+
+const FACTION_COLORS = { GAC:'#3a78d4', KEC:'#c87820', SNA:'#4acc7a', VP:'#c84040', Neutral:'#9aa0a8' };
 // Galaxy icon sprites are all the same 100x100 source regardless of the galaxy's "true" scale, so
 // galaxies get a fixed, deliberately small world footprint instead — a sector should comfortably
 // hold a dozen-plus galaxies, not just 2-3.
@@ -1210,6 +1220,9 @@ const SECTORS = {
       { type:'asteroid_belt', name:'Cinderfall Belt', x:880, y:120, desc:'Secondary KEC extraction site. Lower security than Ironback; popular with smugglers skimming tailings.' },
       { type:'asteroid_belt', name:'The Slagfields',  x:920, y:780, desc:'Depleted mining claim, mostly abandoned. Rumoured Skitterling scavenger nests in the wreckage.' },
       { type:'asteroid_belt', name:'The Weighing Fields', x:520, y:900, desc:'Neutral appraisal zone where independent haulers get their ore graded before KEC will buy it. Heavily armed, oddly civil.' },
+    ],
+    docks: [
+      { name:'Forgehold Platform', owner:'KEC', x:340, y:340, desc:'KEC\'s primary extraction-fleet dock, bristling with cargo cranes and refinery stacks. Non-KEC crews are tolerated if they\'re buying — and searched thoroughly regardless.' },
     ],
     galaxies: [
       { name:'The Great Ring', sprite:1, x:220, y:280, systems: [
@@ -1230,6 +1243,9 @@ const SECTORS = {
     objects: [
       { type:'asteroid_belt', name:'The Scrapfield', x:200, y:600, desc:'A drifting junkyard of decommissioned hulls and salvage. Skitterling clans strip it clean and it refills anyway — nobody knows from where.' },
     ],
+    docks: [
+      { name:"Wanderer's Rest", owner:'Neutral', x:450, y:450, desc:'A patchwork waystation that drifts loosely alongside the Warrens. No flag, no faction, no questions — just fuel, food, and a boarding fee that changes depending on who\'s asking.' },
+    ],
     galaxies: [
       { name:'Mobile Warrens', sprite:2, x:700, y:200, systems: [
         { name:'Warren Cluster Prime', x:-40, y:0,  planets:[ { name:'Warren Cluster', img:'Lava', ox:0, oy:0, desc:'A shifting cloud of scavenged hab-modules. Home to nomadic Skitterling clans. Coordinates change monthly.' } ] },
@@ -1241,6 +1257,10 @@ const SECTORS = {
   'D3': { region: 'Verdant Reach — Habitable Frontier',
     objects: [
       { type:'asteroid_belt', name:'The Shattered Ring', x:180, y:850, desc:'An unclaimed debris ring, remnant of a shattered proto-planet. Rich, unclaimed, and unguarded — for now.' },
+      { type:'nebula', name:'The Verdant Haze', x:600, y:150, desc:'A drifting nebula rich in ionised gas. Beautiful from a distance; sensors are useless inside it.' },
+    ],
+    docks: [
+      { name:'Crossroads Exchange', owner:'Neutral', x:480, y:420, desc:'Deliberately built on neutral ground by a consortium of frontier colonies. GAC, KEC, SNA, and the occasional VP crew all dock here under an uneasy truce — the one rule everyone enforces is no violence on the platform.' },
     ],
     galaxies: [
       { name:'Verdant Reach', sprite:3, x:780, y:650, systems: [
@@ -1258,6 +1278,9 @@ const SECTORS = {
     objects: [
       { type:'asteroid_belt', name:'The Sol Belt', x:170, y:260, desc:'The main asteroid belt, sitting between Mars and Jupiter. Heavily surveyed, lightly claimed — mostly rubble, occasionally a fortune.' },
       { type:'asteroid_belt', name:'The Kuiper Fringe', x:120, y:520, desc:'A vast, scattered shell of ice and rock at the edge of the Sol system. Cold, dark, and largely unmapped past the inner fringe.' },
+    ],
+    docks: [
+      { name:'Aegis Station', owner:'GAC', x:220, y:320, desc:'The GAC\'s flagship customs and defence platform, in high orbit over Sol. Full biometric registry, Patrol Fleet berths, and zero tolerance for unlicensed weapons. Non-Council ships are welcome, but expect a thorough inspection.' },
     ],
     galaxies: [
       { name:'Milky Way', sprite:4, x:280, y:220, systems: [
@@ -1302,6 +1325,9 @@ const SECTORS = {
     objects: [
       { type:'asteroid_belt', name:'Anchorpoint Debris Field', x:820, y:180, desc:'Scattered wreckage from a century of trade-run accidents near the Anchorpoint approach lanes.' },
     ],
+    docks: [
+      { name:'Free Harbor', owner:'SNA', x:350, y:520, desc:'A Scavenger Nomad Allegiance stronghold dressed up as a trade post. Redistributes salvage and credits to frontier worlds that need it. GAC patrols avoid the approach lanes — officially because of "navigation hazards."' },
+    ],
     galaxies: [
       { name:'New Meridian', sprite:1, x:250, y:600, systems: [
         { name:'Meridian Trade Anchor', x:0, y:0, planets:[ { name:'Anchorpoint', img:'Terran6', ox:0, oy:0, desc:'SNA-friendly trade hub world. Neutral ground — scavengers, GAC traders, and the occasional KEC freighter all dock here without incident.' } ] },
@@ -1311,6 +1337,7 @@ const SECTORS = {
   'G5': { region: 'Myx System, Nebulous Way',
     objects: [
       { type:'asteroid_belt', name:'The Chemsea Drift', x:300, y:850, desc:'A field of frozen chemical slush and drifting organic residue. Myxos harvesting crews consider it a delicacy run.' },
+      { type:'nebula', name:'The Weeping Veil', x:850, y:400, desc:'A soft, glowing nebula of vaporised ice. Myxos scholars believe it\'s the ghost of a long-dead ocean world.' },
     ],
     galaxies: [
       { name:'Nebulous Way', sprite:2, x:720, y:720, systems: [
@@ -1325,6 +1352,9 @@ const SECTORS = {
       { type:'black_hole', name:'The Obsidian Maw', x:250, y:250, desc:'A stellar-mass black hole. Void Pirate crews use its gravity shadow to vanish from GAC sensors — most patrols simply refuse to follow.' },
       { type:'asteroid_belt', name:'Wreckwatch Belt', x:600, y:400, desc:'A debris field of picked-clean hulls. Void Pirate crews use it as an ambush point for ships hugging the sector edge.' },
     ],
+    docks: [
+      { name:'Blacktide Anchorage', owner:'VP', x:600, y:600, desc:'A lawless dock cobbled together from salvaged capital-ship hulls. No registry, no questions, no mercy if you owe someone credits. Non-affiliated crews should mask their identity and colours before approach — GAC or KEC transponders will get you boarded, or worse.' },
+    ],
     galaxies: [
       { name:'Outer Rim', sprite:3, x:780, y:750, systems: [
         { name:'Obsidian Fringe', x:0, y:0, planets:[ { name:'The Obsidian Fringe', img:'Moon', ox:0, oy:0, desc:'Kaelen Outcast territory. Void Pirate crews operate freely; GAC patrols rarely bother.' } ] },
@@ -1334,12 +1364,17 @@ const SECTORS = {
   'H7': { region: 'Unmapped Fringe',
     objects: [
       { type:'asteroid_belt', name:'The Drift Yards', x:400, y:400, desc:'An enormous, unclaimed debris field far past any patrolled lane. No faction has bothered to survey it properly.' },
+      { type:'small_asteroid_belt', name:'Loose Gravel', x:700, y:600, desc:'A minor scatter of rubble, barely worth a mining claim. Occasionally hides something interesting.' },
+    ],
+    docks: [
+      { name:'Farhaven Depot', owner:'Neutral', x:650, y:250, desc:'An automated long-haul waystation, unstaffed and unaffiliated. Fuel and basic supplies dispensed by machine for a standing credit line — nobody\'s seen the owner in years.' },
     ],
     galaxies: [],
   },
   'C7': { region: 'Unmapped Fringe',
     objects: [
       { type:'black_hole', name:'The Devourer', x:500, y:500, desc:'An isolated black hole with no nearby claims. Deep-space researchers occasionally charter expeditions to study its accretion disk — few come back with useful data, or on schedule.' },
+      { type:'nebula', name:'The Hollow Veil', x:750, y:300, desc:'A dense ionised nebula, likely blown outward from a nova centuries ago. Ships lose sensor lock within seconds of entry.' },
     ],
     galaxies: [],
   },
@@ -1403,6 +1438,11 @@ function resolveLocationWorldPos(coord, systemName, planetName) {
     }
     return null;
   }
+  // No system set — `planetName` doubles as a generic "place name" for a space dock
+  if (planetName) {
+    const dock = (sector.docks || []).find(d => d.name === planetName);
+    if (dock) return objectWorldPos(coord, dock);
+  }
   const { col, row } = sectorColRow(coord);
   return { x: col*SECTOR_SIZE + 500, y: row*SECTOR_SIZE + 500 };
 }
@@ -1424,6 +1464,9 @@ function buildSearchIndex() {
   Object.entries(SECTORS).forEach(([coord, sector]) => {
     (sector.objects||[]).forEach(o => {
       idx.push({ type:'object', name:o.name, addr:`${o.name}, ${sector.region} — SECTOR ${coord}`, coord, object:o.name });
+    });
+    (sector.docks||[]).forEach(d => {
+      idx.push({ type:'dock', name:d.name, addr:`${d.name} (${d.owner} Space Dock), ${sector.region} — SECTOR ${coord}`, coord, dock:d.name });
     });
     sector.galaxies.forEach(gal => {
       idx.push({ type:'galaxy', name:gal.name, addr:`${gal.name}, ${sector.region} — SECTOR ${coord}`, coord, galaxy:gal.name });
@@ -1558,18 +1601,37 @@ function drawSpaceMap() {
       continue;
     }
 
-    // Sector hazard objects (asteroid belts, black holes) — never expand further
+    // Sector hazard objects (asteroid belts, nebulae, black holes) — never expand further
     (sector.objects||[]).forEach(obj => {
       const op = objectWorldPos(coord, obj);
       const opx = wx(op.x), opy = wy(op.y);
-      const imgName = obj.type === 'black_hole' ? 'Black_hole' : 'asteroid_belt';
-      const img = getSpriteImg(`assets/map/misc/${imgName}.png`);
-      const r = Math.max(6, iconWorldRadius(img, obj.type === 'black_hole' ? 512 : 256, OBJECT_ICON_MULTIPLIER) * mapScale);
+      const spec = OBJECT_SPRITES[obj.type] || OBJECT_SPRITES.asteroid_belt;
+      const img = getSpriteImg(spec.path);
+      const r = Math.max(6, iconWorldRadius(img, spec.fallback, OBJECT_ICON_MULTIPLIER) * mapScale);
       if (opx < -r-60 || opx > W+r+60 || opy < -r-60 || opy > H+r+60) return;
 
-      const { dr, hovered } = drawCircleIcon(img, opx, opy, r, '#5a3a2a');
+      const { dr, hovered } = drawCircleIcon(img, opx, opy, r, spec.fallbackColor);
       drawLabel(obj.name, opx, opy, dr, hovered, 'rgba(255,180,120,.9)');
       mapHitboxes.push({ x:opx, y:opy, r:dr, kind:'object', coord, object:obj.name });
+    });
+
+    // Space docks — stations ships can actually stop at (refuel, restock, quests). Always a
+    // clickable destination, colored by the owning faction (or neutral grey if unaligned).
+    (sector.docks||[]).forEach(dock => {
+      const dp = objectWorldPos(coord, dock);
+      const dpx = wx(dp.x), dpy = wy(dp.y);
+      const img = getSpriteImg('assets/map/space_dock.png');
+      const r = Math.max(6, iconWorldRadius(img, 64, DOCK_ICON_MULTIPLIER) * mapScale);
+      if (dpx < -r-60 || dpx > W+r+60 || dpy < -r-60 || dpy > H+r+60) return;
+
+      const ownerColor = FACTION_COLORS[dock.owner] || FACTION_COLORS.Neutral;
+      const { dr, hovered } = drawCircleIcon(img, dpx, dpy, r, '#3a3a3a');
+      mapCtx.strokeStyle = ownerColor;
+      mapCtx.lineWidth = 2;
+      mapCtx.beginPath(); mapCtx.arc(dpx, dpy, dr + 2, 0, Math.PI*2); mapCtx.stroke();
+      mapCtx.lineWidth = 1;
+      drawLabel(dock.name, dpx, dpy, dr + 2, hovered, ownerColor);
+      mapHitboxes.push({ x:dpx, y:dpy, r:dr+2, kind:'dock', coord, dock:dock.name });
     });
 
     // Galaxies — expand into systems once zoomed in enough
@@ -1736,13 +1798,16 @@ mapCanvas.addEventListener('click', e => {
     if (Math.hypot(mx - hb.x, my - hb.y) > hb.r) continue;
     if (hb.kind === 'planet') return showLeafInfo('planet', hb.coord, hb.galaxy, hb.system, hb.planet);
     if (hb.kind === 'object') return showLeafInfo('object', hb.coord, null, null, null, hb.object);
+    if (hb.kind === 'dock')   return showLeafInfo('dock', hb.coord, null, null, null, null, hb.dock);
     if (hb.kind === 'system') return jumpToMapTarget({ type:'system', coord:hb.coord, galaxy:hb.galaxy, system:hb.system });
     if (hb.kind === 'galaxy') return jumpToMapTarget({ type:'galaxy', coord:hb.coord, galaxy:hb.galaxy });
   }
   document.getElementById('map-info-card').style.display = 'none';
 });
 
-function showLeafInfo(kind, coord, galaxyName, systemName, planetName, objectName) {
+const OBJECT_TYPE_LABELS = { black_hole:'Black Hole', asteroid_belt:'Asteroid Belt', small_asteroid_belt:'Asteroid Field', nebula:'Nebula' };
+
+function showLeafInfo(kind, coord, galaxyName, systemName, planetName, objectName, dockName) {
   const sector = SECTORS[coord];
   const card = document.getElementById('map-info-card');
   card.style.display = 'block';
@@ -1751,9 +1816,40 @@ function showLeafInfo(kind, coord, galaxyName, systemName, planetName, objectNam
     const obj = sector.objects.find(o => o.name === objectName);
     card.innerHTML = `
       <h4>${esc(obj.name)}</h4>
-      <div class="addr">${obj.type === 'black_hole' ? 'Black Hole' : 'Asteroid Belt'} — ${esc(sector.region)} — SECTOR ${esc(coord)}</div>
+      <div class="addr">${OBJECT_TYPE_LABELS[obj.type] || 'Object'} — ${esc(sector.region)} — SECTOR ${esc(coord)}</div>
       <p>${esc(obj.desc)}</p>
       <div style="color:#ff8888;font-size:11px;font-weight:700;">⚠ Navigational hazard</div>
+    `;
+    return;
+  }
+
+  if (kind === 'dock') {
+    const dock = sector.docks.find(d => d.name === dockName);
+    const isHere = campaign.current_sector === coord && !campaign.current_system && campaign.current_planet === dockName;
+    const isDestination = campaign.destination_sector === coord && !campaign.destination_system && campaign.destination_planet === dockName;
+    const ownerColor = FACTION_COLORS[dock.owner] || FACTION_COLORS.Neutral;
+
+    let etaHtml = '';
+    if (!isHere) {
+      const curPos = resolveLocationWorldPos(campaign.current_sector, campaign.current_system, campaign.current_planet);
+      const herePos = objectWorldPos(coord, dock);
+      if (curPos) {
+        const days = computeTravelDays(Math.hypot(herePos.x - curPos.x, herePos.y - curPos.y), shipData?.speed);
+        etaHtml = `<div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">Est. travel from current position: ~${days.toFixed(1)} days at speed ${shipData?.speed ?? '—'}</div>`;
+      }
+    }
+
+    const dArg = dockName.replace(/'/g,"\\'");
+    card.innerHTML = `
+      <h4>${esc(dock.name)}</h4>
+      <div class="addr">Space Dock — <span style="color:${ownerColor};font-weight:700;">${esc(dock.owner)}</span> — ${esc(sector.region)} — SECTOR ${esc(coord)}</div>
+      <p>${esc(dock.desc)}</p>
+      ${etaHtml}
+      ${isHere ? '<div style="color:#ffd23a;font-size:11px;font-weight:700;margin-bottom:8px;">★ Party is docked here</div>' : ''}
+      ${isGM ? `<div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn-secondary" style="font-size:11px;padding:5px 12px;" onclick="setPartyLocation('${coord}',null,'${dArg}')">${isHere?'Currently Here':'Dock Here'}</button>
+          ${!isHere ? `<button class="btn-ghost" style="font-size:11px;padding:5px 12px;" onclick="${isDestination?`clearDestination()`:`setDestination('${coord}',null,'${dArg}')`}">${isDestination?'Clear Course':'Plot Course Here'}</button>` : ''}
+        </div>` : ''}
     `;
     return;
   }
@@ -1840,6 +1936,12 @@ function jumpToMapTarget(item) {
     const p = objectWorldPos(item.coord, obj);
     cx = p.x; cy = p.y;
     scale = mapCanvas.width / 300;
+  } else if (item.type === 'dock') {
+    const sector = SECTORS[item.coord];
+    const dock = sector.docks.find(d => d.name === item.dock);
+    const p = objectWorldPos(item.coord, dock);
+    cx = p.x; cy = p.y;
+    scale = mapCanvas.width / 200;
   } else if (item.type === 'galaxy') {
     const sector = SECTORS[item.coord];
     const gal = sector.galaxies.find(g => g.name === item.galaxy);
@@ -1866,6 +1968,7 @@ function jumpToMapTarget(item) {
   redrawSpaceMap();
   if (item.type === 'planet') showLeafInfo('planet', item.coord, item.galaxy, item.system, item.planet);
   else if (item.type === 'object') showLeafInfo('object', item.coord, null, null, null, item.object);
+  else if (item.type === 'dock') showLeafInfo('dock', item.coord, null, null, null, null, item.dock);
   else document.getElementById('map-info-card').style.display = 'none';
 }
 
