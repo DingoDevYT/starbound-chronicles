@@ -236,6 +236,7 @@
         <h2 id="ship-name">Loading ship…</h2>
         <div style="display:flex; align-items:center; gap:12px;">
           <small id="ship-class">—</small>
+          <a id="space-map-btn" class="btn-ghost" href="#" style="font-size:11px; padding:4px 12px; text-decoration:none; display:inline-block;">Space Map</a>
           <button id="ship-manage-btn" class="btn-secondary" style="font-size:11px; padding:4px 12px; display:none;" onclick="openSetupShip()">Edit Ship</button>
         </div>
       </div>
@@ -277,7 +278,10 @@
     <section class="camp-section" id="crew">
       <div class="camp-section-hdr">
         <span class="camp-section-title">Crew Roster</span>
-        <span style="font-size:11px; color:var(--text-faint);" id="crew-count-lbl">—</span>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:11px; color:var(--text-faint);" id="crew-count-lbl">—</span>
+          <button class="btn-secondary" onclick="openMyCharacterPicker()" style="font-size:11px; padding:5px 12px;">My Character</button>
+        </div>
       </div>
       <div class="crew-grid" id="crew-grid"><div style="color:var(--text-faint);font-size:13px;">Loading…</div></div>
     </section>
@@ -498,6 +502,27 @@
   </div>
 </div>
 
+<!-- My Character -->
+<div class="modal-backdrop" id="modal-my-character">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header"><span class="modal-title">Play As…</span><button class="modal-close" onclick="closeModal('modal-my-character')">✕</button></div>
+    <div class="modal-body">
+      <p style="font-size:12px; color:var(--text-faint); line-height:1.5; margin:0;">Choose which of your characters you're playing in this campaign. Mostly useful for the GM to test as a player, or to switch characters between sessions.</p>
+      <div class="form-group">
+        <label class="form-label">Character</label>
+        <select class="form-select" id="my-character-select">
+          <option value="">— None —</option>
+        </select>
+      </div>
+      <div class="form-error" id="my-character-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('modal-my-character')">Cancel</button>
+      <button class="btn-primary" onclick="saveMyCharacter()" style="width:auto;padding:10px 24px;">Save</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/config.js"></script>
 <script src="js/auth.js?v=2"></script>
 <script>
@@ -549,6 +574,7 @@ function preloadImages() {
   document.getElementById('topbar-name').textContent  = c.name;
   document.getElementById('camp-title-side').textContent = c.name;
   document.getElementById('space-map-link').href = 'space-map.html?id=' + campaignId;
+  document.getElementById('space-map-btn').href  = 'space-map.html?id=' + campaignId;
   document.getElementById('invite-disp').textContent  = c.invite_code;
   document.getElementById('stat-round').textContent   = c.round_num || 0;
   document.getElementById('round-lbl').textContent    = 'Round ' + (c.round_num || 0);
@@ -1003,6 +1029,39 @@ async function loadCrew() {
       </div>
     </div>`;
   }).join('');
+}
+
+// ── My Character (assign/change which character you play as) ────
+async function openMyCharacterPicker() {
+  showError('my-character-error', '');
+  const sel = document.getElementById('my-character-select');
+  sel.innerHTML = '<option value="">Loading…</option>';
+  openModal('modal-my-character');
+
+  const { data: chars } = await db.from('characters').select('id,name,species')
+    .eq('user_id', currentUser.id).eq('is_active', true).order('created_at', { ascending:false });
+
+  sel.innerHTML = '<option value="">— None —</option>' +
+    (chars || []).map(c => `<option value="${c.id}">${esc(c.name)} (${cap(c.species)})</option>`).join('');
+  sel.value = myCharacterId || '';
+
+  if (!chars?.length) showError('my-character-error', 'You have no characters yet — create one from the Dashboard first.');
+}
+
+async function saveMyCharacter() {
+  const charId = document.getElementById('my-character-select').value || null;
+  showError('my-character-error', '');
+
+  const { error } = await db.from('campaign_members')
+    .update({ character_id: charId })
+    .eq('campaign_id', campaignId).eq('user_id', currentUser.id);
+
+  if (error) return showError('my-character-error', error.message);
+
+  myCharacterId = charId;
+  closeModal('modal-my-character');
+  await loadCrew();
+  if (isGM) await ensureCrewTokens();
 }
 
 // ── Initiative ──────────────────────────────────────────────────

@@ -1,7 +1,11 @@
 -- ============================================================
 --  STARBOUND CHRONICLES — Schema v5
 --  Ship types, components, campaign ships
---  Run AFTER schema-v4.sql. Safe to re-run.
+--  Run AFTER schema-v4.sql.
+--  NOTE: table/policy DDL below is safe to re-run, but the seed INSERTs
+--  are not idempotent without schema-v8.sql's UNIQUE(name) constraint
+--  (which adds ON CONFLICT protection retroactively). If you already
+--  ran this file more than once, run schema-v8.sql to deduplicate.
 -- ============================================================
 
 -- ─── Ship hull definitions ───────────────────────────────────
@@ -49,6 +53,16 @@ CREATE TABLE IF NOT EXISTS ship_components (
   image_url    TEXT,
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Guard the seed INSERTs below against duplicate runs
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ship_types_name_key') THEN
+    ALTER TABLE ship_types ADD CONSTRAINT ship_types_name_key UNIQUE (name);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ship_components_name_key') THEN
+    ALTER TABLE ship_components ADD CONSTRAINT ship_components_name_key UNIQUE (name);
+  END IF;
+END $$;
 
 -- ─── Campaign ships (one per campaign) ───────────────────────
 CREATE TABLE IF NOT EXISTS campaign_ships (
@@ -145,7 +159,8 @@ VALUES
  '{"x":30,"y":7,"w":8,"h":7}',
  '{"x":9,"y":20,"w":12,"h":6}',
  '[{"role":"pilot","label":"Helm","x":15,"y":2},{"role":"gunsmith","label":"Gunnery","x":15,"y":8},{"role":"technician","label":"Engineering","x":15,"y":17},{"role":"smuggler","label":"Comms","x":7,"y":10}]',
- 200, 10, 2, 500, 20, 150, 15000);
+ 200, 10, 2, 500, 20, 150, 15000)
+ON CONFLICT (name) DO NOTHING;
 
 -- ============================================================
 --  Pre-populated ship components
@@ -166,4 +181,5 @@ VALUES
 ('Afterburner',          'thruster', '{small,medium}',                 4,  0,  0, -20, 0, 0,   'Injects raw propellant for blistering speed. Burns through your fuel reserves fast.',    400),
 ('Ion Drive',            'thruster', '{medium,large}',                 2,  0,  0,   0, 0, 1.0, 'Efficient ion propulsion engine. Slowly regenerates fuel during transit.',               500),
 ('Plasma Core',          'thruster', '{large,capital}',                5,  0,  0, 100, 0, 0,   'High-output plasma engine with a built-in expanded fuel reserve.',                       900),
-('Fuel Cell Array',      'thruster', '{small,medium,large,capital}', -1,  0,  0, 200, 0, 0.5,  'Trades thrust for a massive fuel reserve and a trickle of passive regeneration.',        600);
+('Fuel Cell Array',      'thruster', '{small,medium,large,capital}', -1,  0,  0, 200, 0, 0.5,  'Trades thrust for a massive fuel reserve and a trickle of passive regeneration.',        600)
+ON CONFLICT (name) DO NOTHING;
