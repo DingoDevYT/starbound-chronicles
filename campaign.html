@@ -1111,7 +1111,7 @@ async function createCampaignShip() {
   const hull = allHullTypes.find(h => h.id === selectedHullId);
   if (!hull) return;
 
-  const { error } = await db.from('campaign_ships').insert({
+  const { error } = await db.from('campaign_ships').upsert({
     campaign_id:  campaignId,
     ship_type_id: hull.id,
     ship_name:    name,
@@ -1121,7 +1121,7 @@ async function createCampaignShip() {
     speed:        hull.speed_base,
     fuel_current: hull.fuel_capacity,
     fuel_max:     hull.fuel_capacity,
-  });
+  }, { onConflict: 'campaign_id' });
 
   if (error) return showError('setup-ship-error', 'Failed to create ship: ' + error.message);
   closeModal('modal-setup-ship');
