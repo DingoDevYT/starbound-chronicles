@@ -1091,31 +1091,34 @@ const SECTOR_SIZE = 1000;
 const SECTOR_COLS = ['A','B','C','D','E','F','G','H','I','J'];
 function sectorColRow(coord) { return { col: SECTOR_COLS.indexOf(coord[0]), row: parseInt(coord.slice(1)) }; }
 
-const GALAXY_RADIUS = 60;     // world units — icon footprint when collapsed
-const GALAXY_EXPAND_PX = 90;  // expand to systems once on-screen radius exceeds this
-const SYSTEM_RADIUS = 12;     // world units — dot footprint when collapsed (inside an expanded galaxy)
-const SYSTEM_EXPAND_PX = 60;  // expand to planets once on-screen radius exceeds this
+// Every icon is drawn at its sprite's *native pixel resolution* converted 1:1 into world
+// units (then doubled) — a black hole (512px) really is enormous next to a planet (48px).
+// Nothing is normalized to a common on-screen size; scale is whatever the art says it is.
+const ICON_SIZE_MULTIPLIER = 2;
+const GALAXY_EXPAND_PX = 110;    // once a galaxy's icon would render bigger than this, open it into systems
+const SYSTEM_RADIUS_WORLD = 14;  // systems are a plain star-dot, not a sprite, so this is a fixed world-unit size
+const SYSTEM_EXPAND_PX = 70;     // once a system's dot would render bigger than this, open it into planets
 const SECTOR_CONTENT_SCALE = 0.1; // mapScale above which a sector's galaxies/objects render individually
 
 const SECTORS = {
   'B2': { region: 'Krag System, The Great Ring',
     objects: [
-      { type:'asteroid_belt', name:'Ironback Belt',  x:180, y:200, desc:'A dense KEC mining claim. Heavy industrial traffic — unlicensed vessels are boarded on sight.' },
-      { type:'asteroid_belt', name:'Cinderfall Belt', x:800, y:230, desc:'Secondary KEC extraction site. Lower security than Ironback; popular with smugglers skimming tailings.' },
-      { type:'asteroid_belt', name:'The Slagfields',  x:420, y:820, desc:'Depleted mining claim, mostly abandoned. Rumoured Skitterling scavenger nests in the wreckage.' },
+      { type:'asteroid_belt', name:'Ironback Belt',  x:150, y:820, desc:'A dense KEC mining claim. Heavy industrial traffic — unlicensed vessels are boarded on sight.' },
+      { type:'asteroid_belt', name:'Cinderfall Belt', x:880, y:120, desc:'Secondary KEC extraction site. Lower security than Ironback; popular with smugglers skimming tailings.' },
+      { type:'asteroid_belt', name:'The Slagfields',  x:920, y:780, desc:'Depleted mining claim, mostly abandoned. Rumoured Skitterling scavenger nests in the wreckage.' },
     ],
     galaxies: [
-      { name:'The Great Ring', sprite:1, x:500, y:480, systems: [
+      { name:'The Great Ring', sprite:1, x:220, y:280, systems: [
         { name:'Mintonas',        x:-90, y:-60, planets:[ { name:'Mintonas',        img:'Moon', ox:0, oy:0,   desc:'Kragol homeworld. Rock, crystal, and gemstone deposits as far as sensors can read. KEC mining rigs dominate the orbital lanes.' } ] },
-        { name:'Grannite Reach',  x:100, y:-40, planets:[ { name:'Grannite Reach Prime', img:'Moon', ox:0, oy:0, desc:'Second Kragol home system. Almost entirely hollowed out by generations of mining clans.' } ] },
-        { name:"Ore's End",       x:20,  y:110, planets:[ { name:"Ore's End",      img:'Lava', ox:0, oy:0,  desc:'KEC forward extraction colony. Molten-core world; refineries run around the clock.' } ] },
+        { name:'Grannite Reach',  x:110, y:-30, planets:[ { name:'Grannite Reach Prime', img:'Moon', ox:0, oy:0, desc:'Second Kragol home system. Almost entirely hollowed out by generations of mining clans.' } ] },
+        { name:"Ore's End",       x:20,  y:120, planets:[ { name:"Ore's End",      img:'Lava', ox:0, oy:0,  desc:'KEC forward extraction colony. Molten-core world; refineries run around the clock.' } ] },
       ]},
     ],
   },
   'C3': { region: 'Nomadic Drift, Mobile Warrens',
     objects: [],
     galaxies: [
-      { name:'Mobile Warrens', sprite:2, x:350, y:650, systems: [
+      { name:'Mobile Warrens', sprite:2, x:700, y:200, systems: [
         { name:'Warren Cluster Prime', x:-40, y:0,  planets:[ { name:'Warren Cluster', img:'Lava', ox:0, oy:0, desc:'A shifting cloud of scavenged hab-modules. Home to nomadic Skitterling clans. Coordinates change monthly.' } ] },
         { name:'Drift Anchor Seven',   x:90,  y:50, planets:[ { name:'Anchor Seven',   img:'Moon', ox:0, oy:0, desc:'A second drifting warren, currently anchored to a dead comet core for stability.' } ] },
       ]},
@@ -1123,10 +1126,10 @@ const SECTORS = {
   },
   'D3': { region: 'Verdant Reach — Habitable Frontier',
     objects: [
-      { type:'asteroid_belt', name:'The Shattered Ring', x:750, y:700, desc:'An unclaimed debris ring, remnant of a shattered proto-planet. Rich, unclaimed, and unguarded — for now.' },
+      { type:'asteroid_belt', name:'The Shattered Ring', x:180, y:850, desc:'An unclaimed debris ring, remnant of a shattered proto-planet. Rich, unclaimed, and unguarded — for now.' },
     ],
     galaxies: [
-      { name:'Verdant Reach', sprite:3, x:480, y:500, systems: [
+      { name:'Verdant Reach', sprite:3, x:780, y:650, systems: [
         { name:'Meridian System', x:-70, y:-50, planets:[
           { name:'Meridian Prime', img:'Terran2', ox:-15, oy:0, desc:'GAC frontier colony. Twin habitable worlds recently opened to mixed-species settlement.' },
           { name:'Meridian II',    img:'Terran5', ox:20,  oy:10, desc:'Sister world to Meridian Prime. Lighter gravity, popular with newer colonists.' },
@@ -1139,10 +1142,10 @@ const SECTORS = {
   },
   'E4': { region: 'Sol System, Milky Way',
     objects: [
-      { type:'asteroid_belt', name:'The Kessler Field', x:200, y:800, desc:'Centuries of orbital debris and dead satellites. Automated GAC patrol drones sweep it constantly — mostly for show.' },
+      { type:'asteroid_belt', name:'The Kessler Field', x:850, y:850, desc:'Centuries of orbital debris and dead satellites. Automated GAC patrol drones sweep it constantly — mostly for show.' },
     ],
     galaxies: [
-      { name:'Milky Way', sprite:4, x:500, y:500, systems: [
+      { name:'Milky Way', sprite:4, x:280, y:220, systems: [
         { name:'Sol', x:-110, y:0, planets:[
           { name:'Earth',        img:'Terran',  ox:-15, oy:0, desc:'GAC founding world, dense population, heaviest patrol coverage in the sector.' },
           { name:'Mars Colony',  img:'Terran6', ox:20,  oy:15, desc:'Terraformed GAC colony world. Still finishing its atmospheric processors after two centuries.' },
@@ -1162,7 +1165,7 @@ const SECTORS = {
   'F3': { region: 'Calamitus Field',
     objects: [],
     galaxies: [
-      { name:'Calamitus Field', sprite:5, x:500, y:450, systems: [
+      { name:'Calamitus Field', sprite:5, x:180, y:750, systems: [
         { name:'Arkanos System', x:0,  y:-60, planets:[ { name:'Arkanos', img:'Terran3', ox:0, oy:0, desc:'Arboran homeworld. Lush, high-UV, and a founding GAC world.' } ] },
         { name:'Sunreach Cluster', x:100, y:60, planets:[ { name:'Sunreach Prime', img:'Terran2', ox:0, oy:0, desc:'Second Arboran home system. Orbits close to its star — solar farming megastructures visible from orbit.' } ] },
       ]},
@@ -1170,10 +1173,10 @@ const SECTORS = {
   },
   'F5': { region: 'New Meridian — Habitable Frontier',
     objects: [
-      { type:'asteroid_belt', name:'Anchorpoint Debris Field', x:250, y:250, desc:'Scattered wreckage from a century of trade-run accidents near the Anchorpoint approach lanes.' },
+      { type:'asteroid_belt', name:'Anchorpoint Debris Field', x:820, y:180, desc:'Scattered wreckage from a century of trade-run accidents near the Anchorpoint approach lanes.' },
     ],
     galaxies: [
-      { name:'New Meridian', sprite:1, x:450, y:500, systems: [
+      { name:'New Meridian', sprite:1, x:250, y:600, systems: [
         { name:'Meridian Trade Anchor', x:0, y:0, planets:[ { name:'Anchorpoint', img:'Terran6', ox:0, oy:0, desc:'SNA-friendly trade hub world. Neutral ground — scavengers, GAC traders, and the occasional KEC freighter all dock here without incident.' } ] },
       ]},
     ],
@@ -1181,7 +1184,7 @@ const SECTORS = {
   'G5': { region: 'Myx System, Nebulous Way',
     objects: [],
     galaxies: [
-      { name:'Nebulous Way', sprite:2, x:500, y:500, systems: [
+      { name:'Nebulous Way', sprite:2, x:720, y:720, systems: [
         { name:'Myx System', x:-60, y:-30, planets:[ { name:'Juniper', img:'Ice', ox:0, oy:0, desc:'Myxos homeworld. Chemical seas and gelatinous ecosystems — bring a suit.' } ] },
         { name:'Sporewell Cluster', x:80, y:60, planets:[ { name:'Sporewell', img:'Ice', ox:0, oy:0, desc:'Second Myxos home system. A colder, denser chemical-sea world used for deep research.' } ] },
       ]},
@@ -1189,10 +1192,10 @@ const SECTORS = {
   },
   'B1': { region: 'Outer Rim, Obsidian Fringe',
     objects: [
-      { type:'black_hole', name:'The Obsidian Maw', x:650, y:350, desc:'A stellar-mass black hole. Void Pirate crews use its gravity shadow to vanish from GAC sensors — most patrols simply refuse to follow.' },
+      { type:'black_hole', name:'The Obsidian Maw', x:250, y:250, desc:'A stellar-mass black hole. Void Pirate crews use its gravity shadow to vanish from GAC sensors — most patrols simply refuse to follow.' },
     ],
     galaxies: [
-      { name:'Outer Rim', sprite:3, x:400, y:600, systems: [
+      { name:'Outer Rim', sprite:3, x:780, y:750, systems: [
         { name:'Obsidian Fringe', x:0, y:0, planets:[ { name:'The Obsidian Fringe', img:'Moon', ox:0, oy:0, desc:'Kaelen Outcast territory. Void Pirate crews operate freely; GAC patrols rarely bother.' } ] },
       ]},
     ],
@@ -1252,9 +1255,26 @@ function mapResizeCanvas() {
   mapCanvas.height = 360;
 }
 
+// An icon's world-space radius comes straight from its sprite's native pixel size — a
+// black hole (512px) is really enormous next to a planet (48px), by design. Falls back to
+// a placeholder size only until the image has finished loading.
+function iconWorldRadius(img, fallbackPx) {
+  const px = spriteReady(img) ? img.naturalWidth : fallbackPx;
+  return (px / 2) * ICON_SIZE_MULTIPLIER;
+}
+
+// Zoom deeper => the backdrop fades toward pure black, so it reads as "space" rather than a map.
+function spaceFadeAlpha(scale) {
+  const startLog = Math.log2(0.16), endLog = Math.log2(4);
+  const t = (Math.log2(scale) - startLog) / (endLog - startLog);
+  return Math.max(0, Math.min(1, t));
+}
+
+let mapMouseX = -9999, mapMouseY = -9999;
+
 function drawSpaceMap() {
   const W = mapCanvas.width || 800, H = mapCanvas.height || 360;
-  mapCtx.fillStyle = '#03040a';
+  mapCtx.fillStyle = '#000';
   mapCtx.fillRect(0, 0, W, H);
 
   const worldW = W / mapScale;
@@ -1265,10 +1285,37 @@ function drawSpaceMap() {
   // Backdrop: the pre-drawn 10x10 universe map, stretched over exactly the 10000x10000 world
   const bgImg = getSpriteImg('assets/UniverseMap.png');
   if (spriteReady(bgImg)) mapCtx.drawImage(bgImg, wx(0), wy(0), SECTOR_SIZE*10*mapScale, SECTOR_SIZE*10*mapScale);
+  const fade = spaceFadeAlpha(mapScale);
+  if (fade > 0) { mapCtx.fillStyle = `rgba(0,0,2,${fade})`; mapCtx.fillRect(0, 0, W, H); }
 
   const showSectorContent = mapScale > SECTOR_CONTENT_SCALE;
   document.getElementById('map-breadcrumb').textContent =
     mapScale > 2 ? 'System View' : showSectorContent ? 'Sector View' : 'Galaxy Overview';
+
+  // Draws a sprite clipped to a circle at (x,y) with radius r; enlarges + brightens on hover.
+  // Returns the radius actually used (so callers can size labels/hitboxes to match).
+  function drawCircleIcon(img, x, y, r, fallbackColor) {
+    const hovered = Math.hypot(mapMouseX - x, mapMouseY - y) <= Math.max(r, 10);
+    const dr = hovered ? r * 1.5 : r;
+    if (hovered) {
+      mapCtx.save();
+      mapCtx.shadowColor = 'rgba(255,255,255,.8)';
+      mapCtx.shadowBlur = 18;
+    }
+    mapCtx.save();
+    mapCtx.beginPath(); mapCtx.arc(x, y, dr, 0, Math.PI*2); mapCtx.clip();
+    if (spriteReady(img)) mapCtx.drawImage(img, x-dr, y-dr, dr*2, dr*2);
+    else { mapCtx.fillStyle = fallbackColor; mapCtx.fill(); }
+    mapCtx.restore();
+    if (hovered) mapCtx.restore();
+    return { dr, hovered };
+  }
+  function drawLabel(text, x, y, dr, hovered, color) {
+    mapCtx.fillStyle = color;
+    mapCtx.font = `${hovered ? '700 ' : ''}${hovered ? 16 : 13}px system-ui, sans-serif`;
+    mapCtx.textAlign = 'center'; mapCtx.textBaseline = 'top';
+    mapCtx.fillText(text, x, y + dr + 4);
+  }
 
   for (let row = 0; row < 10; row++) for (let col = 0; col < 10; col++) {
     const coord = SECTOR_COLS[col] + row;
@@ -1284,7 +1331,7 @@ function drawSpaceMap() {
       mapCtx.beginPath(); mapCtx.arc(cx, cy, 3, 0, Math.PI*2); mapCtx.fill();
       if (size > 24) {
         mapCtx.fillStyle = 'rgba(255,255,255,.5)';
-        mapCtx.font = '10px system-ui, sans-serif'; mapCtx.textAlign='left'; mapCtx.textBaseline='top';
+        mapCtx.font = '12px system-ui, sans-serif'; mapCtx.textAlign='left'; mapCtx.textBaseline='top';
         mapCtx.fillText(coord, x0+4, y0+4);
       }
       continue;
@@ -1294,40 +1341,33 @@ function drawSpaceMap() {
     (sector.objects||[]).forEach(obj => {
       const op = objectWorldPos(coord, obj);
       const opx = wx(op.x), opy = wy(op.y);
-      if (opx < -60 || opx > W+60 || opy < -60 || opy > H+60) return;
-      const r = Math.max(10, Math.min(30, mapScale * 40));
       const imgName = obj.type === 'black_hole' ? 'Black_hole' : 'asteroid_belt';
       const img = getSpriteImg(`assets/map/misc/${imgName}.png`);
-      mapCtx.save();
-      mapCtx.beginPath(); mapCtx.arc(opx, opy, r, 0, Math.PI*2); mapCtx.clip();
-      if (spriteReady(img)) mapCtx.drawImage(img, opx-r, opy-r, r*2, r*2);
-      else { mapCtx.fillStyle = '#5a3a2a'; mapCtx.fill(); }
-      mapCtx.restore();
-      mapCtx.fillStyle = 'rgba(255,180,120,.85)';
-      mapCtx.font = '10px system-ui, sans-serif'; mapCtx.textAlign='center'; mapCtx.textBaseline='top';
-      mapCtx.fillText(obj.name, opx, opy + r + 2);
-      mapHitboxes.push({ x:opx, y:opy, r, kind:'object', coord, object:obj.name });
+      const r = Math.max(6, iconWorldRadius(img, obj.type === 'black_hole' ? 512 : 256) * mapScale);
+      if (opx < -r-60 || opx > W+r+60 || opy < -r-60 || opy > H+r+60) return;
+
+      const { dr, hovered } = drawCircleIcon(img, opx, opy, r, '#5a3a2a');
+      drawLabel(obj.name, opx, opy, dr, hovered, 'rgba(255,180,120,.9)');
+      mapHitboxes.push({ x:opx, y:opy, r:dr, kind:'object', coord, object:obj.name });
     });
 
     // Galaxies — expand into systems once zoomed in enough
     sector.galaxies.forEach(gal => {
       const gp = galaxyWorldPos(coord, gal);
       const gpx = wx(gp.x), gpy = wy(gp.y);
-      const galPx = GALAXY_RADIUS * mapScale;
-      if (gpx < -galPx-40 || gpx > W+galPx+40 || gpy < -galPx-40 || gpy > H+galPx+40) return;
+      const galImg = getSpriteImg(`assets/map/galaxies/galaxy${gal.sprite}.png`);
+      const galR = iconWorldRadius(galImg, 100) * mapScale;
+      const galOffscreen = gpx < -galR-60 || gpx > W+galR+60 || gpy < -galR-60 || gpy > H+galR+60;
+      // Skip entirely if off-screen AND still collapsed (a collapsed icon has nothing to show
+      // off past its own edges). If it's expanded, its systems may still be on-screen even
+      // though the galaxy's own center point isn't, so keep going.
+      if (galOffscreen && galR < GALAXY_EXPAND_PX) return;
 
-      if (galPx < GALAXY_EXPAND_PX) {
-        const r = Math.max(8, Math.min(40, galPx));
-        const img = getSpriteImg(`assets/map/galaxies/galaxy${gal.sprite}.png`);
-        mapCtx.save();
-        mapCtx.beginPath(); mapCtx.arc(gpx, gpy, r, 0, Math.PI*2); mapCtx.clip();
-        if (spriteReady(img)) mapCtx.drawImage(img, gpx-r, gpy-r, r*2, r*2);
-        else { mapCtx.fillStyle = '#7a4ac8'; mapCtx.fill(); }
-        mapCtx.restore();
-        mapCtx.fillStyle = '#e0d0ff';
-        mapCtx.font = '11px system-ui, sans-serif'; mapCtx.textAlign='center'; mapCtx.textBaseline='top';
-        mapCtx.fillText(gal.name, gpx, gpy + r + 3);
-        mapHitboxes.push({ x:gpx, y:gpy, r, kind:'galaxy', coord, galaxy:gal.name });
+      if (galR < GALAXY_EXPAND_PX) {
+        const r = Math.max(6, galR);
+        const { dr, hovered } = drawCircleIcon(galImg, gpx, gpy, r, '#7a4ac8');
+        drawLabel(gal.name, gpx, gpy, dr, hovered, '#e0d0ff');
+        mapHitboxes.push({ x:gpx, y:gpy, r:dr, kind:'galaxy', coord, galaxy:gal.name });
         return;
       }
 
@@ -1335,52 +1375,47 @@ function drawSpaceMap() {
       gal.systems.forEach(sys => {
         const sp = systemWorldPos(coord, gal, sys);
         const spx = wx(sp.x), spy = wy(sp.y);
-        const sysPx = SYSTEM_RADIUS * mapScale;
-        if (spx < -sysPx-40 || spx > W+sysPx+40 || spy < -sysPx-40 || spy > H+sysPx+40) return;
+        const sysR = SYSTEM_RADIUS_WORLD * mapScale;
+        if (spx < -sysR-60 || spx > W+sysR+60 || spy < -sysR-60 || spy > H+sysR+60) return;
 
-        if (sysPx < SYSTEM_EXPAND_PX) {
-          const r = Math.max(4, Math.min(9, sysPx));
+        if (sysR < SYSTEM_EXPAND_PX) {
+          const r = Math.max(4, sysR);
+          const hovered = Math.hypot(mapMouseX - spx, mapMouseY - spy) <= Math.max(r, 10);
+          const dr = hovered ? r * 1.6 : r;
           mapCtx.fillStyle = '#ffe07a';
-          mapCtx.beginPath(); mapCtx.arc(spx, spy, r, 0, Math.PI*2); mapCtx.fill();
-          mapCtx.fillStyle = 'rgba(255,224,122,.85)';
-          mapCtx.font = '10px system-ui, sans-serif'; mapCtx.textAlign='center'; mapCtx.textBaseline='top';
-          mapCtx.fillText(sys.name, spx, spy + r + 3);
-          mapHitboxes.push({ x:spx, y:spy, r:Math.max(r,10), kind:'system', coord, galaxy:gal.name, system:sys.name });
+          mapCtx.beginPath(); mapCtx.arc(spx, spy, dr, 0, Math.PI*2); mapCtx.fill();
+          drawLabel(sys.name, spx, spy, dr, hovered, 'rgba(255,224,122,.9)');
+          mapHitboxes.push({ x:spx, y:spy, r:Math.max(dr,10), kind:'system', coord, galaxy:gal.name, system:sys.name });
           return;
         }
 
         // Expanded: star + planets
         mapCtx.fillStyle = '#ffe07a';
         mapCtx.beginPath(); mapCtx.arc(spx, spy, 5, 0, Math.PI*2); mapCtx.fill();
-        mapCtx.fillStyle = 'rgba(255,224,122,.8)';
-        mapCtx.font = '11px system-ui, sans-serif'; mapCtx.textAlign='center'; mapCtx.textBaseline='bottom';
+        mapCtx.fillStyle = 'rgba(255,224,122,.85)';
+        mapCtx.font = '13px system-ui, sans-serif'; mapCtx.textAlign='center'; mapCtx.textBaseline='bottom';
         mapCtx.fillText(sys.name, spx, spy - 10);
 
         sys.planets.forEach(p => {
           const pp = planetWorldPos(coord, gal, sys, p);
           const ppx = wx(pp.x), ppy = wy(pp.y);
-          const r = Math.max(14, Math.min(26, mapScale * 8));
           const img = getSpriteImg(`assets/map/planets/${p.img}.png`);
-          mapCtx.save();
-          mapCtx.beginPath(); mapCtx.arc(ppx, ppy, r, 0, Math.PI*2); mapCtx.clip();
-          if (spriteReady(img)) mapCtx.drawImage(img, ppx-r, ppy-r, r*2, r*2);
-          else { mapCtx.fillStyle = '#3a4050'; mapCtx.fill(); }
-          mapCtx.restore();
-          mapCtx.strokeStyle = 'rgba(255,255,255,.3)';
-          mapCtx.beginPath(); mapCtx.arc(ppx, ppy, r, 0, Math.PI*2); mapCtx.stroke();
+          const r = Math.max(6, iconWorldRadius(img, 48) * mapScale);
+          if (ppx < -r-40 || ppx > W+r+40 || ppy < -r-40 || ppy > H+r+40) return;
+
+          const { dr, hovered } = drawCircleIcon(img, ppx, ppy, r, '#3a4050');
+          mapCtx.strokeStyle = 'rgba(255,255,255,.35)';
+          mapCtx.beginPath(); mapCtx.arc(ppx, ppy, dr, 0, Math.PI*2); mapCtx.stroke();
 
           const isHere = campaign.current_sector === coord && campaign.current_system === sys.name && campaign.current_planet === p.name;
           if (isHere) {
             mapCtx.strokeStyle = '#ffd23a'; mapCtx.lineWidth = 2;
-            mapCtx.beginPath(); mapCtx.arc(ppx, ppy, r+4, 0, Math.PI*2); mapCtx.stroke();
+            mapCtx.beginPath(); mapCtx.arc(ppx, ppy, dr+4, 0, Math.PI*2); mapCtx.stroke();
             mapCtx.lineWidth = 1;
           }
 
-          mapCtx.fillStyle = '#e0ecff';
-          mapCtx.font = '10px system-ui, sans-serif'; mapCtx.textAlign='center'; mapCtx.textBaseline='top';
-          mapCtx.fillText(p.name, ppx, ppy + r + 3);
-
-          mapHitboxes.push({ x:ppx, y:ppy, r, kind:'planet', coord, galaxy:gal.name, system:sys.name, planet:p.name });
+          drawLabel(p.name, ppx, ppy, dr, hovered, '#e0ecff');
+          mapHitboxes.push({ x:ppx, y:ppy, r:dr, kind:'planet', coord, galaxy:gal.name, system:sys.name, planet:p.name });
         });
       });
     });
@@ -1397,7 +1432,14 @@ mapCanvas.addEventListener('mousedown', e => {
   mapDragCenterX = mapCenterX; mapDragCenterY = mapCenterY;
 });
 window.addEventListener('mousemove', e => {
-  if (!mapDragging) return;
+  const rect = mapCanvas.getBoundingClientRect();
+  mapMouseX = e.clientX - rect.left;
+  mapMouseY = e.clientY - rect.top;
+
+  if (!mapDragging) {
+    if (shipViewMode === 'map') redrawSpaceMap();
+    return;
+  }
   const dx = e.clientX - mapDragStartX, dy = e.clientY - mapDragStartY;
   if (Math.abs(dx) > 2 || Math.abs(dy) > 2) mapDidDrag = true;
   mapCenterX = mapDragCenterX - dx / mapScale;
@@ -1405,6 +1447,7 @@ window.addEventListener('mousemove', e => {
   redrawSpaceMap();
 });
 window.addEventListener('mouseup', () => { mapDragging = false; });
+mapCanvas.addEventListener('mouseleave', () => { mapMouseX = -9999; mapMouseY = -9999; if (shipViewMode === 'map') redrawSpaceMap(); });
 
 mapCanvas.addEventListener('wheel', e => {
   e.preventDefault();
