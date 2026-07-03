@@ -37,6 +37,12 @@
 }
 .ability-name { font-size: 12px; font-weight: 800; color: #e0ecff; min-width: 130px; }
 .ability-desc { font-size: 12px; color: var(--text-faint); line-height: 1.5; }
+.ability-badges { display: flex; flex-direction: column; gap: 4px; min-width: 54px; flex-shrink: 0; }
+.ability-badge-lv, .ability-badge-pp {
+  font-size: 10px; font-weight: 800; text-align: center; border-radius: 5px; padding: 2px 6px;
+}
+.ability-badge-lv { background: rgba(255,255,255,0.06); color: var(--text-faint); }
+.ability-badge-pp { background: var(--role-color, var(--accent)); color: #0a0e18; opacity: .85; }
 .wip-banner {
   background: rgba(212,175,55,0.08); border: 1px solid rgba(212,175,55,0.25);
   border-radius: 10px; padding: 14px 18px; margin-bottom: 28px;
@@ -69,10 +75,10 @@
   <aside class="sidebar">
     <div class="sidebar-section">
       <div class="sidebar-heading">Crew Roles</div>
+      <a class="sidebar-link" href="#captain"><div class="sidebar-dot" style="background:rgba(212,175,55,0.5);">👨‍✈️</div>The Captain</a>
       <a class="sidebar-link" href="#pilot"><div class="sidebar-dot" style="background:rgba(64,160,200,0.5);">🚀</div>The Pilot</a>
       <a class="sidebar-link" href="#gunsmith"><div class="sidebar-dot" style="background:rgba(200,64,64,0.5);">🔫</div>The Gunsmith</a>
       <a class="sidebar-link" href="#technician"><div class="sidebar-dot" style="background:rgba(32,168,128,0.5);">⚙️</div>The Technician</a>
-      <a class="sidebar-link" href="#smuggler"><div class="sidebar-dot" style="background:rgba(128,64,200,0.5);">🗣️</div>The Smuggler</a>
     </div>
     <div class="sidebar-divider"></div>
     <div class="sidebar-section">
@@ -87,17 +93,56 @@
     <div class="page-hero">
       <div class="page-category">Crew Roster</div>
       <h1 class="page-title">Crew Roles & Ship Stations</h1>
-      <p class="page-subtitle">Four roles. One ship. Every crew member controls a station — your class determines your battlefield, your abilities determine how you control it.</p>
+      <p class="page-subtitle">Four classes. One ship. Every crew member controls a station — your class determines your battlefield, your class actions determine how you control it.</p>
       <div class="page-tags">
-        <span class="tag highlight">4 Core Roles</span>
+        <span class="tag highlight">4 Core Classes</span>
         <span class="tag">Ship Stations</span>
-        <span class="tag">Cooperative Combat</span>
+        <span class="tag">Power Point Economy</span>
         <span class="tag">Alpha v1.0</span>
       </div>
     </div>
 
-    <div class="wip-banner">
-      ⚠️ This section is in active development. Ability costs, unlock trees, and advanced station actions will be detailed in a future update.
+    <!-- CAPTAIN -->
+    <div class="role-card" id="captain" style="--role-color:#d4af37;">
+      <div class="role-header">
+        <div class="role-icon-box" style="background:rgba(212,175,55,0.15);border-color:rgba(212,175,55,0.3);">👨‍✈️</div>
+        <div>
+          <div class="role-name">The Captain</div>
+          <div class="role-station">Station: The Bridge · Stat Focus: FACE</div>
+        </div>
+        <div class="role-stat-badge" style="color:#d4af37;border-color:rgba(212,175,55,0.4);background:rgba(212,175,55,0.1);">FACE Primary</div>
+      </div>
+      <p class="role-desc">This class acts as the general "leader" of a vessel — making strategic decisions for the group and handling comms with other vessels. As they level up, they learn key actions and skills to ensure their vessel runs smoothly in all situations: travel, combat, or otherwise.</p>
+      <div class="role-abilities">
+        <div class="ability-row">
+          <div class="ability-badges"><span class="ability-badge-lv">LV 1</span><span class="ability-badge-pp">0 PP</span></div>
+          <div>
+            <div class="ability-name">Tactical Directives</div>
+            <div class="ability-desc">Grant a flat +2 modifier to any single crew member's station dice check during the current Action Phase.</div>
+          </div>
+        </div>
+        <div class="ability-row">
+          <div class="ability-badges"><span class="ability-badge-lv">LV 1</span><span class="ability-badge-pp">0 PP</span></div>
+          <div>
+            <div class="ability-name">Hailing Frequency</div>
+            <div class="ability-desc">Requires a FACE check. This can be used to resolve encounters peacefully or stall an enemy before shots are fired. Effectiveness is at the discretion of the GM to provide you advantage/disadvantage on rolls for good roleplay.</div>
+          </div>
+        </div>
+        <div class="ability-row">
+          <div class="ability-badges"><span class="ability-badge-lv">LV 3</span><span class="ability-badge-pp">2 PP</span></div>
+          <div>
+            <div class="ability-name">Focus Fire</div>
+            <div class="ability-desc">For the remainder of the round, any weapon fired from the ship adds a flat +5 bonus to AD checks.</div>
+          </div>
+        </div>
+        <div class="ability-row" style="border-color:rgba(212,175,55,0.3);">
+          <div class="ability-badges"><span class="ability-badge-lv">LV 3</span><span class="ability-badge-pp">2 PP</span></div>
+          <div>
+            <div class="ability-name" style="color:#d4af37;">Scramble Signals</div>
+            <div class="ability-desc">Roll a FACE check against the enemy ship. On a success, the enemy vessel is jammed for 1 round, preventing their crew from communicating or using sensors / trackers.</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- PILOT -->
@@ -110,23 +155,35 @@
         </div>
         <div class="role-stat-badge" style="color:#40a0c8;border-color:rgba(64,160,200,0.4);background:rgba(64,160,200,0.1);">FLY Primary</div>
       </div>
-      <p class="role-desc">The Pilot is the nerve center of any ship operation. Where the Gunsmith blows things up and the Technician keeps them together, the Pilot decides whether the ship lives to fight another round. They are the last line of evasion — and the first one responsible when a warp jump goes sideways. A good Pilot doesn't just fly the ship. They become the ship.</p>
+      <p class="role-desc">This class acts as the controller of the vessel, deciding the speed and direction of the ship. As a Pilot grows in skill they learn many tricks to get around quicker, dodge attacks, and outmanoeuvre opponents.</p>
       <div class="role-abilities">
         <div class="ability-row">
-          <div class="ability-name">🌀 Evasive Maneuvers</div>
-          <div class="ability-desc">Expend 2 Power to instantly redirect one incoming missile or cannon round. Requires a FLY check DC 12. On failure, the ship still takes half damage.</div>
+          <div class="ability-badges"><span class="ability-badge-lv">LV 1</span><span class="ability-badge-pp">1 PP</span></div>
+          <div>
+            <div class="ability-name">Full Power!</div>
+            <div class="ability-desc">Increase your baseline tile movement layout for the current round based on the engine component specifications.</div>
+          </div>
         </div>
         <div class="ability-row">
-          <div class="ability-name">⚡ Tactical Burn</div>
-          <div class="ability-desc">Spend 3 Power to execute a high-thrust repositioning burn. Moves the ship up to two zones in any direction, ignoring standard movement costs this round.</div>
+          <div class="ability-badges"><span class="ability-badge-lv">LV 1</span><span class="ability-badge-pp">2 PP</span></div>
+          <div>
+            <div class="ability-name">Evasive Manoeuvre</div>
+            <div class="ability-desc">"Throw the vessel into a violent kinetic drift, spin, or hard roll." Requires a FLY check. On a success, instantly increase your ship's total AD by +10 for the remainder of the current round.</div>
+          </div>
         </div>
         <div class="ability-row">
-          <div class="ability-name">🔭 Sensor Sweep</div>
-          <div class="ability-desc">Passive. The Pilot may spend 1 Power to reveal hidden threats in the current zone. FLY + Fix check — on success, ambushes within range are preempted for 1 round.</div>
+          <div class="ability-badges"><span class="ability-badge-lv">LV 3</span><span class="ability-badge-pp">2 PP</span></div>
+          <div>
+            <div class="ability-name">Thread the Needle</div>
+            <div class="ability-desc">"Guide the ship flawlessly through dense debris." When utilising map obstacles (like asteroid belts or scrap fields) as cover, the AD penalty applied to enemies trying to target you increases from doubled to tripled for 1 round.</div>
+          </div>
         </div>
         <div class="ability-row" style="border-color:rgba(64,160,200,0.3);">
-          <div class="ability-name" style="color:#40a0c8;">⭐ CORE: Dead Stick Landing</div>
-          <div class="ability-desc">Once per session, the Pilot may attempt a controlled emergency landing on any terrain with zero fuel remaining. FLY DC 18. Success: crew survives intact. Failure: crew survives, ship takes 2d10 Hull damage.</div>
+          <div class="ability-badges"><span class="ability-badge-lv">LV 5</span><span class="ability-badge-pp">3 PP</span></div>
+          <div>
+            <div class="ability-name" style="color:#40a0c8;">Slingshot Drift</div>
+            <div class="ability-desc">"Execute an advanced physics-defying vector turn." Move the ship up to 3 tiles diagonally as a free action, dropping your ship into an opening that completely bypasses the target's obstacle AD protection for your Gunsmith's next attack.</div>
+          </div>
         </div>
       </div>
     </div>
@@ -141,23 +198,35 @@
         </div>
         <div class="role-stat-badge" style="color:#c84040;border-color:rgba(200,64,64,0.4);background:rgba(200,64,64,0.1);">FIGHT Primary</div>
       </div>
-      <p class="role-desc">The Gunsmith operates the ship's offensive systems — railguns, missile pods, point-defense cannons, and whatever black-market weaponry the Smuggler managed to bolt on at the last port. They are raw, controlled destruction. The art isn't pointing and shooting. It's knowing which weapon to fire, in what sequence, at what heat level, without melting the ship's own reactor.</p>
+      <p class="role-desc">The Gunsmith manages the weaponry on board, targeting lock-ons, and ballistic array output as they fight enemies. Built to aim and fire.</p>
       <div class="role-abilities">
         <div class="ability-row">
-          <div class="ability-name">🔥 Overcharge Shot</div>
-          <div class="ability-desc">Spend 3 Power. Deal +2d6 bonus damage on the next weapons salvo. Generates 2 Heat. If current Heat exceeds threshold, the weapons array goes offline until next round.</div>
+          <div class="ability-badges"><span class="ability-badge-lv">LV 1</span><span class="ability-badge-pp">[?]</span></div>
+          <div>
+            <div class="ability-name">Fire Weapons</div>
+            <div class="ability-desc">"Unleash a payload from an active, powered hardpoint turret." Requires a FIGHT check rolled directly against the target vessel's Total AD to hit successfully.</div>
+          </div>
         </div>
         <div class="ability-row">
-          <div class="ability-name">🎯 Target Lock</div>
-          <div class="ability-desc">Spend 1 Power to establish a target lock. Next round, all weapons fire against this target have Advantage on the FIGHT roll. Lock breaks if target changes zone.</div>
+          <div class="ability-badges"><span class="ability-badge-lv">LV 1</span><span class="ability-badge-pp">1 PP</span></div>
+          <div>
+            <div class="ability-name">Target Lock</div>
+            <div class="ability-desc">"Focus the ship's tracking sensors onto a specific hostile hull." Achieving a successful lock grants Advantage on all weapon fire checks against that exact ship on your next turn.</div>
+          </div>
         </div>
         <div class="ability-row">
-          <div class="ability-name">💥 Scatter Volley</div>
-          <div class="ability-desc">Spend 4 Power. Fire simultaneously at up to 3 targets in the current zone. Each takes base weapon damage. No bonus damage. No targeting lock applies.</div>
+          <div class="ability-badges"><span class="ability-badge-lv">LV 3</span><span class="ability-badge-pp">2 PP</span></div>
+          <div>
+            <div class="ability-name">Stun Gun</div>
+            <div class="ability-desc">"Fire a stun shot instead of a damaging shot." Requires a FIGHT check rolled directly against the target vessel's Total AD to hit successfully. If completed successfully, the target vessel has their shields "stunned" until the next round.</div>
+          </div>
         </div>
         <div class="ability-row" style="border-color:rgba(200,64,64,0.3);">
-          <div class="ability-name" style="color:#c84040;">⭐ CORE: Controlled Demolition</div>
-          <div class="ability-desc">Once per combat, the Gunsmith may declare a Precision Strike — targeting a specific system on an enemy ship (engines, weapons, shields, comms). On hit, that system is disabled for 1d4 rounds instead of dealing Hull damage.</div>
+          <div class="ability-badges"><span class="ability-badge-lv">LV 5</span><span class="ability-badge-pp">3 PP</span></div>
+          <div>
+            <div class="ability-name" style="color:#c84040;">Overcharge Salvo</div>
+            <div class="ability-desc">"Pump raw, unmetered plasma into your active weapon modules." Double the total weapon damage dice pool for this round. However, this creates extreme stress, and makes it harder to aim, reducing your FIGHT check roll by -3.</div>
+          </div>
         </div>
       </div>
     </div>
@@ -172,54 +241,42 @@
         </div>
         <div class="role-stat-badge" style="color:#20a880;border-color:rgba(32,168,128,0.4);background:rgba(32,168,128,0.1);">FIX Primary</div>
       </div>
-      <p class="role-desc">The Technician is the reason the ship doesn't explode. While everyone else is shooting, evading, or talking their way out of problems, the Technician is duct-taping the reactor casing back together with whatever's available. They manage heat, reroute power, patch hull breaches mid-combat, and are the only crew member capable of performing an emergency system reboot without killing everyone aboard.</p>
+      <p class="role-desc">The Technician regulates the reactor limits, clears heat overloads, and handles emergency repairs. The most strategic of the classes.</p>
       <div class="role-abilities">
         <div class="ability-row">
-          <div class="ability-name">🔄 Emergency Reboot</div>
-          <div class="ability-desc">Spend 2 Power. Bring one offline system (weapons, shields, engines) back online immediately. FIX DC 14. On failure, system stays offline but Heat is reduced by 1.</div>
+          <div class="ability-badges"><span class="ability-badge-lv">LV 1</span><span class="ability-badge-pp">0 PP</span></div>
+          <div>
+            <div class="ability-name">Reactor Overclock</div>
+            <div class="ability-desc">"Override the safety protocols on the ship's primary power core." Roll a FIX check. On a success, generate +2 bonus PP to be added directly to the crew's power pool on the following round.</div>
+          </div>
         </div>
         <div class="ability-row">
-          <div class="ability-name">🛡️ Shield Reroute</div>
-          <div class="ability-desc">Spend 3 Power. Transfer Shield Points from one system to another, or regenerate 1d6+FIX Shield Points by draining power from non-critical systems.</div>
+          <div class="ability-badges"><span class="ability-badge-lv">LV 1</span><span class="ability-badge-pp">1 PP</span></div>
+          <div>
+            <div class="ability-name">Shield Restore</div>
+            <div class="ability-desc">"Reroute secondary juice into the deflector grids." Roll a FIX check. Regain 1d20 shield points for the initial cost, plus an additional 1d6 for every extra PP siphoned into the check.</div>
+          </div>
         </div>
         <div class="ability-row">
-          <div class="ability-name">🌡️ Heat Vent</div>
-          <div class="ability-desc">Spend 1 Power. Reduce ship Heat by 2. Can be used at any point in the round, even reactively after Overcharge damage is declared.</div>
+          <div class="ability-badges"><span class="ability-badge-lv">LV 1</span><span class="ability-badge-pp">2 PP</span></div>
+          <div>
+            <div class="ability-name">Ship Repairs</div>
+            <div class="ability-desc">"Execute a high-stakes mid-combat patch via the ship panels." Roll a FIX check to instantly recover 1d8 lost Hull Points or fix a damaged component's health.</div>
+          </div>
+        </div>
+        <div class="ability-row">
+          <div class="ability-badges"><span class="ability-badge-lv">LV 3</span><span class="ability-badge-pp">2 PP</span></div>
+          <div>
+            <div class="ability-name">Siphon Shields</div>
+            <div class="ability-desc">Siphon hit points from your shield's HP to charge up PP. You can convert as much shield energy as you'd like into PP: 1d10 + 10 damage to shield = 2 PP.</div>
+          </div>
         </div>
         <div class="ability-row" style="border-color:rgba(32,168,128,0.3);">
-          <div class="ability-name" style="color:#20a880;">⭐ CORE: Jury-Rig</div>
-          <div class="ability-desc">Once per session, the Technician can improvise a repair using whatever materials are available. Restore up to 2d10 Hull Points. Requires 1 round of uninterrupted work and a successful FIX DC 16. The repair holds for 24 hours then degrades.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SMUGGLER -->
-    <div class="role-card" id="smuggler" style="--role-color:#8040c8;">
-      <div class="role-header">
-        <div class="role-icon-box" style="background:rgba(128,64,200,0.15);border-color:rgba(128,64,200,0.3);">🗣️</div>
-        <div>
-          <div class="role-name">The Smuggler</div>
-          <div class="role-station">Station: Comms &amp; Sensors · Stat Focus: FACE</div>
-        </div>
-        <div class="role-stat-badge" style="color:#8040c8;border-color:rgba(128,64,200,0.4);background:rgba(128,64,200,0.1);">FACE Primary</div>
-      </div>
-      <p class="role-desc">The Smuggler is the information warfare specialist, the deal-maker, the distraction, and the reason the crew didn't have to shoot their way out of that checkpoint. They operate the ship's communication arrays and electronic countermeasures — which means they can jam targeting computers, spoof transponder signals, negotiate docking rights under false credentials, and triangulate enemy positions from passive sensor data before the Gunsmith even has a lock.</p>
-      <div class="role-abilities">
-        <div class="ability-row">
-          <div class="ability-name">📡 Signal Jam</div>
-          <div class="ability-desc">Spend 2 Power. Disrupt enemy targeting matrices for 1 round — all attacks against the crew's ship have Disadvantage. FACE DC 13 to maintain past the first round.</div>
-        </div>
-        <div class="ability-row">
-          <div class="ability-name">🪪 Transponder Spoof</div>
-          <div class="ability-desc">Spend 1 Power + 1 minute of work. Change the ship's apparent registry and ID in sector databases. Lasts until the end of the current system visit or until actively scanned by military-grade equipment.</div>
-        </div>
-        <div class="ability-row">
-          <div class="ability-name">🔍 Passive Sweep</div>
-          <div class="ability-desc">Spend 2 Power. Scan the current zone for hidden ships, contraband signals, or distress beacons. FACE + Fix check. Reveals all hidden contacts on success.</div>
-        </div>
-        <div class="ability-row" style="border-color:rgba(128,64,200,0.3);">
-          <div class="ability-name" style="color:#8040c8;">⭐ CORE: Just Trust Me</div>
-          <div class="ability-desc">Once per session, the Smuggler can attempt to talk any single non-hostile NPC or faction into doing something they would normally refuse. FACE DC 18. On failure, the NPC becomes hostile but the Smuggler knows exactly what leverage would work next time.</div>
+          <div class="ability-badges"><span class="ability-badge-lv">LV 5</span><span class="ability-badge-pp">3 PP</span></div>
+          <div>
+            <div class="ability-name" style="color:#20a880;">System Reboot</div>
+            <div class="ability-desc">Roll a FIX check vs DC 10. On a success, instantly clear all effects (such as stuns etc.) from all components on the ship.</div>
+          </div>
         </div>
       </div>
     </div>
