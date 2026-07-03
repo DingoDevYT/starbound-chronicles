@@ -354,7 +354,7 @@ body.edit-mode .edit-hint  { display:block; }
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
         <div class="form-group">
           <label class="form-label">Type</label>
-          <select class="form-select" id="item-type">
+          <select class="form-select" id="item-type" onchange="toggleWeaponFields()">
             <option value="weapon">⚔️ Weapon</option>
             <option value="armor">🛡️ Armor</option>
             <option value="tool">🔧 Tool</option>
@@ -365,6 +365,22 @@ body.edit-mode .edit-hint  { display:block; }
         <div class="form-group">
           <label class="form-label">Quantity</label>
           <input class="form-input" id="item-qty" type="number" min="1" value="1">
+        </div>
+      </div>
+      <div id="weapon-fields" style="display:none;">
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;">
+          <div class="form-group">
+            <label class="form-label">Damage</label>
+            <input class="form-input" id="item-dmg" placeholder="e.g. 2d6">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Accuracy</label>
+            <input class="form-input" id="item-acc" type="number" value="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Range (m)</label>
+            <input class="form-input" id="item-range" type="number" min="0" value="40">
+          </div>
         </div>
       </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
@@ -898,10 +914,15 @@ function renderInventory() {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-faint); padding:24px;">No items yet.</td></tr>';
     return;
   }
-  tbody.innerHTML = inventory.map(item => `
+  tbody.innerHTML = inventory.map(item => {
+    const isWeapon = item.item_type === 'weapon';
+    const weaponMeta = isWeapon && (item.damage_dice || item.range_m)
+      ? `<br><span style="font-size:11px; color:#c88;">${item.damage_dice ? esc(item.damage_dice)+' dmg' : ''}${item.accuracy_mod ? ` · ${item.accuracy_mod>0?'+':''}${item.accuracy_mod} acc` : ''}${item.range_m ? ` · ${item.range_m}m` : ''}${item.is_equipped ? ' · <strong style="color:#4acc7a;">EQUIPPED</strong>' : ''}</span>`
+      : '';
+    return `
     <tr>
-      <td><div class="inv-equipped ${item.is_equipped ? 'active' : ''}" onclick="toggleEquip('${item.id}', ${!item.is_equipped})"></div></td>
-      <td><strong style="color:var(--text)">${esc(item.name)}</strong>${item.description ? `<br><span style="font-size:11px; color:var(--text-faint)">${esc(item.description)}</span>` : ''}</td>
+      <td><div class="inv-equipped ${item.is_equipped ? 'active' : ''}" title="${isWeapon ? 'Equip weapon (only one at a time)' : 'Mark equipped'}" onclick="toggleEquip('${item.id}', ${!item.is_equipped}, ${isWeapon})"></div></td>
+      <td><strong style="color:var(--text)">${esc(item.name)}</strong>${item.description ? `<br><span style="font-size:11px; color:var(--text-faint)">${esc(item.description)}</span>` : ''}${weaponMeta}</td>
       <td><span class="inv-type-badge type-${item.item_type}">${cap(item.item_type)}</span></td>
       <td>${item.quantity}</td>
       <td>${(item.weight||0).toFixed(1)} kg</td>
@@ -910,8 +931,8 @@ function renderInventory() {
         <button class="btn-ghost" style="font-size:10px; padding:4px 8px; margin-right:4px;" onclick="openSendToCargo('${item.id}')">→ Ship</button>
         <button class="inv-delete-btn" onclick="deleteItem('${item.id}')">🗑</button>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 let myCampaignsForChar = null, sendCargoItemId = null;
@@ -954,9 +975,19 @@ async function confirmSendToCargo() {
   await loadInventory();
 }
 
-async function toggleEquip(id, equipped) {
+async function toggleEquip(id, equipped, isWeapon) {
+  // Only ONE weapon can be equipped at a time — equipping one unequips the rest.
+  if (isWeapon && equipped) {
+    await db.from('character_inventory').update({ is_equipped: false })
+      .eq('character_id', charId).eq('item_type', 'weapon');
+  }
   await db.from('character_inventory').update({ is_equipped: equipped }).eq('id', id);
   await loadInventory();
+}
+
+function toggleWeaponFields() {
+  document.getElementById('weapon-fields').style.display =
+    document.getElementById('item-type').value === 'weapon' ? 'block' : 'none';
 }
 
 async function deleteItem(id) {
@@ -967,25 +998,37 @@ async function deleteItem(id) {
 
 function openAddItem() {
   document.getElementById('item-name').value   = '';
+  document.getElementById('item-type').value   = 'misc';
   document.getElementById('item-qty').value    = 1;
   document.getElementById('item-weight').value = 0;
   document.getElementById('item-value').value  = 0;
   document.getElementById('item-desc').value   = '';
+  document.getElementById('item-dmg').value    = '';
+  document.getElementById('item-acc').value    = 0;
+  document.getElementById('item-range').value  = 40;
+  toggleWeaponFields();
   openModal('modal-add-item');
 }
 
 async function addItem() {
   const name = document.getElementById('item-name').value.trim();
   if (!name) return showError('item-error', 'Item needs a name.');
-  const { error } = await db.from('character_inventory').insert({
+  const type = document.getElementById('item-type').value;
+  const payload = {
     character_id: charId,
     name,
-    item_type:   document.getElementById('item-type').value,
+    item_type:   type,
     quantity:    parseInt(document.getElementById('item-qty').value)    || 1,
     weight:      parseFloat(document.getElementById('item-weight').value) || 0,
     value:       parseInt(document.getElementById('item-value').value)  || 0,
     description: document.getElementById('item-desc').value.trim(),
-  });
+  };
+  if (type === 'weapon') {
+    payload.damage_dice  = document.getElementById('item-dmg').value.trim();
+    payload.accuracy_mod = parseInt(document.getElementById('item-acc').value) || 0;
+    payload.range_m      = parseInt(document.getElementById('item-range').value) || 0;
+  }
+  const { error } = await db.from('character_inventory').insert(payload);
   if (error) return showError('item-error', error.message);
   closeModal('modal-add-item');
   await loadInventory();

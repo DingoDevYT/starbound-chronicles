@@ -65,6 +65,20 @@
 .species-bonus-chip.pos { border-color:#2a7a46; color:#4acc7a; background:rgba(40,120,70,.15); }
 .species-bonus-chip.neg { border-color:#7a2020; color:#ff8888; background:rgba(160,40,40,.15); }
 
+/* ── Combat ── */
+#combat-canvas { display:block; width:100%; cursor:default; background:#04070e; }
+.combat-type-btn.active { border-color:var(--accent); color:#fff; background:var(--surface3); }
+.combat-map-opt { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 8px; cursor:pointer; text-align:center; font-size:11px; color:var(--text-dim); transition:all .12s; }
+.combat-map-opt.active { border-color:var(--accent); color:#fff; background:var(--surface3); }
+.combat-map-opt:hover { border-color:var(--border2); }
+.combat-cheatsheet { padding:12px 18px; border-top:1px solid var(--border); background:var(--surface); display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+.combat-cheat-name { font-size:14px; font-weight:800; color:#e0ecff; }
+.combat-cheat-tag { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
+.combat-cheat-chip { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:12px; color:var(--text-dim); }
+.combat-cheat-chip strong { color:#d0e4ff; }
+.combat-shield-ctl { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
+.combat-shield-ctl input { width:56px; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:5px 7px; font-size:12px; }
+
 /* ── Ship / Map view toggle ── */
 .view-toggle { display:flex; background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:2px; gap:2px; }
 .view-toggle-btn { background:none; border:none; color:var(--text-dim); font-size:11px; font-weight:600; padding:5px 12px; border-radius:5px; cursor:pointer; font-family:inherit; transition:all .12s; }
@@ -338,6 +352,7 @@
           <div class="view-toggle">
             <button class="view-toggle-btn active" id="view-btn-ship" onclick="setShipViewMode('ship')">Ship</button>
             <button class="view-toggle-btn" id="view-btn-map" onclick="setShipViewMode('map')">Space Map</button>
+            <button class="view-toggle-btn" id="view-btn-combat" onclick="setShipViewMode('combat')">Combat</button>
           </div>
           <button id="place-tokens-btn" class="btn-ghost" style="font-size:11px; padding:4px 12px; display:none;" onclick="placeAllCrewTokens()">Place Crew Tokens</button>
           <button id="ship-manage-btn" class="btn-secondary" style="font-size:11px; padding:4px 12px; display:none;" onclick="openSetupShip()">Edit Ship</button>
@@ -413,6 +428,19 @@
         <canvas id="space-map-canvas" height="520"></canvas>
         <div id="map-route-banner" class="map-route-banner" style="display:none;"></div>
         <div id="map-info-card" class="map-info-card" style="display:none;"></div>
+      </div>
+
+      <!-- COMBAT VIEW -->
+      <div id="combat-view-panel" style="display:none;">
+        <div class="map-toolbar" style="flex-wrap:wrap;">
+          <div id="combat-status" style="font-size:12px; color:var(--text-dim); flex:1; min-width:160px;">No active battle.</div>
+          <button class="btn-ghost" id="combat-ruler-btn" onclick="toggleRuler()" style="padding:4px 10px; font-size:11px;" title="Measure distance & AD">📏 Ruler</button>
+          <button class="btn-secondary" id="combat-turn-btn" onclick="nextTurn()" style="padding:4px 12px; font-size:11px; display:none;">Next Turn ▸</button>
+          <button class="btn-secondary" id="combat-start-btn" onclick="openStartCombat()" style="padding:4px 12px; font-size:11px; display:none;">Start Combat</button>
+          <button class="btn-ghost" id="combat-end-btn" onclick="endCombat()" style="padding:4px 12px; font-size:11px; display:none; color:#ff8888;">End Combat</button>
+        </div>
+        <canvas id="combat-canvas" height="520"></canvas>
+        <div id="combat-cheatsheet" class="combat-cheatsheet" style="display:none;"></div>
       </div>
 
       <div id="viewport-resize-handle" class="viewport-resize-handle" title="Drag to resize">⋯</div>
@@ -667,6 +695,28 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="modal-start-combat">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header"><span class="modal-title">Start Combat</span><button class="modal-close" onclick="closeModal('modal-start-combat')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Combat Type</label>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn-ghost combat-type-btn active" data-ctype="outside" onclick="selectCombatType('outside')" style="flex:1; padding:10px;">🔫 On-Foot</button>
+          <button type="button" class="btn-ghost combat-type-btn" data-ctype="space" onclick="selectCombatType('space')" style="flex:1; padding:10px;">🚀 Spacecraft</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Battlefield</label>
+        <div id="combat-map-picker" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;"></div>
+      </div>
+      <p style="font-size:11px; color:var(--text-faint); margin:0;">Every combatant currently in the Initiative tracker becomes a token, clustered at the centre — drag them into position once the battle opens. Add enemies to Initiative first if you haven't.</p>
+      <div class="form-error" id="combat-error"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-ghost" onclick="closeModal('modal-start-combat')">Cancel</button><button class="btn-primary" onclick="startCombat()" style="width:auto;padding:10px 24px;">Begin Battle</button></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-add-cargo">
   <div class="modal" style="max-width:440px;">
     <div class="modal-header"><span class="modal-title">Add Item to Cargo Hold</span><button class="modal-close" onclick="closeModal('modal-add-cargo')">✕</button></div>
@@ -833,6 +883,7 @@ function preloadImages() {
         document.getElementById('stat-round').textContent = p.new.round_num || 0; document.getElementById('round-lbl').textContent = 'Round ' + (p.new.round_num || 0);
         document.getElementById('day-num').textContent = p.new.day_num || 1;
         if (shipViewMode === 'map') redrawSpaceMap();
+        if (shipViewMode === 'combat') { refreshCombatUI(); drawCombatMap(); }
       })
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'campaign_ships',    filter:`campaign_id=eq.${campaignId}` }, async p => { await loadShip(); })
     .on('postgres_changes', { event:'*',      schema:'public', table:'ship_tokens',       filter:`campaign_id=eq.${campaignId}` }, async () => { await loadTokens(); drawShipMap(); })
@@ -947,7 +998,39 @@ function renderLoadout() {
           : `<div class="loadout-slot-empty">${isGM ? '+ Equip Reactor' : 'Empty'}</div>`}
       </div>
       ${gunSlotsHtml}
-    </div>`;
+    </div>
+    ${isGM ? `
+    <div class="combat-shield-ctl">
+      <span class="loadout-slot-label" style="margin:0;">Shields</span>
+      <input type="number" id="ship-shield-amt" placeholder="amt">
+      <button class="btn-danger" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('shield',-1)">Damage</button>
+      <button class="btn-secondary" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('shield',1)">Restore</button>
+      <span style="width:14px;"></span>
+      <span class="loadout-slot-label" style="margin:0;">Hull</span>
+      <input type="number" id="ship-hull-amt" placeholder="amt">
+      <button class="btn-danger" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('hull',-1)">Damage</button>
+      <button class="btn-secondary" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('hull',1)">Repair</button>
+      <span style="font-size:10.5px; color:var(--text-faint); flex-basis:100%;">Damage hits shields first; overflow spills into the hull automatically.</span>
+    </div>` : ''}`;
+}
+
+// GM: damage or heal the party ship's shields / hull. Damage to shields overflows into hull.
+async function adjustShipBar(bar, sign) {
+  if (!isGM || !shipData) return;
+  const amt = Math.abs(parseInt(document.getElementById(bar === 'shield' ? 'ship-shield-amt' : 'ship-hull-amt').value) || 0);
+  if (!amt) return;
+  let shield = shipData.shield_current ?? 0, hull = shipData.hp_current ?? 0;
+  const shieldMax = shipData.shield_max ?? 0, hullMax = shipData.hp_max ?? 0;
+  if (bar === 'shield') {
+    if (sign > 0) shield = Math.min(shieldMax, shield + amt);
+    else { const leftover = amt - shield; shield = Math.max(0, shield - amt); if (leftover > 0) hull = Math.max(0, hull - leftover); }
+  } else {
+    if (sign > 0) hull = Math.min(hullMax, hull + amt);
+    else hull = Math.max(0, hull - amt);
+  }
+  const { error } = await db.from('campaign_ships').update({ shield_current: shield, hp_current: hull }).eq('campaign_id', campaignId);
+  if (error) return alert('Failed to update ship: ' + error.message);
+  await loadShip();
 }
 
 async function loadTokens() {
@@ -1016,6 +1099,7 @@ function applyViewportHeight() {
   document.getElementById('space-map-canvas').height = viewportHeight;
   if (shipCanvas) { shipCanvas.height = viewportHeight; drawShipMap(); }
   if (mapCanvas)  { mapCanvas.height  = viewportHeight; if (shipViewMode === 'map') redrawSpaceMap(); }
+  if (combatCanvas) { combatCanvas.height = viewportHeight; if (shipViewMode === 'combat') drawCombatMap(); }
 }
 
 (() => {
@@ -1374,16 +1458,19 @@ shipCanvas.addEventListener('click', e => {
 const resizeObserver = new ResizeObserver(() => drawShipMap());
 resizeObserver.observe(shipCanvas);
 
-// ── View toggle (Ship / Space Map) ───────────────────────────────
+// ── View toggle (Ship / Space Map / Combat) ──────────────────────
 let shipViewMode = 'ship';
 function setShipViewMode(mode) {
   shipViewMode = mode;
   document.getElementById('view-btn-ship').classList.toggle('active', mode === 'ship');
   document.getElementById('view-btn-map').classList.toggle('active', mode === 'map');
-  document.getElementById('ship-view-panel').style.display = mode === 'ship' ? 'block' : 'none';
-  document.getElementById('map-view-panel').style.display  = mode === 'map'  ? 'block' : 'none';
+  document.getElementById('view-btn-combat').classList.toggle('active', mode === 'combat');
+  document.getElementById('ship-view-panel').style.display   = mode === 'ship'   ? 'block' : 'none';
+  document.getElementById('map-view-panel').style.display    = mode === 'map'    ? 'block' : 'none';
+  document.getElementById('combat-view-panel').style.display = mode === 'combat' ? 'block' : 'none';
   document.getElementById('ship').scrollIntoView({ behavior: 'smooth', block: 'start' });
   if (mode === 'map') { mapResizeCanvas(); drawSpaceMap(); }
+  if (mode === 'combat') { refreshCombatUI(); drawCombatMap(); }
 }
 
 // ── Space Map: universe data ──────────────────────────────────────
@@ -2668,9 +2755,10 @@ async function saveMyCharacter() {
 // ── Initiative ──────────────────────────────────────────────────
 let combatants = [], editingCombatantId = null;
 async function loadInitiative() {
-  const { data } = await db.from('initiative_tracker').select('*').eq('campaign_id', campaignId).eq('is_active', true).order('initiative', {ascending:false}).order('created_at');
+  const { data } = await db.from('initiative_tracker').select('*, characters(species, appearance)').eq('campaign_id', campaignId).eq('is_active', true).order('initiative', {ascending:false}).order('created_at');
   combatants = data || [];
   renderInitiative();
+  if (combatState().active && shipViewMode === 'combat') { refreshCombatUI(); drawCombatMap(); }
 }
 
 function renderInitiative() {
@@ -2756,6 +2844,7 @@ async function nextTurn() {
     document.getElementById('round-lbl').textContent  = 'Round ' + newRound;
   }
   renderInitiative();
+  if (combatState().active) { refreshCombatUI(); drawCombatMap(); }
 }
 
 async function advanceDay(delta) {
@@ -2766,6 +2855,319 @@ async function advanceDay(delta) {
   const { error } = await db.from('campaigns').update({ day_num: next }).eq('id', campaignId);
   if (error) alert('Failed to update the day: ' + error.message);
 }
+
+// ══════════════════════════════════════════════════════════════
+//  GRID COMBAT
+// ══════════════════════════════════════════════════════════════
+const SPECIES_BASE_AD = { skitterling:10, human:8, myxos:8, arboran:7, kragol:6 };
+const COMBAT_SQUARE_M = 10;                 // metres per grid square
+const COVER_AD = 4;                          // AD bonus for tucking against an obstacle
+function distanceAD(meters) { return Math.floor(meters / 20); }   // +1 AD per 20 m
+function movementSquares(speed) { return Math.max(1, Math.floor((speed ?? 30) / 5)); }
+
+// Preset battlefields. obstacles are [col,row] cells that block movement and grant cover.
+function rect(x0,y0,x1,y1){ const o=[]; for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)o.push([x,y]); return o; }
+const COMBAT_MAPS = {
+  space: {
+    open:     { label:'Open Space', w:34, h:20, obstacles:[] },
+    asteroid: { label:'Asteroid Field', w:34, h:20, obstacles:[[6,4],[7,4],[6,5],[14,10],[15,10],[15,11],[22,6],[23,6],[9,14],[10,14],[26,15],[27,15],[27,14],[19,3],[3,12]] },
+    debris:   { label:'Debris Corridor', w:34, h:20, obstacles:[...rect(10,0,11,7),...rect(22,12,23,19),[16,9],[17,10],[16,11]] },
+  },
+  outside: {
+    open:   { label:'Open Plain', w:26, h:18, obstacles:[] },
+    canyon: { label:'Rocky Canyon', w:26, h:18, obstacles:[...rect(0,0,25,2),...rect(0,15,25,17),[8,7],[9,7],[8,8],[16,9],[17,9],[17,10],[12,12]] },
+    ruins:  { label:'Ruins', w:26, h:18, obstacles:[[5,4],[6,4],[7,4],[5,5],[5,6],[18,5],[19,5],[20,5],[20,6],[20,7],[10,11],[11,11],[12,11],[15,13],[16,13]] },
+  },
+};
+
+function combatState() { return campaign?.combat_state || { active:false }; }
+
+let selectedCombatType = 'outside', selectedCombatMap = 'open';
+function openStartCombat() {
+  if (!isGM) return;
+  selectedCombatType = 'outside'; selectedCombatMap = 'open';
+  document.querySelectorAll('.combat-type-btn').forEach(b => b.classList.toggle('active', b.dataset.ctype === 'outside'));
+  renderMapPicker();
+  showError('combat-error','');
+  openModal('modal-start-combat');
+}
+function selectCombatType(t) {
+  selectedCombatType = t; selectedCombatMap = 'open';
+  document.querySelectorAll('.combat-type-btn').forEach(b => b.classList.toggle('active', b.dataset.ctype === t));
+  renderMapPicker();
+}
+function renderMapPicker() {
+  const maps = COMBAT_MAPS[selectedCombatType];
+  document.getElementById('combat-map-picker').innerHTML = Object.entries(maps).map(([key, m]) =>
+    `<div class="combat-map-opt ${key===selectedCombatMap?'active':''}" onclick="selectCombatMap('${key}')">${esc(m.label)}</div>`).join('');
+}
+function selectCombatMap(k) {
+  selectedCombatMap = k;
+  document.querySelectorAll('.combat-map-opt').forEach((el,i) => el.classList.toggle('active', Object.keys(COMBAT_MAPS[selectedCombatType])[i] === k));
+}
+
+async function startCombat() {
+  if (!isGM) return;
+  const preset = COMBAT_MAPS[selectedCombatType][selectedCombatMap];
+  const state = {
+    active: true, type: selectedCombatType, map: selectedCombatMap,
+    w: preset.w, h: preset.h, obstacles: preset.obstacles,
+  };
+  // Cluster every current combatant near the centre so the GM can drag them out.
+  const cx = Math.floor(preset.w / 2), cy = Math.floor(preset.h / 2);
+  const obstacleSet = new Set(preset.obstacles.map(o => o[0]+','+o[1]));
+  let placed = 0;
+  for (const c of combatants) {
+    let gx, gy, tries = 0;
+    do { gx = cx + (placed % 5) - 2; gy = cy + Math.floor(placed / 5) - 1; placed++; tries++; }
+    while (obstacleSet.has(gx+','+gy) && tries < 40);
+    await db.from('initiative_tracker').update({ grid_x: gx, grid_y: gy }).eq('id', c.id);
+  }
+  activeTurn = 0;
+  const { error } = await db.from('campaigns').update({ combat_state: state }).eq('id', campaignId);
+  if (error) return showError('combat-error', error.message);
+  campaign.combat_state = state;
+  closeModal('modal-start-combat');
+  await loadInitiative();
+  refreshCombatUI(); drawCombatMap();
+}
+
+async function endCombat() {
+  if (!isGM) return;
+  if (!confirm('End the battle? Tokens stay in the Initiative tracker; you can clear them there.')) return;
+  const state = { active:false };
+  await db.from('campaigns').update({ combat_state: state }).eq('id', campaignId);
+  campaign.combat_state = state;
+  rulerActive = false; rulerStart = null; rulerEnd = null;
+  refreshCombatUI(); drawCombatMap();
+}
+
+function refreshCombatUI() {
+  const st = combatState();
+  const status = document.getElementById('combat-status');
+  const startBtn = document.getElementById('combat-start-btn');
+  const endBtn = document.getElementById('combat-end-btn');
+  const turnBtn = document.getElementById('combat-turn-btn');
+  const cheat = document.getElementById('combat-cheatsheet');
+
+  document.getElementById('combat-ruler-btn').classList.toggle('active', rulerActive);
+  startBtn.style.display = (isGM && !st.active) ? 'inline-block' : 'none';
+  endBtn.style.display   = (isGM && st.active) ? 'inline-block' : 'none';
+  turnBtn.style.display  = (isGM && st.active) ? 'inline-block' : 'none';
+
+  if (!st.active) {
+    status.textContent = isGM ? 'No active battle. Add combatants to Initiative, then Start Combat.' : 'No active battle.';
+    cheat.style.display = 'none';
+    return;
+  }
+  const typeLabel = st.type === 'space' ? 'Spacecraft' : 'On-Foot';
+  const mapLabel = COMBAT_MAPS[st.type]?.[st.map]?.label || '';
+  const active = combatants[activeTurn % (combatants.length || 1)];
+  status.innerHTML = `<strong style="color:#e0ecff;">${typeLabel} battle</strong> · ${esc(mapLabel)} · Round ${campaign.round_num || 0}` +
+    (active ? ` · <span style="color:#ffd23a;">${esc(active.combatant)}'s turn</span>` : '');
+  renderCheatSheet(active);
+}
+
+async function renderCheatSheet(c) {
+  const cheat = document.getElementById('combat-cheatsheet');
+  if (!c) { cheat.style.display = 'none'; return; }
+  cheat.style.display = 'flex';
+  const mv = movementSquares(c.speed);
+  let weaponHtml = '';
+  if (c.character_id) {
+    const { data: w } = await db.from('character_inventory').select('name,damage_dice,accuracy_mod,range_m')
+      .eq('character_id', c.character_id).eq('is_equipped', true).eq('item_type','weapon').limit(1).maybeSingle();
+    if (w) weaponHtml = `<div class="combat-cheat-chip">Weapon: <strong>${esc(w.name)}</strong>${w.damage_dice?` · ${esc(w.damage_dice)}`:''}${w.accuracy_mod?` · ${w.accuracy_mod>0?'+':''}${w.accuracy_mod} acc`:''}${w.range_m?` · ${w.range_m}m`:''}</div>`;
+    else weaponHtml = `<div class="combat-cheat-chip" style="color:var(--text-faint);">No weapon equipped</div>`;
+  }
+  cheat.innerHTML = `
+    <div><div class="combat-cheat-tag">Active Turn</div><div class="combat-cheat-name">${esc(c.combatant)}</div></div>
+    <div class="combat-cheat-chip">Move: <strong>${mv} squares</strong> (${mv*COMBAT_SQUARE_M} m)</div>
+    <div class="combat-cheat-chip">Base AD: <strong>${c.base_ad ?? 8}</strong></div>
+    <div class="combat-cheat-chip">To-hit: d20 ${(c.fight_mod??0)>=0?'+':''}${c.fight_mod??0} FIGHT</div>
+    ${weaponHtml}
+    <div class="combat-cheat-chip" style="border-color:var(--border2);">Core action: <strong>Attack</strong> · Dash (+${Math.floor(mv/2)}) · Switch weapon</div>
+    ${isGM ? `<button class="btn-secondary" style="font-size:11px; padding:5px 12px; margin-left:auto;" onclick="nextTurn()">End Turn ▸</button>` : ''}`;
+}
+
+// ── Combat canvas ────────────────────────────────────────────────
+const combatCanvas = document.getElementById('combat-canvas');
+const combatCtx = combatCanvas.getContext('2d');
+let cbScale = 1, cbOffX = 0, cbOffY = 0, cbCell = 1;
+let cbDragToken = null, cbDragOff = {x:0,y:0}, cbJustDragged = false;
+let rulerActive = false, rulerStart = null, rulerEnd = null;
+
+function combatPoint(e) {
+  const rect = combatCanvas.getBoundingClientRect();
+  const sx = rect.width ? combatCanvas.width / rect.width : 1;
+  const sy = rect.height ? combatCanvas.height / rect.height : 1;
+  return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy };
+}
+function cellFromPoint(px, py) {
+  return { cx: Math.floor((px - cbOffX) / cbCell), cy: Math.floor((py - cbOffY) / cbCell) };
+}
+
+function drawCombatMap() {
+  const W = combatCanvas.offsetWidth || 800;
+  combatCanvas.width = W;
+  combatCanvas.height = viewportHeight;
+  const H = combatCanvas.height;
+  combatCtx.fillStyle = '#04070e';
+  combatCtx.fillRect(0, 0, W, H);
+
+  const st = combatState();
+  if (!st.active) {
+    combatCtx.fillStyle = '#4a5568';
+    combatCtx.font = '14px system-ui, sans-serif';
+    combatCtx.textAlign = 'center';
+    combatCtx.fillText(isGM ? 'No active battle — press Start Combat.' : 'No active battle.', W/2, H/2);
+    return;
+  }
+
+  const gw = st.w, gh = st.h;
+  const pad = 16;
+  cbCell = Math.min((W - pad*2) / gw, (H - pad*2) / gh);
+  cbOffX = (W - gw * cbCell) / 2;
+  cbOffY = (H - gh * cbCell) / 2;
+
+  // Grid
+  combatCtx.strokeStyle = 'rgba(90,120,160,.14)';
+  combatCtx.lineWidth = 1;
+  for (let x = 0; x <= gw; x++) { combatCtx.beginPath(); combatCtx.moveTo(cbOffX+x*cbCell, cbOffY); combatCtx.lineTo(cbOffX+x*cbCell, cbOffY+gh*cbCell); combatCtx.stroke(); }
+  for (let y = 0; y <= gh; y++) { combatCtx.beginPath(); combatCtx.moveTo(cbOffX, cbOffY+y*cbCell); combatCtx.lineTo(cbOffX+gw*cbCell, cbOffY+y*cbCell); combatCtx.stroke(); }
+
+  // Obstacles
+  const isSpace = st.type === 'space';
+  (st.obstacles || []).forEach(([ox, oy]) => {
+    const x = cbOffX+ox*cbCell, y = cbOffY+oy*cbCell;
+    combatCtx.fillStyle = isSpace ? '#3a2f28' : '#3a352a';
+    combatCtx.strokeStyle = isSpace ? '#5a4636' : '#5a5038';
+    combatCtx.lineWidth = 1;
+    combatCtx.beginPath();
+    combatCtx.arc(x+cbCell/2, y+cbCell/2, cbCell*0.44, 0, Math.PI*2);
+    combatCtx.fill(); combatCtx.stroke();
+  });
+
+  // Active-token reachable range ring
+  const active = combatants[activeTurn % (combatants.length || 1)];
+  if (active && active.grid_x != null) {
+    const reach = movementSquares(active.speed);
+    combatCtx.fillStyle = 'rgba(122,174,255,.09)';
+    for (let dy = -reach; dy <= reach; dy++) for (let dx = -reach; dx <= reach; dx++) {
+      if (Math.abs(dx)+Math.abs(dy) > reach) continue;                 // simple diamond range
+      const gx = active.grid_x+dx, gy = active.grid_y+dy;
+      if (gx<0||gy<0||gx>=gw||gy>=gh) continue;
+      if ((st.obstacles||[]).some(o => o[0]===gx && o[1]===gy)) continue;
+      combatCtx.fillRect(cbOffX+gx*cbCell+1, cbOffY+gy*cbCell+1, cbCell-2, cbCell-2);
+    }
+  }
+
+  // Tokens
+  combatants.forEach((c, i) => {
+    if (c.grid_x == null || c.grid_y == null) return;
+    const cxp = cbOffX + c.grid_x*cbCell + cbCell/2;
+    const cyp = cbOffY + c.grid_y*cbCell + cbCell/2;
+    const r = cbCell*0.42;
+    const isActive = i === activeTurn % combatants.length;
+
+    if (isActive) { combatCtx.strokeStyle = '#ffd23a'; combatCtx.lineWidth = 3; combatCtx.beginPath(); combatCtx.arc(cxp,cyp,r+3,0,Math.PI*2); combatCtx.stroke(); }
+
+    combatCtx.save();
+    combatCtx.beginPath(); combatCtx.arc(cxp,cyp,r,0,Math.PI*2); combatCtx.clip();
+    const img = (!isSpace && c.characters?.species) ? tokenImage(c.characters.species, c.characters.appearance) : null;
+    if (img && img.complete && img.naturalWidth > 0) combatCtx.drawImage(img, cxp-r, cyp-r, r*2, r*2);
+    else {
+      combatCtx.fillStyle = c.token_color || (c.is_npc ? '#c84040' : '#3a78d4'); combatCtx.fill();
+      if (isSpace) { combatCtx.fillStyle = '#e0ecff'; combatCtx.font = `${r}px system-ui`; combatCtx.textAlign='center'; combatCtx.textBaseline='middle'; combatCtx.fillText(c.is_npc?'▲':'🚀'.slice(0,1), cxp, cyp); }
+    }
+    combatCtx.restore();
+
+    combatCtx.strokeStyle = c.is_npc ? '#c84040' : (c.token_color || '#5a98f4');
+    combatCtx.lineWidth = 2; combatCtx.beginPath(); combatCtx.arc(cxp,cyp,r,0,Math.PI*2); combatCtx.stroke();
+
+    // HP pip
+    if (c.hp_max) {
+      const pct = Math.max(0, Math.min(1, (c.hp_current ?? 0) / c.hp_max));
+      combatCtx.fillStyle = '#20304a'; combatCtx.fillRect(cxp-r, cyp+r+2, r*2, 3);
+      combatCtx.fillStyle = pct>.5?'#4acc7a':pct>.25?'#d4af37':'#cc4444'; combatCtx.fillRect(cxp-r, cyp+r+2, r*2*pct, 3);
+    }
+    // Name
+    combatCtx.fillStyle = '#e0ecff';
+    combatCtx.font = `bold ${Math.max(8, cbCell*0.28)}px system-ui, sans-serif`;
+    combatCtx.textAlign = 'center'; combatCtx.textBaseline = 'top';
+    combatCtx.fillText((c.combatant||'').slice(0,10), cxp, cyp+r+6);
+  });
+
+  // Ruler overlay
+  if (rulerActive && rulerStart && rulerEnd) {
+    const ax = cbOffX+(rulerStart.cx+0.5)*cbCell, ay = cbOffY+(rulerStart.cy+0.5)*cbCell;
+    const bx = cbOffX+(rulerEnd.cx+0.5)*cbCell, by = cbOffY+(rulerEnd.cy+0.5)*cbCell;
+    combatCtx.strokeStyle = '#ffd23a'; combatCtx.lineWidth = 2; combatCtx.setLineDash([5,4]);
+    combatCtx.beginPath(); combatCtx.moveTo(ax,ay); combatCtx.lineTo(bx,by); combatCtx.stroke();
+    combatCtx.setLineDash([]);
+    const cells = Math.round(Math.hypot(rulerEnd.cx-rulerStart.cx, rulerEnd.cy-rulerStart.cy));
+    const meters = cells * COMBAT_SQUARE_M;
+    const ad = distanceAD(meters);
+    const label = `${meters} m · +${ad} AD`;
+    combatCtx.font = 'bold 13px system-ui, sans-serif';
+    const tw = combatCtx.measureText(label).width;
+    const mx = (ax+bx)/2, my = (ay+by)/2;
+    combatCtx.fillStyle = 'rgba(10,14,24,.9)'; combatCtx.fillRect(mx-tw/2-8, my-12, tw+16, 22);
+    combatCtx.strokeStyle = '#ffd23a'; combatCtx.lineWidth=1; combatCtx.strokeRect(mx-tw/2-8, my-12, tw+16, 22);
+    combatCtx.fillStyle = '#ffd23a'; combatCtx.textAlign='center'; combatCtx.textBaseline='middle';
+    combatCtx.fillText(label, mx, my);
+  }
+}
+
+function toggleRuler() {
+  rulerActive = !rulerActive;
+  rulerStart = null; rulerEnd = null;
+  document.getElementById('combat-ruler-btn').classList.toggle('active', rulerActive);
+  combatCanvas.style.cursor = rulerActive ? 'crosshair' : 'default';
+  drawCombatMap();
+}
+
+combatCanvas.addEventListener('mousedown', e => {
+  if (!combatState().active) return;
+  const { x, y } = combatPoint(e);
+  if (rulerActive) { rulerStart = cellFromPoint(x,y); rulerEnd = cellFromPoint(x,y); drawCombatMap(); return; }
+  // grab a token you're allowed to move (GM: any; player: only their own character token)
+  for (const c of combatants) {
+    if (c.grid_x == null) continue;
+    if (!isGM && c.character_id !== myCharacterId) continue;
+    const cxp = cbOffX + c.grid_x*cbCell + cbCell/2, cyp = cbOffY + c.grid_y*cbCell + cbCell/2;
+    if (Math.hypot(x-cxp, y-cyp) < cbCell*0.45) { cbDragToken = c; cbDragOff = { x:x-cxp, y:y-cyp }; combatCanvas.style.cursor='grabbing'; return; }
+  }
+});
+combatCanvas.addEventListener('mousemove', e => {
+  if (!combatState().active) return;
+  const { x, y } = combatPoint(e);
+  if (rulerActive && rulerStart && e.buttons) { rulerEnd = cellFromPoint(x,y); drawCombatMap(); return; }
+  if (cbDragToken) {
+    cbJustDragged = true;
+    drawCombatMap();
+    const r = cbCell*0.42;
+    combatCtx.strokeStyle = '#7aaeff'; combatCtx.lineWidth = 2; combatCtx.setLineDash([4,3]);
+    combatCtx.beginPath(); combatCtx.arc(x-cbDragOff.x, y-cbDragOff.y, r, 0, Math.PI*2); combatCtx.stroke(); combatCtx.setLineDash([]);
+  }
+});
+combatCanvas.addEventListener('mouseup', async e => {
+  if (cbDragToken) {
+    const { x, y } = combatPoint(e);
+    const cx = Math.round((x - cbDragOff.x - cbCell/2 - cbOffX) / cbCell);
+    const cy = Math.round((y - cbDragOff.y - cbCell/2 - cbOffY) / cbCell);
+    const st = combatState();
+    const blocked = (st.obstacles||[]).some(o => o[0]===cx && o[1]===cy) || cx<0||cy<0||cx>=st.w||cy>=st.h;
+    const tok = cbDragToken; cbDragToken = null; combatCanvas.style.cursor = rulerActive?'crosshair':'default';
+    if (!blocked) {
+      tok.grid_x = cx; tok.grid_y = cy;
+      await db.from('initiative_tracker').update({ grid_x: cx, grid_y: cy }).eq('id', tok.id);
+    }
+    drawCombatMap();
+    setTimeout(() => cbJustDragged = false, 30);
+  }
+});
+combatCanvas.addEventListener('mouseleave', () => { if (cbDragToken) { cbDragToken = null; drawCombatMap(); } });
 
 async function clearInit() {
   if (!confirm('Clear all combatants?')) return;
@@ -2778,7 +3180,7 @@ async function clearInit() {
 // (skill challenges, chases) where the ship-combat station system doesn't apply.
 async function autoPopulateCrew() {
   const { data: members, error } = await db.from('campaign_members')
-    .select('character_id, characters(name, hp_current, hp_max)')
+    .select('character_id, characters(id, name, species, hp_current, hp_max, speed, stats, appearance)')
     .eq('campaign_id', campaignId)
     .not('character_id', 'is', null);
   if (error) return alert('Failed to load crew: ' + error.message);
@@ -2788,14 +3190,25 @@ async function autoPopulateCrew() {
   const toAdd = members.filter(m => m.characters?.name && !existingNames.has(m.characters.name.toLowerCase()));
   if (!toAdd.length) return;
 
-  const inserts = toAdd.map(m => ({
-    campaign_id: campaignId,
-    combatant:   m.characters.name,
-    initiative:  Math.floor(Math.random() * 20) + 1,
-    hp_current:  m.characters.hp_current ?? m.characters.hp_max ?? null,
-    hp_max:      m.characters.hp_max ?? null,
-    is_npc:      false,
-  }));
+  const inserts = toAdd.map(m => {
+    const ch = m.characters;
+    const speed = ch.speed ?? 30;
+    const fightMod = Math.floor(((ch.stats?.fight ?? 10) - 10) / 2);
+    return {
+      campaign_id: campaignId,
+      combatant:   ch.name,
+      // Initiative = d20 + movement (speed in squares), per the combat rules.
+      initiative:  (Math.floor(Math.random() * 20) + 1) + Math.floor(speed / 5),
+      hp_current:  ch.hp_current ?? ch.hp_max ?? null,
+      hp_max:      ch.hp_max ?? null,
+      is_npc:      false,
+      character_id: ch.id,
+      base_ad:     SPECIES_BASE_AD[ch.species] ?? 8,
+      speed,
+      fight_mod:   fightMod,
+      token_color: '#3a78d4',
+    };
+  });
   await db.from('initiative_tracker').insert(inserts);
 }
 
