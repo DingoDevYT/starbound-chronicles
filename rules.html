@@ -165,8 +165,8 @@
         Classes & Roles
       </a>
       <a class="sidebar-link" href="#ship-combat">
-        <div class="sidebar-dot" style="background:rgba(200,64,64,0.5);">🚀</div>
-        Ship Combat
+        <div class="sidebar-dot" style="background:rgba(200,64,64,0.5);">⚔️</div>
+        Combat
       </a>
       <a class="sidebar-link" href="#factions">
         <div class="sidebar-dot" style="background:rgba(74,200,122,0.5);">🗺️</div>
@@ -203,15 +203,15 @@
 
     <div class="page-hero">
       <div class="page-category">Core Rulebook</div>
-      <h1 class="page-title">Infinite Stars: Core Rulebook</h1>
+      <h1 class="page-title">Starbound Chronicles: Core Rulebook</h1>
       <p class="page-subtitle">
-        Alpha v1.0 — The foundational mechanical framework for players and Directors alike.
+        Alpha v1.0 — The foundational mechanical framework for players and GMs alike.
         Fast-paced action, cooperative crew dynamics, and an unrestrictive open-world structure.
       </p>
       <div class="page-tags">
         <span class="tag highlight">Alpha v1.0</span>
         <span class="tag">d20 System</span>
-        <span class="tag">Cooperative Ship Combat</span>
+        <span class="tag">Grid Combat</span>
         <span class="tag">Open Sandbox</span>
       </div>
     </div>
@@ -221,15 +221,15 @@
       <div class="rules-number">Section 01</div>
       <h2 class="rules-h2">Game Overview & Philosophy</h2>
       <p class="rules-intro">
-        <em>Infinite Stars</em> is designed to prioritize fast-paced action, collaborative crew dynamics, and an
-        unrestrictive, open-world structure. Unlike traditional campaign-driven RPGs, Infinite Stars utilizes a
+        <em>Starbound Chronicles</em> is designed to prioritize fast-paced action, collaborative crew dynamics, and an
+        unrestrictive, open-world structure. Unlike traditional campaign-driven RPGs, Starbound Chronicles utilizes a
         modular design built to interact seamlessly with an evolving digital sector map. The core philosophy
         centers on a shared asset: <strong>your crew's starship.</strong>
       </p>
       <div class="callout-rules">
-        <div class="callout-rules-title">Director's Note</div>
+        <div class="callout-rules-title">GM's Note</div>
         <p>
-          The Director (DM equivalent) sets the scene, plays the factions, and controls the living galaxy. Players
+          The GM sets the scene, plays the factions, and controls the living galaxy. Players
           are the crew — each commanding their station, pooling resources, and making decisions that ripple across
           the open map. No railroading. No predetermined story. Just the void and whatever trouble you fly into.
         </p>
@@ -243,7 +243,7 @@
       <div class="rules-number">Section 02</div>
       <h2 class="rules-h2">The Core Engine — The Four "F"s</h2>
       <p class="rules-intro">
-        All actions in Infinite Stars — whether traversing a lawless space station on foot or exchanging laser fire
+        All actions in Starbound Chronicles — whether traversing a lawless space station on foot or exchanging laser fire
         with a pirate cruiser — are resolved using a d20 system governed by four primary statistics. Ditch
         traditional metrics of physical or mental attributes; here, your capabilities are defined by
         <strong>operational functions.</strong>
@@ -282,7 +282,7 @@
       <p class="rules-intro">
         When a character attempts an action with a risk of failure, they roll a 20-sided die (d20) and add the
         relevant stat modifier. If the total meets or exceeds the <strong>Difficulty Class (DC)</strong> set by
-        the Director, the action succeeds. Modifiers are calculated as <code>(stat − 10) ÷ 2</code>, rounded down.
+        the GM, the action succeeds. Modifiers are calculated as <code>(stat − 10) ÷ 2</code>, rounded down.
       </p>
 
       <table class="rules-table">
@@ -315,7 +315,7 @@
       <div class="callout-rules">
         <div class="callout-rules-title">Advantage & Disadvantage</div>
         <p>
-          When circumstances strongly favor success, the Director may grant <strong>Advantage</strong> — roll 2d20 and
+          When circumstances strongly favor success, the GM may grant <strong>Advantage</strong> — roll 2d20 and
           take the higher result. When circumstances work against the character, they roll at
           <strong>Disadvantage</strong> — roll 2d20 and take the lower result. Advantage and Disadvantage cancel
           each other out regardless of how many sources are stacked.
@@ -375,7 +375,7 @@
       <div class="callout-rules">
         <div class="callout-rules-title">Multiclassing Note</div>
         <p>
-          At Director discretion, crew members may train secondary station roles over the course of a campaign.
+          At GM discretion, crew members may train secondary station roles over the course of a campaign.
           A Gunsmith who spends downtime at the helm under a Pilot's instruction may unlock limited access to
           Helm maneuvers — at a reduced power cost efficiency.
         </p>
@@ -384,78 +384,159 @@
 
     <div class="species-divider"></div>
 
-    <!-- ─── SECTION 4: SHIP COMBAT ─── -->
+    <!-- ─── SECTION 4: COMBAT ─── -->
     <div class="rules-section" id="ship-combat">
       <div class="rules-number">Section 04</div>
-      <h2 class="rules-h2">Cooperative Ship Combat</h2>
+      <h2 class="rules-h2">Combat</h2>
       <p class="rules-intro">
-        Ship combat is the mechanical heart of Infinite Stars. Instead of controlling independent vessels, the
-        entire party operates a <strong>singular ship asset</strong>, pooling resources and taking tactical turns
-        simultaneously. Every crew member has a role — and the ship dies if anyone neglects theirs.
+        Combat comes in two forms, and both run on the same spine: <strong>initiative order</strong>, a
+        <strong>d20 vs Aim Difficulty (AD)</strong> hit roll, and a deliberately tiny action economy. There are
+        no reactions, no bonus actions, and no spell slots — that complexity has been stripped out on purpose.
+        You have a gun. If it's equipped, you shoot. You move. That's the game.
       </p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:26px;">
+        <div class="resource-card" style="--r-color:#c84040; text-align:left; padding:16px;">
+          <div class="resource-name" style="font-size:15px;">🔫 On-Foot Combat</div>
+          <div class="resource-desc">Every PC and NPC is their own token and rolls their own initiative. Your entire offense is your one equipped weapon.</div>
+        </div>
+        <div class="resource-card" style="--r-color:#3a78d4; text-align:left; padding:16px;">
+          <div class="resource-name" style="font-size:15px;">🚀 Spacecraft Combat</div>
+          <div class="resource-desc">The whole party crews a single vessel token. Each ship rolls one initiative; the crew win or lose it together through their stations.</div>
+        </div>
+      </div>
 
-      <h3 style="font-size:15px; font-weight:800; color:#e0ecff; margin:0 0 14px 0;">Ship Resources</h3>
-      <div class="resource-grid">
+      <!-- 4.1 The Hit System -->
+      <h3 style="font-size:15px; font-weight:800; color:#e0ecff; margin:0 0 6px 0;">4.1 · The Hit System (AD)</h3>
+      <p style="font-size:13px; color:var(--text-dim); line-height:1.7; margin-bottom:14px;">
+        To attack, roll <code>d20 + FIGHT modifier + weapon accuracy</code>. If the total meets or beats the
+        target's <strong>Total AD</strong>, you hit. A higher AD is harder to hit.
+      </p>
+      <div class="callout-rules" style="margin-bottom:18px;">
+        <div class="callout-rules-title">Total AD = Base AD + Distance + Cover</div>
+        <p style="margin:0;">Every point of AD is one more you need on the d20. Distance is the big one — the further away the target, the harder the shot.</p>
+      </div>
+
+      <h4 style="font-size:13px; font-weight:800; color:#e0ecff; margin:0 0 8px 0;">Base AD — by size</h4>
+      <p style="font-size:13px; color:var(--text-dim); line-height:1.7; margin-bottom:10px;">
+        Base AD is purely about how big a target is. Small things are hard to hit; big things are easy.
+      </p>
+      <table class="sec-table" style="margin-bottom:20px;">
+        <thead><tr><th>Target</th><th>Size</th><th>Base AD</th></tr></thead>
+        <tbody>
+          <tr><td>Skitterling</td><td>Tiny</td><td><strong>10</strong></td></tr>
+          <tr><td>Human · Myxos</td><td>Medium</td><td><strong>8</strong></td></tr>
+          <tr><td>Arboran</td><td>Tall</td><td><strong>7</strong></td></tr>
+          <tr><td>Kragol</td><td>Large</td><td><strong>6</strong></td></tr>
+          <tr><td>Sleek Interceptor</td><td>Small ship</td><td><strong>14</strong></td></tr>
+          <tr><td>Standard Frigate</td><td>Medium ship</td><td><strong>10</strong></td></tr>
+          <tr><td>Heavy Cargo Hauler</td><td>Large ship</td><td><strong>6</strong></td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="font-size:13px; font-weight:800; color:#e0ecff; margin:0 0 8px 0;">Distance — +1 AD per 20 m</h4>
+      <p style="font-size:13px; color:var(--text-dim); line-height:1.7; margin-bottom:10px;">
+        Each grid square is <strong>10 m</strong>. Every 20 m (2 squares) between shooter and target adds
+        <strong>+1 AD</strong>. The in-app <strong>ruler tool</strong> measures any two points and tells you the
+        exact distance and AD penalty. Point-blank is trivial; a 200 m shot is a real gamble.
+      </p>
+      <table class="sec-table" style="margin-bottom:20px;">
+        <thead><tr><th>Distance</th><th>AD penalty</th><th>vs an AD-8 human, +3 shooter</th></tr></thead>
+        <tbody>
+          <tr><td>20 m</td><td>+1</td><td>AD 9 — hit on 6+ <span style="color:#4acc7a;">(~75%, easy)</span></td></tr>
+          <tr><td>100 m</td><td>+5</td><td>AD 13 — hit on 10+ <span style="color:#d4af37;">(~55%)</span></td></tr>
+          <tr><td>200 m</td><td>+10</td><td>AD 18 — hit on 15+ <span style="color:#ff8888;">(~30%, hard)</span></td></tr>
+          <tr><td>300 m</td><td>+15</td><td>AD 23 — need a 20 <span style="color:#ff8888;">(~5%, brutal)</span></td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="font-size:13px; font-weight:800; color:#e0ecff; margin:0 0 8px 0;">Cover &amp; Armor</h4>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:22px;">
+        <div class="resource-card" style="--r-color:#9aa0a8; text-align:left; padding:14px;">
+          <div class="resource-name" style="font-size:13px;">🪨 Cover: +4 AD</div>
+          <div class="resource-desc">Tuck a token against an obstacle (asteroid, rock) between it and the shooter and it gains <strong>+4 AD</strong>. Obstacles are solid — you can't move through them. The Pilot's <em>Thread the Needle</em> boosts this further.</div>
+        </div>
+        <div class="resource-card" style="--r-color:#c8884a; text-align:left; padding:14px;">
+          <div class="resource-name" style="font-size:13px;">🛡️ Armor: flat damage cut</div>
+          <div class="resource-desc">Armor does <strong>not</strong> make you harder to hit — it subtracts straight from the damage of every hit that lands. Armor 3 turns a 10-damage hit into 7.</div>
+        </div>
+      </div>
+
+      <!-- 4.2 Initiative & the Turn -->
+      <h3 style="font-size:15px; font-weight:800; color:#e0ecff; margin:0 0 6px 0;">4.2 · Initiative &amp; the Turn</h3>
+      <p style="font-size:13px; color:var(--text-dim); line-height:1.7; margin-bottom:14px;">
+        Everyone (or every ship) rolls initiative once: <code>d20 + movement</code>, where movement is your speed in
+        squares (see below). Highest goes first. On your turn you get exactly <strong>one Movement action</strong>
+        and <strong>one Core action</strong> — nothing else.
+      </p>
+      <div class="round-steps" style="margin-bottom:14px;">
+        <div class="round-step">
+          <div class="step-num">▸</div>
+          <div>
+            <div class="step-title">Movement Action</div>
+            <div class="step-desc">Move up to <strong>speed ÷ 5 squares</strong> (a speed-30 character moves 6 squares = 60 m). Obstacles block the path.</div>
+          </div>
+        </div>
+        <div class="round-step">
+          <div class="step-num">◆</div>
+          <div>
+            <div class="step-title">Core Action — pick one</div>
+            <div class="step-desc">
+              <strong>Attack</strong> with your equipped weapon (roll vs AD) ·
+              <strong>Dash</strong> to move again at half your movement ·
+              <strong>Switch weapon</strong> (the only way to change what's equipped — it eats your whole Core action).
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="callout-rules" style="margin-bottom:26px;">
+        <div class="callout-rules-title">Why so bare?</div>
+        <p style="margin:0;">No opportunity attacks, no reactions, no bonus actions, no slots. If you want to shoot, have the right gun equipped. If you don't, spend a turn switching. Move, then do one thing. That's the whole loop — for a person or a starship.</p>
+      </div>
+
+      <!-- 4.3 On-Foot -->
+      <h3 style="font-size:15px; font-weight:800; color:#e0ecff; margin:0 0 6px 0;">4.3 · On-Foot Combat</h3>
+      <p style="font-size:13px; color:var(--text-dim); line-height:1.7; margin-bottom:14px;">
+        Each PC and NPC is a token on a gridded map (a plain, a rocky canyon, ruins…). Your <strong>one equipped
+        weapon</strong> is your entire offense — its damage dice roll on a hit, then the target's Armor is
+        subtracted. Want a different weapon? Switching is a Core action, so you'll skip a shot to do it. Carry
+        your loadout wisely.
+      </p>
+      <div class="callout-rules" style="margin-bottom:26px;">
+        <div class="callout-rules-title">Your turn, at a glance</div>
+        <p style="margin:0;">During combat the app shows the active character a cheat-sheet: your movement in squares, your equipped weapon's to-hit and damage, and your three Core options. No rulebook lookups mid-fight.</p>
+      </div>
+
+      <!-- 4.4 Spacecraft -->
+      <h3 style="font-size:15px; font-weight:800; color:#e0ecff; margin:0 0 6px 0;">4.4 · Spacecraft Combat</h3>
+      <p style="font-size:13px; color:var(--text-dim); line-height:1.7; margin-bottom:14px;">
+        Instead of individual tokens, the party crews one <strong>vessel token</strong>. The ship rolls a single
+        initiative (<code>d20 + its speed in squares</code>) and acts as a unit, powered by the shared
+        <strong>Power Point (PP)</strong> pool from its reactor. Each crew member drives their station —
+        see <a href="roles.html" style="color:var(--accent);">Crew Roles</a> for every class action and its PP cost.
+      </p>
+      <div class="resource-grid" style="margin-bottom:16px;">
         <div class="resource-card" style="--r-color:#4acc7a;">
           <div class="resource-icon">🛡️</div>
-          <div class="resource-abbr">SP</div>
-          <div class="resource-name">Shield Points</div>
-          <div class="resource-desc">First line of defense. Regenerates dynamically when power is routed to shields.</div>
+          <div class="resource-abbr">Shields</div>
+          <div class="resource-name">First to take hits</div>
+          <div class="resource-desc">All incoming damage drains Shield HP first. The Technician can restore them mid-fight.</div>
         </div>
         <div class="resource-card" style="--r-color:#ff8888;">
           <div class="resource-icon">🚢</div>
-          <div class="resource-abbr">HP</div>
-          <div class="resource-name">Hull Points</div>
-          <div class="resource-desc">Physical structural integrity. At zero, the ship is disabled or destroyed. Requires drydock to repair.</div>
+          <div class="resource-abbr">Hull</div>
+          <div class="resource-name">The real health</div>
+          <div class="resource-desc">Once Shields hit 0, damage leaks into Hull HP. At 0 Hull the ship is crippled or destroyed.</div>
         </div>
         <div class="resource-card" style="--r-color:#d4af37;">
           <div class="resource-icon">⚡</div>
-          <div class="resource-abbr">PC</div>
-          <div class="resource-name">Power Core</div>
-          <div class="resource-desc">The primary engine pool. Generates a static Power Point pool each round based on reactor tier.</div>
+          <div class="resource-abbr">PP</div>
+          <div class="resource-name">Power Points</div>
+          <div class="resource-desc">Refresh each round from the reactor. Every station action spends PP, so the crew must budget together.</div>
         </div>
       </div>
-
-      <h3 style="font-size:15px; font-weight:800; color:#e0ecff; margin:0 0 14px 0;">The Round Loop</h3>
-      <div class="round-steps">
-        <div class="round-step">
-          <div class="step-num">1</div>
-          <div>
-            <div class="step-title">Power Generation Phase</div>
-            <div class="step-desc">The ship reactor refreshes its maximum Power Points for the round. A Tier 1 reactor generates 6 Power, scaling with upgrade level.</div>
-          </div>
-        </div>
-        <div class="round-step">
-          <div class="step-num">2</div>
-          <div>
-            <div class="step-title">Crew Consultation Phase</div>
-            <div class="step-desc">Players discuss and distribute Power Points among stations. A crew member cannot act at their station without assigned Power Points.</div>
-          </div>
-        </div>
-        <div class="round-step">
-          <div class="step-num">3</div>
-          <div>
-            <div class="step-title">Action Phase</div>
-            <div class="step-desc">All station actions execute simultaneously. The Pilot moves the ship; the Captain directs or hails; the Gunsmith fires; the Technician mitigates incoming damage.</div>
-          </div>
-        </div>
-        <div class="round-step">
-          <div class="step-num">4</div>
-          <div>
-            <div class="step-title">Enemy Response Phase</div>
-            <div class="step-desc">Enemy vessels execute their designated tactical actions. The Director resolves all hostile moves and applies damage to the crew's ship.</div>
-          </div>
-        </div>
-      </div>
-
       <div class="callout-rules">
-        <div class="callout-rules-title">Heat & Overload</div>
-        <p>
-          Certain actions — particularly <em>Overcharge</em> and emergency power redistribution — generate
-          <strong>System Heat</strong>. If Heat exceeds the ship's threshold, the overloaded system goes offline
-          until the Technician performs an Engineering check to cool it down. Managing heat is the Technician's
-          primary off-combat responsibility.
-        </p>
+        <div class="callout-rules-title">Damage: Shields, then Hull</div>
+        <p style="margin:0;">A hit that rolls, say, 14 damage against a ship with 8 Shields leaves the shields at 0 and carries the remaining 6 into the Hull. Both bars can be damaged <em>and</em> healed independently in the app — the Technician's job is keeping that shield bar between the enemy and the hull.</p>
       </div>
     </div>
 
@@ -466,7 +547,7 @@
       <div class="rules-number">Section 05</div>
       <h2 class="rules-h2">Open-World Living Map &amp; Factions</h2>
       <p class="rules-intro">
-        Infinite Stars relies on a decentralized sandboxed map. Sectors are assigned
+        Starbound Chronicles relies on a decentralized sandboxed map. Sectors are assigned
         <strong>Security Ratings</strong> and <strong>Faction Influence Maps</strong>, altering encounter rates
         and economic values dynamically. Where you fly determines what you risk — and what you stand to gain.
       </p>
