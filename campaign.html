@@ -291,7 +291,17 @@
     <div class="sidebar-section">
       <div class="sidebar-heading">Campaign Info</div>
       <div style="padding:6px 14px;">
-        <div style="font-size:11px; color:var(--text-faint); margin-bottom:6px;" id="camp-title-side">—</div>
+        <div style="font-size:11px; color:var(--text-faint); margin-bottom:8px;" id="camp-title-side">—</div>
+        <div style="background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
+          <div style="font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-faint); font-weight:700;">Stardate</div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:4px;">
+            <span style="font-size:16px; font-weight:800; color:#d0e4ff;">Day <span id="day-num">1</span></span>
+            <div id="day-controls" style="display:none; gap:4px;">
+              <button class="btn-ghost" style="padding:2px 9px; font-size:14px; line-height:1;" title="Previous day" onclick="advanceDay(-1)">−</button>
+              <button class="btn-secondary" style="padding:2px 9px; font-size:12px;" title="Advance a day" onclick="advanceDay(1)">+ Day</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="sidebar-divider"></div>
@@ -717,11 +727,24 @@
 <script src="js/config.js"></script>
 <script src="js/auth.js?v=2"></script>
 <script>
-const SPECIES_IMGS = {
-  human:'assets/NN_Species_HumanM_0.png', kragol:'assets/NN_Species_KragolM.png',
-  skitterling:'assets/NN_Species_SkitterlingM_0.png', myxos:'assets/NN_Species_MyxosF.png',
-  arboran:'assets/NN_Species_ArboranM.png'
+// Appearance system — must stay in sync with dashboard.html/character.html.
+const SPECIES_VARIANTS = {
+  human:       { M: [0,1,2,3], F: [0,1,2,3] },
+  skitterling: { M: [0,1,2,3], F: [0,1,2,3] },
+  kragol:      { M: [null] },
+  myxos:       { F: [null] },
+  arboran:     { M: [null] },
 };
+function speciesImagePath(species, gender, variant) {
+  const variants = SPECIES_VARIANTS[species] || {};
+  const g = gender && variants[gender] ? gender : Object.keys(variants)[0];
+  const opts = variants[g] || [null];
+  const v = opts.includes(variant) ? variant : opts[0];
+  const suffix = v === null || v === undefined ? '' : `_${v}`;
+  const speciesName = species ? species[0].toUpperCase() + species.slice(1) : 'Human';
+  return `assets/NN_Species_${speciesName}${g || 'M'}${suffix}.png`;
+}
+const SPECIES_IMGS = Object.fromEntries(Object.keys(SPECIES_VARIANTS).map(s => [s, speciesImagePath(s)]));
 const AVATAR_COLORS = ['#1e4a9a','#4a1a0a','#1a3a2a','#0a2a3a','#2a2a1a','#3a1a1a','#1a2a0a','#1a1a3a','#1a2430'];
 
 const params     = new URLSearchParams(location.search);
@@ -729,16 +752,26 @@ const campaignId = params.get('id');
 let currentUser, campaign, isGM = false, activeTurn = 0, myCharacterId = null;
 let shipData = null, shipType = null, shipTokens = [];
 let shipComponents = { left_wing: null, right_wing: null, thruster: null };
-let tokenImages = {};  // species → HTMLImageElement
+let tokenImages = {};  // image path → HTMLImageElement (cached, redraws ship map on load)
 
 if (!campaignId) location.href = 'dashboard.html';
 
+// Get (and lazily cache) the portrait image for a specific appearance path.
+function tokenImage(species, appearance) {
+  const path = speciesImagePath(species, appearance?.gender, appearance?.variant);
+  if (!tokenImages[path]) {
+    const img = new Image();
+    img.onload = () => { if (shipViewMode === 'ship') drawShipMap(); };
+    img.src = path;
+    tokenImages[path] = img;
+  }
+  return tokenImages[path];
+}
+
 // ── Image preload ───────────────────────────────────────────────
 function preloadImages() {
-  Object.entries(SPECIES_IMGS).forEach(([key, src]) => {
-    const img = new Image();
-    img.src = src;
-    tokenImages[key] = img;
+  Object.values(SPECIES_IMGS).forEach(src => {
+    if (!tokenImages[src]) { const img = new Image(); img.src = src; tokenImages[src] = img; }
   });
 }
 
@@ -778,6 +811,8 @@ function preloadImages() {
   document.getElementById('invite-disp').textContent  = c.invite_code;
   document.getElementById('stat-round').textContent   = c.round_num || 0;
   document.getElementById('round-lbl').textContent    = 'Round ' + (c.round_num || 0);
+  document.getElementById('day-num').textContent      = c.day_num || 1;
+  document.getElementById('day-controls').style.display = isGM ? 'flex' : 'none';
 
   try {
     await Promise.all([loadShip(), loadCrew(), loadCargo(), loadInitiative(), loadQuests(), loadNPCs(), loadLog(), loadDiceHistory()]);
@@ -796,6 +831,7 @@ function preloadImages() {
       p => {
         campaign = p.new;
         document.getElementById('stat-round').textContent = p.new.round_num || 0; document.getElementById('round-lbl').textContent = 'Round ' + (p.new.round_num || 0);
+        document.getElementById('day-num').textContent = p.new.day_num || 1;
         if (shipViewMode === 'map') redrawSpaceMap();
       })
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'campaign_ships',    filter:`campaign_id=eq.${campaignId}` }, async p => { await loadShip(); })
@@ -915,7 +951,7 @@ function renderLoadout() {
 }
 
 async function loadTokens() {
-  const { data } = await db.from('ship_tokens').select('*, characters(species)').eq('campaign_id', campaignId);
+  const { data } = await db.from('ship_tokens').select('*, characters(species, appearance)').eq('campaign_id', campaignId);
   shipTokens = data || [];
 }
 
@@ -1184,7 +1220,7 @@ function drawShipMap() {
     const py = gy(tok.grid_y) + cs / 2;
     const r  = cs * .42;
     const species = tok.characters?.species || 'human';
-    const img = tokenImages[species];
+    const img = tokenImage(species, tok.characters?.appearance);
 
     shipCtx.save();
     shipCtx.beginPath();
@@ -1223,9 +1259,18 @@ let dragToken = null, dragOffX = 0, dragOffY = 0, justDraggedToken = false;
 let shipUserZoom = 1, shipUserPanX = 0, shipUserPanY = 0;
 let shipPanning = false, shipPanStartX = 0, shipPanStartY = 0, shipPanStartOffX = 0, shipPanStartOffY = 0, justPannedShip = false;
 
-shipCanvas.addEventListener('mousedown', e => {
+// Map a mouse event to canvas-buffer coordinates. The canvas buffer (canvas.width/height)
+// and its CSS-displayed size can differ (integer offsetWidth vs fractional layout width,
+// retina, etc.), so scale by that ratio — otherwise tokens drift from the pointer.
+function shipCanvasPoint(e) {
   const rect = shipCanvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const sx = rect.width  ? shipCanvas.width  / rect.width  : 1;
+  const sy = rect.height ? shipCanvas.height / rect.height : 1;
+  return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy };
+}
+
+shipCanvas.addEventListener('mousedown', e => {
+  const { x: mx, y: my } = shipCanvasPoint(e);
   const cs = CELL * shipScale;
 
   for (const tok of shipTokens) {
@@ -1235,7 +1280,7 @@ shipCanvas.addEventListener('mousedown', e => {
     const py = shipOffY + tok.grid_y * cs + cs / 2;
     if (Math.hypot(mx - px, my - py) < cs * .45) {
       dragToken = tok;
-      dragOffX  = mx - px;
+      dragOffX  = mx - px;   // grab offset relative to the token's centre
       dragOffY  = my - py;
       shipCanvas.style.cursor = 'grabbing';
       return;
@@ -1251,22 +1296,19 @@ shipCanvas.addEventListener('mousedown', e => {
 
 shipCanvas.addEventListener('mousemove', e => {
   if (dragToken) {
-    const rect = shipCanvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left - dragOffX;
-    const my = e.clientY - rect.top  - dragOffY;
+    const { x, y } = shipCanvasPoint(e);
     const cs = CELL * shipScale;
-    dragToken._liveX = (mx - shipOffX) / cs;
-    dragToken._liveY = (my - shipOffY) / cs;
+    // Where the token's centre should be, keeping the same grab offset.
+    const centerX = x - dragOffX;
+    const centerY = y - dragOffY;
     drawShipMap();
 
-    const px = shipOffX + dragToken._liveX * cs + cs / 2;
-    const py = shipOffY + dragToken._liveY * cs + cs / 2;
-    const r  = cs * .42;
+    const r = cs * .42;
     shipCtx.strokeStyle = '#7aaeff';
     shipCtx.lineWidth   = 2;
     shipCtx.setLineDash([4, 3]);
     shipCtx.beginPath();
-    shipCtx.arc(px, py, r, 0, Math.PI * 2);
+    shipCtx.arc(centerX, centerY, r, 0, Math.PI * 2);
     shipCtx.stroke();
     shipCtx.setLineDash([]);
     return;
@@ -1284,11 +1326,13 @@ shipCanvas.addEventListener('mousemove', e => {
 shipCanvas.addEventListener('mouseup', async e => {
   if (dragToken) {
     const cs = CELL * shipScale;
-    const rect = shipCanvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left - dragOffX;
-    const my = e.clientY - rect.top  - dragOffY;
-    const newX = Math.round((mx - shipOffX) / cs);
-    const newY = Math.round((my - shipOffY) / cs);
+    const { x, y } = shipCanvasPoint(e);
+    // Desired centre → cell index. Subtract the half-cell the token is drawn with so the
+    // token's CENTRE snaps to the nearest cell centre (previously it was a half-cell off).
+    const centerX = x - dragOffX;
+    const centerY = y - dragOffY;
+    const newX = Math.round((centerX - cs / 2 - shipOffX) / cs);
+    const newY = Math.round((centerY - cs / 2 - shipOffY) / cs);
     await db.from('ship_tokens').update({ grid_x: newX, grid_y: newY }).eq('id', dragToken.id);
     dragToken = null;
     justDraggedToken = true;
@@ -1317,8 +1361,7 @@ shipCanvas.addEventListener('click', e => {
   if (justDraggedToken) { justDraggedToken = false; return; }
   if (justPannedShip) { justPannedShip = false; return; }
   if (!isGM || !shipData || !shipType) return;
-  const rect = shipCanvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const { x: mx, y: my } = shipCanvasPoint(e);
   for (const [key, r] of Object.entries(slotRects)) {
     if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
       openEquipSlot(key);
@@ -2356,7 +2399,7 @@ new ResizeObserver(() => { if (shipViewMode === 'map') { mapResizeCanvas(); redr
 // ── Crew ────────────────────────────────────────────────────────
 async function loadCrew() {
   const { data } = await db.from('campaign_members')
-    .select('user_id,member_role,character_id,profiles(username,display_name,avatar_color),characters(id,name,species,role,rank,credits)')
+    .select('user_id,member_role,character_id,profiles(username,display_name,avatar_color),characters(id,name,species,role,rank,credits,appearance)')
     .eq('campaign_id', campaignId);
   const grid = document.getElementById('crew-grid');
   document.getElementById('crew-count-lbl').textContent = data?.length || 0;
@@ -2365,7 +2408,7 @@ async function loadCrew() {
   grid.innerHTML = data.map(m => {
     const name = m.profiles?.display_name || m.profiles?.username || '?';
     const char = m.characters;
-    const specImg = char ? SPECIES_IMGS[char.species] : null;
+    const specImg = char ? speciesImagePath(char.species, char.appearance?.gender, char.appearance?.variant) : null;
     const isMine = m.user_id === currentUser.id;
     return `<div class="crew-card">
       <div class="crew-avatar" style="background:${m.profiles?.avatar_color||'#3a78d4'}">${getInitials(name)}</div>
@@ -2401,7 +2444,7 @@ async function openViewCharacter(characterId) {
   if (!c) { document.getElementById('vc-body').innerHTML = 'Could not load this character.'; return; }
 
   document.getElementById('vc-title').textContent = `${c.name} — Character Sheet`;
-  const specImg = SPECIES_IMGS[c.species];
+  const specImg = speciesImagePath(c.species, c.appearance?.gender, c.appearance?.variant);
   const cls = CLASS_LABELS[c.role];
   const skillEntries = Object.entries(c.skills || {}).filter(([,v]) => v);
 
@@ -2713,6 +2756,15 @@ async function nextTurn() {
     document.getElementById('round-lbl').textContent  = 'Round ' + newRound;
   }
   renderInitiative();
+}
+
+async function advanceDay(delta) {
+  if (!isGM) return;
+  const next = Math.max(1, (campaign.day_num || 1) + delta);
+  campaign.day_num = next;
+  document.getElementById('day-num').textContent = next;   // optimistic — realtime confirms for others
+  const { error } = await db.from('campaigns').update({ day_num: next }).eq('id', campaignId);
+  if (error) alert('Failed to update the day: ' + error.message);
 }
 
 async function clearInit() {

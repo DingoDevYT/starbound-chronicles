@@ -21,10 +21,16 @@
   display:flex; align-items:center; justify-content:center;
   font-size:48px; font-weight:700; color:#fff;
   background: linear-gradient(135deg, #1e4a9a, #3a78d4);
-  border:1px solid var(--border); position:relative; overflow:hidden;
+  border:1px solid var(--border); position:relative; overflow:hidden; cursor:pointer;
 }
-.char-portrait-icon { font-size:60px; }
+.char-portrait-icon { font-size:60px; width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
 .char-portrait-species { position:absolute; bottom:8px; right:10px; font-size:22px; }
+.char-portrait-edit {
+  position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:center;
+  padding-bottom:10px; font-size:11px; font-weight:700; letter-spacing:.05em; color:#fff;
+  background:linear-gradient(to top, rgba(0,0,0,.6), transparent 45%); opacity:0; transition:opacity .12s;
+}
+.char-portrait:hover .char-portrait-edit { opacity:1; }
 .char-bio-name { font-size:20px; font-weight:800; color:#e0ecff; text-align:center; }
 .char-bio-sub  { font-size:12px; color:var(--text-faint); text-align:center; margin-top:2px; }
 .char-badges   { display:flex; flex-wrap:wrap; gap:5px; justify-content:center; }
@@ -173,9 +179,10 @@ body.edit-mode .edit-hint  { display:block; }
 <div class="sheet-layout">
   <!-- Sidebar -->
   <aside class="sheet-sidebar">
-    <div class="char-portrait" id="char-portrait" style="background:linear-gradient(135deg,#1e4a9a,#3a78d4)">
+    <div class="char-portrait" id="char-portrait" style="background:linear-gradient(135deg,#1e4a9a,#3a78d4)" onclick="openAppearance()" title="Click to change appearance">
       <span class="char-portrait-icon" id="portrait-icon">🧑</span>
       <span class="char-portrait-species" id="portrait-species"></span>
+      <span class="char-portrait-edit">Change Appearance</span>
     </div>
     <div>
       <div class="char-bio-name" id="bio-name">Loading…</div>
@@ -383,6 +390,26 @@ body.edit-mode .edit-hint  { display:block; }
   </div>
 </div>
 
+<!-- Modal: Change Appearance -->
+<div class="modal-backdrop" id="modal-appearance">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header"><span class="modal-title">Change Appearance</span><button class="modal-close" onclick="closeModal('modal-appearance')">✕</button></div>
+    <div class="modal-body">
+      <div style="display:flex; gap:16px; align-items:flex-start;">
+        <img id="appearance-preview" src="" style="width:88px;height:88px;object-fit:cover;border-radius:10px;background:var(--surface2);border:1px solid var(--border);flex-shrink:0;">
+        <div style="flex:1;">
+          <div id="appearance-gender" style="display:flex; gap:6px; margin-bottom:10px;"></div>
+          <div id="appearance-variants" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('modal-appearance')">Cancel</button>
+      <button class="btn-primary" onclick="saveAppearance()" style="width:auto; padding:10px 24px;">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Send to Ship Cargo -->
 <div class="modal-backdrop" id="modal-send-cargo">
   <div class="modal" style="max-width:400px;">
@@ -489,11 +516,24 @@ const CLASS_DATA = {
 
 const ROLE_ICONS = { captain:'👨‍✈️', pilot:'🚀', gunsmith:'🔫', technician:'⚙️', engineer:'⚙️', face:'🗣️', medic:'💊', navigator:'🧭', science:'🔭', heavy:'🛡️' };
 const SPECIES_ICONS_MAP = { human:'🧑', kragol:'🪨', skitterling:'🐾', myxos:'🫧', arboran:'🌿' };
-const SPECIES_IMGS = {
-  human:'assets/NN_Species_HumanM_0.png', kragol:'assets/NN_Species_KragolM.png',
-  skitterling:'assets/NN_Species_SkitterlingM_0.png', myxos:'assets/NN_Species_MyxosF.png',
-  arboran:'assets/NN_Species_ArboranM.png',
+// Appearance system — must stay in sync with dashboard.html's SPECIES_VARIANTS/speciesImagePath.
+const SPECIES_VARIANTS = {
+  human:       { M: [0,1,2,3], F: [0,1,2,3] },
+  skitterling: { M: [0,1,2,3], F: [0,1,2,3] },
+  kragol:      { M: [null] },
+  myxos:       { F: [null] },
+  arboran:     { M: [null] },
 };
+function speciesImagePath(species, gender, variant) {
+  const variants = SPECIES_VARIANTS[species] || {};
+  const g = gender && variants[gender] ? gender : Object.keys(variants)[0];
+  const opts = variants[g] || [null];
+  const v = opts.includes(variant) ? variant : opts[0];
+  const suffix = v === null || v === undefined ? '' : `_${v}`;
+  const speciesName = species ? species[0].toUpperCase() + species.slice(1) : 'Human';
+  return `assets/NN_Species_${speciesName}${g || 'M'}${suffix}.png`;
+}
+const SPECIES_IMGS = Object.fromEntries(Object.keys(SPECIES_VARIANTS).map(s => [s, speciesImagePath(s)]));
 
 const params = new URLSearchParams(location.search);
 const charId = params.get('id');
@@ -539,10 +579,10 @@ function populateSidebar() {
   document.title = `${char.name} — Starbound Chronicles`;
   document.getElementById('bio-name').textContent   = char.name;
   document.getElementById('bio-sub').textContent    = `${cap(spec)} · ${char.rank || 'Ensign'}`;
-  const imgSrc = SPECIES_IMGS[spec];
+  const imgSrc = speciesImagePath(spec, char.appearance?.gender, char.appearance?.variant);
   const iconEl = document.getElementById('portrait-icon');
   if (imgSrc) {
-    iconEl.innerHTML = `<img src="${imgSrc}" style="width:80px;height:80px;object-fit:contain;border-radius:10px;" alt="">`;
+    iconEl.innerHTML = `<img src="${imgSrc}" style="width:100%;height:100%;object-fit:cover;" alt="">`;
   } else {
     iconEl.textContent = SPECIES_ICONS_MAP[spec] || '🧑';
   }
@@ -753,6 +793,53 @@ async function applyCreditsAdjust() {
   document.getElementById('credits-display').textContent = next.toLocaleString();
   const { error } = await db.from('characters').update({ credits: next }).eq('id', charId);
   if (error) alert('Failed to save credits: ' + error.message);
+}
+
+// ── Appearance (gender + variant) ─────────────────────────────
+let apGender = null, apVariant = null;
+
+function openAppearance() {
+  const spec = char.species || 'human';
+  const variants = SPECIES_VARIANTS[spec] || { M: [null] };
+  apGender  = (char.appearance?.gender && variants[char.appearance.gender]) ? char.appearance.gender : Object.keys(variants)[0];
+  const opts = variants[apGender] || [null];
+  apVariant = opts.includes(char.appearance?.variant) ? char.appearance.variant : opts[0];
+  renderAppearancePicker();
+  openModal('modal-appearance');
+}
+
+function renderAppearancePicker() {
+  const spec = char.species || 'human';
+  const variants = SPECIES_VARIANTS[spec] || { M: [null] };
+  const genders = Object.keys(variants);
+  document.getElementById('appearance-gender').innerHTML = genders.length > 1
+    ? genders.map(g => `<button type="button" class="btn-ghost ${g===apGender?'':''}" style="font-size:11px;padding:5px 14px;${g===apGender?'border-color:var(--accent);color:#fff;':''}" onclick="setApGender('${g}')">${g === 'M' ? 'Male' : 'Female'}</button>`).join('')
+    : '<span style="font-size:11px;color:var(--text-faint);">Single fixed appearance for this species.</span>';
+
+  const opts = variants[apGender] || [null];
+  document.getElementById('appearance-variants').innerHTML = opts.length > 1
+    ? opts.map(v => `<img class="appearance-variant-opt" src="${speciesImagePath(spec, apGender, v)}"
+        style="width:52px;height:52px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid ${v===apVariant?'var(--accent)':'transparent'};" onclick="setApVariant(${v})">`).join('')
+    : '';
+
+  document.getElementById('appearance-preview').src = speciesImagePath(spec, apGender, apVariant);
+}
+
+function setApGender(g) {
+  apGender = g;
+  const opts = (SPECIES_VARIANTS[char.species || 'human'] || {})[g] || [null];
+  apVariant = opts[0];
+  renderAppearancePicker();
+}
+function setApVariant(v) { apVariant = v; renderAppearancePicker(); }
+
+async function saveAppearance() {
+  const appearance = { gender: apGender, variant: apVariant };
+  char.appearance = appearance;
+  const { error } = await db.from('characters').update({ appearance }).eq('id', charId);
+  if (error) return alert('Failed to save appearance: ' + error.message);
+  closeModal('modal-appearance');
+  populateSidebar();
 }
 
 async function applyDamage() { await adjustHP(-Math.abs(parseInt(document.getElementById('hp-amount').value) || 0)); }
