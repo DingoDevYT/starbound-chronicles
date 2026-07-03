@@ -50,6 +50,21 @@
   height:220px; color:var(--text-faint); font-size:14px; flex-direction:column; gap:10px;
 }
 
+/* ── Ship loadout (reactor + gun hardpoints) ── */
+.ship-loadout-panel { padding:14px 18px; border-top:1px solid var(--border); background:var(--surface); }
+.loadout-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
+.loadout-slot { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px; cursor:default; transition:all .12s; }
+.loadout-slot[onclick] { cursor:pointer; }
+.loadout-slot[onclick]:hover { border-color:var(--accent); background:var(--surface3); }
+.loadout-slot-label { font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:4px; }
+.loadout-slot-name { font-size:12px; font-weight:700; color:var(--text); }
+.loadout-slot-meta { font-size:10.5px; color:var(--text-faint); margin-top:2px; }
+.loadout-slot-empty { font-size:11px; color:var(--text-faint); font-style:italic; }
+
+.species-bonus-chip { display:inline-block; background:var(--surface3); border:1px solid var(--border); color:var(--text-dim); font-size:11px; padding:2px 8px; border-radius:4px; margin:2px 4px 2px 0; }
+.species-bonus-chip.pos { border-color:#2a7a46; color:#4acc7a; background:rgba(40,120,70,.15); }
+.species-bonus-chip.neg { border-color:#7a2020; color:#ff8888; background:rgba(160,40,40,.15); }
+
 /* ── Ship / Map view toggle ── */
 .view-toggle { display:flex; background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:2px; gap:2px; }
 .view-toggle-btn { background:none; border:none; color:var(--text-dim); font-size:11px; font-weight:600; padding:5px 12px; border-radius:5px; cursor:pointer; font-family:inherit; transition:all .12s; }
@@ -343,6 +358,19 @@
             <div class="ship-stat-sub" id="stat-fuel-max"></div>
           </div>
           <div class="ship-stat">
+            <div class="ship-stat-label">Shield</div>
+            <div class="ship-stat-val" id="stat-shield">—</div>
+            <div class="ship-stat-sub" id="stat-shield-max"></div>
+          </div>
+          <div class="ship-stat">
+            <div class="ship-stat-label">Total AD</div>
+            <div class="ship-stat-val" id="stat-ad">—</div>
+          </div>
+          <div class="ship-stat">
+            <div class="ship-stat-label">Max PP</div>
+            <div class="ship-stat-val" id="stat-pp">—</div>
+          </div>
+          <div class="ship-stat">
             <div class="ship-stat-label">Crew</div>
             <div class="ship-stat-val" id="stat-crew">—</div>
           </div>
@@ -351,6 +379,7 @@
             <div class="ship-stat-val" id="stat-round">—</div>
           </div>
         </div>
+        <div class="ship-loadout-panel" id="ship-loadout-panel" style="display:none;"></div>
       </div>
 
       <!-- SPACE MAP VIEW -->
@@ -801,8 +830,9 @@ async function loadShip() {
     shipType = ht || null;
   }
 
-  shipComponents = { left_wing: null, right_wing: null, thruster: null };
-  const compIds = [sd?.left_wing_id, sd?.right_wing_id, sd?.thruster_id].filter(Boolean);
+  shipComponents = { left_wing: null, right_wing: null, thruster: null, reactor: null, guns: [] };
+  const gunIds = sd?.gun_ids || [];
+  const compIds = [sd?.left_wing_id, sd?.right_wing_id, sd?.thruster_id, sd?.reactor_id, ...gunIds].filter(Boolean);
   if (compIds.length) {
     const { data: comps, error: compErr } = await db.from('ship_components').select('*').in('id', compIds);
     if (compErr) console.error('loadShipComponents error:', compErr);
@@ -810,6 +840,8 @@ async function loadShip() {
       shipComponents.left_wing  = comps.find(c => c.id === sd.left_wing_id)  || null;
       shipComponents.right_wing = comps.find(c => c.id === sd.right_wing_id) || null;
       shipComponents.thruster   = comps.find(c => c.id === sd.thruster_id)   || null;
+      shipComponents.reactor    = comps.find(c => c.id === sd.reactor_id)    || null;
+      shipComponents.guns       = gunIds.map(id => comps.find(c => c.id === id)).filter(Boolean);
     }
   }
 
@@ -827,6 +859,10 @@ async function loadShip() {
     document.getElementById('stat-speed').textContent = shipData.speed ?? '—';
     document.getElementById('stat-fuel').textContent  = shipData.fuel_current ?? '—';
     document.getElementById('stat-fuel-max').textContent = shipData.fuel_max ? '/ ' + shipData.fuel_max : '';
+    document.getElementById('stat-shield').textContent = shipData.shield_current ?? 0;
+    document.getElementById('stat-shield-max').textContent = shipData.shield_max ? '/ ' + shipData.shield_max : '';
+    document.getElementById('stat-pp').textContent = shipData.pp_max ?? 6;
+    document.getElementById('stat-ad').textContent = shipData.ad_total ?? (shipType?.base_ad ?? 10);
 
     const hpPct = shipData.hp_max ? shipData.hp_current / shipData.hp_max : 1;
     document.getElementById('stat-hp').className = 'ship-stat-val ' + (hpPct < .3 ? 'danger' : hpPct > .6 ? 'ok' : '');
@@ -840,9 +876,42 @@ async function loadShip() {
     document.getElementById('ship-hint').style.display = 'none';
   }
 
+  renderLoadout();
   await loadTokens();
   await ensureCrewTokens();
   drawShipMap();
+}
+
+// ── Reactor + Gun Hardpoints (no on-canvas sprite — a straight equipment list) ──
+function renderLoadout() {
+  const panel = document.getElementById('ship-loadout-panel');
+  if (!shipData || !shipType) { panel.style.display = 'none'; return; }
+  panel.style.display = '';
+
+  const gunSlots = shipType.gun_slots || 1;
+  const guns = shipComponents.guns || [];
+  const gunSlotsHtml = Array.from({ length: gunSlots }, (_, i) => {
+    const g = guns[i];
+    return `<div class="loadout-slot" ${isGM ? `onclick="openEquipGun(${i})"` : ''}>
+      <div class="loadout-slot-label">Hardpoint ${i + 1}</div>
+      ${g
+        ? `<div class="loadout-slot-name">${esc(g.name)}</div><div class="loadout-slot-meta">${g.pp_cost} PP · ${esc(g.damage_dice)} dmg · ${g.fight_mod>=0?'+':''}${g.fight_mod} FIGHT</div>`
+        : `<div class="loadout-slot-empty">${isGM ? '+ Equip Weapon' : 'Empty'}</div>`}
+    </div>`;
+  }).join('');
+
+  const r = shipComponents.reactor;
+  panel.innerHTML = `
+    <div class="cargo-panel-title"><span>Ship Loadout</span></div>
+    <div class="loadout-grid">
+      <div class="loadout-slot" ${isGM ? `onclick="openEquipSlot('reactor')"` : ''}>
+        <div class="loadout-slot-label">Reactor</div>
+        ${r
+          ? `<div class="loadout-slot-name">${esc(r.name)}</div><div class="loadout-slot-meta">${r.pp_cap_mod} PP cap · +${r.pp_regen_mod} PP/turn</div>`
+          : `<div class="loadout-slot-empty">${isGM ? '+ Equip Reactor' : 'Empty'}</div>`}
+      </div>
+      ${gunSlotsHtml}
+    </div>`;
 }
 
 async function loadTokens() {
@@ -2938,17 +3007,20 @@ async function openSetupShip() {
       <div class="hull-card-desc">${esc(h.description)}</div>
       <div class="hull-card-stats">
         <span>HP ${h.hp_base}</span>
+        <span>Base AD ${h.base_ad ?? 10}</span>
         <span>Speed ${h.speed_base}</span>
+        <span>Guns ${h.gun_slots ?? 1}</span>
         <span>Fuel ${h.fuel_capacity}</span>
         <span>Crew ${h.crew_capacity}</span>
         <span class="cost-pill" title="Market value — GM sets the actual price">~${(h.cost_credits||0).toLocaleString()}¢</span>
       </div>
+      ${h.special ? `<div style="font-size:11px; color:#d4af37; margin-top:4px; font-style:italic;">${esc(h.special)}</div>` : ''}
     </div>`).join('');
 
   if (shipData && shipData.ship_type_id) {
     const note = document.createElement('div');
     note.style.cssText = 'grid-column:1/-1;font-size:11px;color:var(--text-faint);';
-    note.textContent = 'Changing the hull will unequip any wing/thruster components and reset stats to the new hull\'s base values.';
+    note.textContent = 'Changing the hull resets stats to the new hull\'s base values. Equipped wings/thruster/reactor/weapons are kept if compatible with the new hull size, otherwise unequipped individually — a mismatched left/right wing pair is never reset back together.';
     picker.appendChild(note);
   }
 }
@@ -2972,15 +3044,25 @@ async function createCampaignShip() {
 
   const payload = { campaign_id: campaignId, ship_type_id: hull.id, ship_name: name, color };
   if (hullChanged) {
-    // Auto-equip a default wing/thruster compatible with the new hull so slots aren't left empty
-    const [{ data: defaultWing }, { data: defaultThruster }] = await Promise.all([
-      db.from('ship_components').select('id').eq('type', 'wing').contains('compatible_sizes', [hull.size]).limit(1).maybeSingle(),
-      db.from('ship_components').select('id').eq('type', 'thruster').contains('compatible_sizes', [hull.size]).limit(1).maybeSingle(),
-    ]);
+    // Only unequip a wing/thruster/gun if it's genuinely incompatible with the new hull size —
+    // previously this always force-reset BOTH wings to the same shared default component,
+    // which looked like "editing one wing edits the other" any time the hull changed and wiped
+    // out a deliberately mismatched left/right pair. Now each slot is checked independently.
+    const prevIds = [shipData?.left_wing_id, shipData?.right_wing_id, shipData?.thruster_id, shipData?.reactor_id, ...(shipData?.gun_ids||[])].filter(Boolean);
+    let compatMap = {};
+    if (prevIds.length) {
+      const { data: prevComps } = await db.from('ship_components').select('id,compatible_sizes').in('id', prevIds);
+      compatMap = Object.fromEntries((prevComps||[]).map(c => [c.id, c.compatible_sizes||[]]));
+    }
+    const keepIfCompatible = id => id && compatMap[id]?.includes(hull.size) ? id : null;
+    const keptGuns = (shipData?.gun_ids||[]).map(keepIfCompatible).filter(Boolean).slice(0, hull.gun_slots || 1);
+
     Object.assign(payload, {
-      left_wing_id: defaultWing?.id || null,
-      right_wing_id: defaultWing?.id || null,
-      thruster_id: defaultThruster?.id || null,
+      left_wing_id: keepIfCompatible(shipData?.left_wing_id),
+      right_wing_id: keepIfCompatible(shipData?.right_wing_id),
+      thruster_id: keepIfCompatible(shipData?.thruster_id),
+      reactor_id: keepIfCompatible(shipData?.reactor_id),
+      gun_ids: keptGuns,
       hp_current: hull.hp_base, hp_max: hull.hp_base,
       armor: hull.armor_base, speed: hull.speed_base,
       fuel_current: hull.fuel_capacity, fuel_max: hull.fuel_capacity,
@@ -2997,12 +3079,43 @@ async function createCampaignShip() {
 
 // ── Component slots (GM) ─────────────────────────────────────────
 let currentEquipSlot = null;
+let currentEquipGunIndex = null;
+
+const EQUIP_SLOT_LABELS = { left_wing:'Left Wing', right_wing:'Right Wing', thruster:'Thruster', reactor:'Reactor' };
+const EQUIP_SLOT_TYPES  = { left_wing:'wing', right_wing:'wing', thruster:'thruster', reactor:'reactor' };
+
+// A single "stat delta" line: shows +N in green, -N in red, and skips zero/blank values entirely
+// so the picker only ever displays what a component *actually changes* — no noise.
+function statDelta(label, val, opts) {
+  if (!val) return '';
+  const suffix = opts?.suffix || '';
+  const cls = val > 0 ? 'pos' : 'neg';
+  return `<span class="species-bonus-chip ${cls}">${label} ${val>0?'+':''}${val}${suffix}</span>`;
+}
+
+function componentStatChips(c) {
+  return [
+    statDelta('Speed', c.speed_mod),
+    statDelta('Armor', c.armor_mod),
+    statDelta('HP', c.hp_mod),
+    statDelta('Fuel', c.fuel_mod),
+    c.fuel_regen ? `<span class="species-bonus-chip pos">Fuel Regen +${c.fuel_regen}/turn</span>` : '',
+    statDelta('Shield', c.shield_hp_mod),
+    statDelta('AD', c.ad_mod),
+    statDelta('Max PP', c.pp_cap_mod),
+    statDelta('PP Regen', c.pp_regen_mod, { suffix:'/turn' }),
+    c.pp_cost ? `<span class="species-bonus-chip">${c.pp_cost} PP to fire</span>` : '',
+    c.damage_dice ? `<span class="species-bonus-chip">${esc(c.damage_dice)} dmg</span>` : '',
+    statDelta('FIGHT', c.fight_mod),
+    c.component_hp ? `<span class="species-bonus-chip">${c.component_hp} Component HP</span>` : '',
+  ].filter(Boolean).join('');
+}
 
 async function openEquipSlot(slotKey) {
   currentEquipSlot = slotKey;
-  const type  = slotKey === 'thruster' ? 'thruster' : 'wing';
-  const label = slotKey === 'left_wing' ? 'Left Wing' : slotKey === 'right_wing' ? 'Right Wing' : 'Thruster';
-  document.getElementById('equip-slot-title').textContent = 'Equip ' + label;
+  currentEquipGunIndex = null;
+  const type  = EQUIP_SLOT_TYPES[slotKey] || 'wing';
+  document.getElementById('equip-slot-title').textContent = 'Equip ' + (EQUIP_SLOT_LABELS[slotKey] || slotKey);
   showError('equip-slot-error', '');
 
   const list = document.getElementById('component-picker');
@@ -3016,22 +3129,45 @@ async function openEquipSlot(slotKey) {
   }
 
   const currentId = shipData?.[slotKey + '_id'] || null;
+  renderComponentPicker(data, currentId, id => equipComponent(id));
+}
+
+async function openEquipGun(index) {
+  currentEquipSlot = null;
+  currentEquipGunIndex = index;
+  document.getElementById('equip-slot-title').textContent = `Equip Weapon — Hardpoint ${index + 1}`;
+  showError('equip-slot-error', '');
+
+  const list = document.getElementById('component-picker');
+  list.innerHTML = '<div style="color:var(--text-faint);font-size:13px;grid-column:1/-1;">Loading weapons…</div>';
+  openModal('modal-equip-slot');
+
+  const { data, error } = await db.from('ship_components').select('*').eq('type', 'weapon').contains('compatible_sizes', [shipType.size]);
+  if (error) {
+    list.innerHTML = '<div style="color:#ff8888;font-size:13px;grid-column:1/-1;">Could not load weapons.</div>';
+    return;
+  }
+
+  const currentId = (shipData?.gun_ids || [])[index] || null;
+  renderComponentPicker(data, currentId, id => equipGun(index, id));
+}
+
+function renderComponentPicker(data, currentId, onPick) {
+  const list = document.getElementById('component-picker');
+  window._equipPick = onPick; // bridge for inline onclick below
   const cards = (data || []).map(c => `
-    <div class="hull-card ${c.id===currentId?'selected':''}" onclick="equipComponent('${c.id}')">
+    <div class="hull-card ${c.id===currentId?'selected':''}" onclick="window._equipPick('${c.id}')">
       <div class="hull-card-name">${esc(c.name)}</div>
       <div class="hull-card-desc">${esc(c.description)}</div>
+      ${c.special ? `<div style="font-size:11px; color:#d4af37; font-style:italic; margin:4px 0;">${esc(c.special)}</div>` : ''}
       <div class="hull-card-stats">
-        ${c.speed_mod ? `<span>Speed ${c.speed_mod>0?'+':''}${c.speed_mod}</span>` : ''}
-        ${c.armor_mod ? `<span>Armor ${c.armor_mod>0?'+':''}${c.armor_mod}</span>` : ''}
-        ${c.hp_mod    ? `<span>HP ${c.hp_mod>0?'+':''}${c.hp_mod}</span>`          : ''}
-        ${c.fuel_mod  ? `<span>Fuel ${c.fuel_mod>0?'+':''}${c.fuel_mod}</span>`    : ''}
-        ${c.fuel_regen ? `<span>Regen +${c.fuel_regen}/turn</span>` : ''}
+        ${componentStatChips(c)}
         <span class="cost-pill" title="Market value — GM sets the actual price">~${(c.cost_credits||0).toLocaleString()}¢</span>
       </div>
     </div>`).join('');
 
   list.innerHTML = `
-    <div class="hull-card ${!currentId?'selected':''}" onclick="equipComponent(null)">
+    <div class="hull-card ${!currentId?'selected':''}" onclick="window._equipPick(null)">
       <div class="hull-card-name">None</div>
       <div class="hull-card-desc">Remove the equipped component from this slot.</div>
     </div>` + cards;
@@ -3049,26 +3185,38 @@ async function equipComponent(componentId) {
   await recomputeShipStats();
 }
 
+async function equipGun(index, componentId) {
+  const guns = [...(shipData?.gun_ids || [])];
+  guns[index] = componentId;
+  const { error } = await db.from('campaign_ships').update({ gun_ids: guns.filter((v,i,a) => i < (shipType?.gun_slots||1)) }).eq('campaign_id', campaignId);
+  if (error) return showError('equip-slot-error', error.message);
+  closeModal('modal-equip-slot');
+  await recomputeShipStats();
+}
+
 async function recomputeShipStats() {
   const { data: sd } = await db.from('campaign_ships').select('*').eq('campaign_id', campaignId).maybeSingle();
   if (!sd) return;
   const { data: hull } = await db.from('ship_types').select('*').eq('id', sd.ship_type_id).maybeSingle();
   if (!hull) return;
 
-  const ids = [sd.left_wing_id, sd.right_wing_id, sd.thruster_id].filter(Boolean);
+  const ids = [sd.left_wing_id, sd.right_wing_id, sd.thruster_id, sd.reactor_id, ...(sd.gun_ids||[])].filter(Boolean);
   let comps = [];
   if (ids.length) {
     const { data } = await db.from('ship_components').select('*').in('id', ids);
     comps = data || [];
   }
   const find = id => comps.find(c => c.id === id);
-  const lw = find(sd.left_wing_id), rw = find(sd.right_wing_id), th = find(sd.thruster_id);
+  const lw = find(sd.left_wing_id), rw = find(sd.right_wing_id), th = find(sd.thruster_id), rc = find(sd.reactor_id);
   const sum = key => (lw?.[key]||0) + (rw?.[key]||0) + (th?.[key]||0);
 
   const newHpMax   = hull.hp_base + sum('hp_mod');
   const newArmor   = hull.armor_base + sum('armor_mod');
   const newSpeed   = hull.speed_base + sum('speed_mod');
   const newFuelMax = hull.fuel_capacity + sum('fuel_mod');
+  const newShieldMax = (lw?.shield_hp_mod||0) + (rw?.shield_hp_mod||0);
+  const newAdTotal = (hull.base_ad||10) + (lw?.ad_mod||0) + (rw?.ad_mod||0);
+  const newPpMax = rc?.pp_cap_mod || 6;
 
   await db.from('campaign_ships').update({
     hp_max: newHpMax,
@@ -3077,6 +3225,10 @@ async function recomputeShipStats() {
     speed: newSpeed,
     fuel_max: newFuelMax,
     fuel_current: Math.min(sd.fuel_current ?? newFuelMax, newFuelMax),
+    shield_max: newShieldMax,
+    shield_current: Math.min(sd.shield_current ?? newShieldMax, newShieldMax),
+    ad_total: newAdTotal,
+    pp_max: newPpMax,
   }).eq('campaign_id', campaignId);
 
   await loadShip();
