@@ -156,17 +156,13 @@
       </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
         <div class="form-group">
-          <label class="form-label">Crew Role</label>
+          <label class="form-label">Class</label>
           <select class="form-select" id="new-char-role">
-            <option value="">— Choose Role —</option>
+            <option value="">— Choose Class —</option>
+            <option value="captain">👨‍✈️ Captain</option>
             <option value="pilot">🚀 Pilot</option>
-            <option value="engineer">⚙️ Engineer</option>
-            <option value="gunsmith">🔧 Gunsmith</option>
-            <option value="face">🗣️ Face</option>
-            <option value="medic">💊 Medic</option>
-            <option value="navigator">🧭 Navigator</option>
-            <option value="science">🔭 Science Officer</option>
-            <option value="heavy">🛡️ Heavy</option>
+            <option value="gunsmith">🔫 Gunsmith</option>
+            <option value="technician">⚙️ Technician</option>
           </select>
         </div>
         <div class="form-group">
@@ -372,7 +368,7 @@ function speciesImagePath(species, gender, variant) {
 // Default portrait per species (first available gender/variant) — used wherever a character's
 // specific appearance choice isn't available (NPCs, fallbacks, etc).
 const SPECIES_IMGS = Object.fromEntries(Object.keys(SPECIES_VARIANTS).map(s => [s, speciesImagePath(s)]));
-const ROLE_ICONS = { pilot:'🚀', gunsmith:'🔫', technician:'⚙️', smuggler:'🗣️' };
+const ROLE_ICONS = { captain:'👨‍✈️', pilot:'🚀', gunsmith:'🔫', technician:'⚙️' };
 
 const PLACEHOLDER = {
   human: {
@@ -380,55 +376,55 @@ const PLACEHOLDER = {
       pilot:      "Grew up on a mid-rim transport freighter, learning the helm before they learned to read. Left home after the family ship was seized by a debt collector. Never quite forgave the Federation for letting it happen.",
       gunsmith:   "Ex-colonial militia, three tours on the Frontier keeping settlers alive. Mustered out with a commendation, a bad shoulder, and an intimate knowledge of every firearm manufactured in the last forty years.",
       technician: "Academy dropout who figured out she learned faster pulling things apart than sitting in lectures. Spent eight years as a salvage engineer before deciding derelicts paid better than docks.",
-      smuggler:   "Born talking his way out of trouble. Raised in Port Solace by a traveling merchant who taught him that every person has a price — and that knowing it before they do is the only real advantage.",
+      captain:     "Born talking his way out of trouble. Raised in Port Solace by a traveling merchant who taught him that every person has a price — and that knowing it before they do is the only real advantage.",
     },
-    personality: { pilot:"Calm under pressure; panics exactly once per session in private.", gunsmith:"Speaks in short sentences. Actions first. Explanations later if anyone's still alive.", technician:"Narrates repairs aloud. Not to you — just to the machine.", smuggler:"Charming, distractingly so. You keep wondering what they're not saying." },
-    bonds:       { pilot:"Would fly into a black hole for their crew. Has nearly done so twice.", gunsmith:"Still owes a life-debt to someone they don't talk about.", technician:"Will not abandon a ship that can still be saved. This has caused problems.", smuggler:"Loyal to contracts, more loyal to people, most loyal to whoever bought the last round." },
-    flaws:       { pilot:"Refuses to ask for help navigating. Famously.", gunsmith:"Has no volume control on 'this situation calls for more firepower.'", technician:"Loses track of time in engine rooms. Entire meals have disappeared this way.", smuggler:"Cannot resist a con, even when the mark doesn't deserve it." },
+    personality: { pilot:"Calm under pressure; panics exactly once per session in private.", gunsmith:"Speaks in short sentences. Actions first. Explanations later if anyone's still alive.", technician:"Narrates repairs aloud. Not to you — just to the machine.", captain:  "Charming, distractingly so. You keep wondering what they're not saying." },
+    bonds:       { pilot:"Would fly into a black hole for their crew. Has nearly done so twice.", gunsmith:"Still owes a life-debt to someone they don't talk about.", technician:"Will not abandon a ship that can still be saved. This has caused problems.", captain:  "Loyal to contracts, more loyal to people, most loyal to whoever bought the last round." },
+    flaws:       { pilot:"Refuses to ask for help navigating. Famously.", gunsmith:"Has no volume control on 'this situation calls for more firepower.'", technician:"Loses track of time in engine rooms. Entire meals have disappeared this way.", captain:  "Cannot resist a con, even when the mark doesn't deserve it." },
   },
   kragol: {
     backstory: {
       pilot:      "Clan Vorath outcasts don't usually end up at helm — that's a Skitterling's work, the elders said. Proved them wrong three times and stopped counting.",
       gunsmith:   "Came up through the Kragol Belt extraction crews where you learn to fight or you learn to regret not fighting. Chose the former emphatically.",
       technician: "Kragol minds aren't built for delicate work, the Academy assessor wrote. Built a working warp drive from salvage parts at age 16 just to prove the point.",
-      smuggler:   "Nobody suspects the Kragol of being the talker. Uses this constantly. Has built an entire identity around being underestimated.",
+      captain:     "Nobody suspects the Kragol of being the talker. Uses this constantly. Has built an entire identity around being underestimated.",
     },
-    personality: { pilot:"Stubborn about flight paths. Stubborn about everything, actually.", gunsmith:"Enthusiastic. Perhaps too enthusiastic about certain solutions.", technician:"Precise when it matters. Alarmingly casual when it doesn't.", smuggler:"Warmer than expected. Colder than they look when betrayed." },
-    bonds:       { pilot:"Clan loyalty runs deep even across light-years.", gunsmith:"The crew is the clan now. Acts accordingly.", technician:"Owes a technical debt to a mentor they can never fully repay.", smuggler:"Sends a cut of every job back to a sibling on the Belt." },
-    flaws:       { pilot:"Pride about piloting makes it hard to hand off the helm.", gunsmith:"Escalation is a habit. De-escalation is a skill still being developed.", technician:"Breaks things to understand them. Including things that didn't need understanding.", smuggler:"Holds grudges across decades. Kragol memory is exceptionally good." },
+    personality: { pilot:"Stubborn about flight paths. Stubborn about everything, actually.", gunsmith:"Enthusiastic. Perhaps too enthusiastic about certain solutions.", technician:"Precise when it matters. Alarmingly casual when it doesn't.", captain:  "Warmer than expected. Colder than they look when betrayed." },
+    bonds:       { pilot:"Clan loyalty runs deep even across light-years.", gunsmith:"The crew is the clan now. Acts accordingly.", technician:"Owes a technical debt to a mentor they can never fully repay.", captain:  "Sends a cut of every job back to a sibling on the Belt." },
+    flaws:       { pilot:"Pride about piloting makes it hard to hand off the helm.", gunsmith:"Escalation is a habit. De-escalation is a skill still being developed.", technician:"Breaks things to understand them. Including things that didn't need understanding.", captain:  "Holds grudges across decades. Kragol memory is exceptionally good." },
   },
   skitterling: {
     backstory: {
       pilot:      "Six limbs, four eyes, and three near-death experiences in the first year behind a control panel. Every one of them made the flying better.",
       gunsmith:   "Skitterlings aren't supposed to like heavy weapons. The weight alone. And yet. The physics of ballistics clicked in a way that social interaction never quite has.",
       technician: "The Queens' network passes technical knowledge like signal — fast and total. Carries the inherited memory of six generations of engineers and still improvises constantly.",
-      smuggler:   "Evolved to blend into background noise. Turns out that translates perfectly to working a crowd.",
+      captain:     "Evolved to blend into background noise. Turns out that translates perfectly to working a crowd.",
     },
-    personality: { pilot:"Thinks three moves ahead. Sometimes forgets to share move one.", gunsmith:"Thorough. Studies a target before committing. Then commits completely.", technician:"Talkative during repairs. Goes completely silent during critical moments.", smuggler:"Chitinous exterior, surprisingly warm underneath. Takes time to earn." },
-    bonds:       { pilot:"Maintains a private log of every landing. Every single one.", gunsmith:"Protective of anyone smaller. Which is most people.", technician:"Finds ships more intuitive than people. Extends the same loyalty to both.", smuggler:"Has a network of contacts that seems impossible for one person. Uses it sparingly." },
-    flaws:       { pilot:"Claustrophobic in small vessels. Ironic, given the career.", gunsmith:"Overplans. The perfect shot has been missed while calculating it.", technician:"Cannot leave a broken system alone. Even someone else's.", smuggler:"Trust takes forever to build. Distrust arrives instantly." },
+    personality: { pilot:"Thinks three moves ahead. Sometimes forgets to share move one.", gunsmith:"Thorough. Studies a target before committing. Then commits completely.", technician:"Talkative during repairs. Goes completely silent during critical moments.", captain:  "Chitinous exterior, surprisingly warm underneath. Takes time to earn." },
+    bonds:       { pilot:"Maintains a private log of every landing. Every single one.", gunsmith:"Protective of anyone smaller. Which is most people.", technician:"Finds ships more intuitive than people. Extends the same loyalty to both.", captain:  "Has a network of contacts that seems impossible for one person. Uses it sparingly." },
+    flaws:       { pilot:"Claustrophobic in small vessels. Ironic, given the career.", gunsmith:"Overplans. The perfect shot has been missed while calculating it.", technician:"Cannot leave a broken system alone. Even someone else's.", captain:  "Trust takes forever to build. Distrust arrives instantly." },
   },
   myxos: {
     backstory: {
       pilot:      "Myxos don't have eyes the same way. What they have is better for spatial reasoning. Spent a decade as a navigation consultant before deciding navigation was more fun when you were the one moving.",
       gunsmith:   "Unconventional species for combat roles. Made it work through chemistry — literally. Myxos biochemistry processes adrenaline differently, which turns out to be an advantage.",
       technician: "Grew up in the Caduceus research labs. Left when the ethics review board decided some research shouldn't be published. Still thinks it should be.",
-      smuggler:   "Myxos pheromone communication works on most species. Usually subconsciously. Not technically manipulation. Not technically not.",
+      captain:     "Myxos pheromone communication works on most species. Usually subconsciously. Not technically manipulation. Not technically not.",
     },
-    personality: { pilot:"Speaks in flow metaphors that are somehow always accurate.", gunsmith:"Methodical. No movement is wasted. No bullet is either.", technician:"Genuinely excited by problems most people would find terrifying.", smuggler:"Hard to read. Harder to refuse." },
-    bonds:       { pilot:"The ship is an extension of self. Treats it accordingly.", gunsmith:"Will not leave wounded. Has the extraction scars to prove it.", technician:"The research matters. Protecting it matters more.", smuggler:"Doesn't explain favors owed. They always get called in at the right moment." },
-    flaws:       { pilot:"Makes decisions that make perfect sense to a Myxos. Forgets to explain them.", gunsmith:"Adapts to violence faster than is strictly comfortable.", technician:"The research should continue. Where others see ethical lines, sees unfinished work.", smuggler:"The pheromone thing isn't always intentional. This is a genuine problem." },
+    personality: { pilot:"Speaks in flow metaphors that are somehow always accurate.", gunsmith:"Methodical. No movement is wasted. No bullet is either.", technician:"Genuinely excited by problems most people would find terrifying.", captain:  "Hard to read. Harder to refuse." },
+    bonds:       { pilot:"The ship is an extension of self. Treats it accordingly.", gunsmith:"Will not leave wounded. Has the extraction scars to prove it.", technician:"The research matters. Protecting it matters more.", captain:  "Doesn't explain favors owed. They always get called in at the right moment." },
+    flaws:       { pilot:"Makes decisions that make perfect sense to a Myxos. Forgets to explain them.", gunsmith:"Adapts to violence faster than is strictly comfortable.", technician:"The research should continue. Where others see ethical lines, sees unfinished work.", captain:  "The pheromone thing isn't always intentional. This is a genuine problem." },
   },
   arboran: {
     backstory: {
       pilot:      "Arborans aren't built for speed. Learned to think of flight not as velocity but as patience — knowing exactly when to burn and when to drift.",
       gunsmith:   "The old Arboran saying: a grove defends itself. Spent thirty years being the defense before deciding to bring the grove to the fight.",
       technician: "Trees communicate through root networks. Spent years building artificial versions — data networks, sensor arrays, ship-to-ship comms. The engineering just made sense.",
-      smuggler:   "Nobody checks the Arboran's cargo. They seem too slow to be sneaky. This is exactly why they're very sneaky.",
+      captain:     "Nobody checks the Arboran's cargo. They seem too slow to be sneaky. This is exactly why they're very sneaky.",
     },
-    personality: { pilot:"Long view of everything. The destination matters; the speed doesn't.", gunsmith:"Quiet until threatened. Then the situation escalates at an alarming rate.", technician:"Patient with machines. Patient with people. Runs out of patience at roughly the same time for both.", smuggler:"Plays the long game to a degree that unsettles other long-game players." },
-    bonds:       { pilot:"The crew grows on you. Like roots. You don't realize until you try to leave.", gunsmith:"Carries the names of those who couldn't defend themselves. Literally — carved into bark.", technician:"The network must survive. Through them if necessary.", smuggler:"Three hundred-year plan. Currently in year forty. On track." },
-    flaws:       { pilot:"Slow to change course in the metaphorical sense as well as the literal.", gunsmith:"Grudges outlive civilizations. Arborans consider this appropriate.", technician:"Gets attached to broken systems. Keeps trying past the point of reason.", smuggler:"Absolutely cannot be rushed. This has cost opportunities." },
+    personality: { pilot:"Long view of everything. The destination matters; the speed doesn't.", gunsmith:"Quiet until threatened. Then the situation escalates at an alarming rate.", technician:"Patient with machines. Patient with people. Runs out of patience at roughly the same time for both.", captain:  "Plays the long game to a degree that unsettles other long-game players." },
+    bonds:       { pilot:"The crew grows on you. Like roots. You don't realize until you try to leave.", gunsmith:"Carries the names of those who couldn't defend themselves. Literally — carved into bark.", technician:"The network must survive. Through them if necessary.", captain:  "Three hundred-year plan. Currently in year forty. On track." },
+    flaws:       { pilot:"Slow to change course in the metaphorical sense as well as the literal.", gunsmith:"Grudges outlive civilizations. Arborans consider this appropriate.", technician:"Gets attached to broken systems. Keeps trying past the point of reason.", captain:  "Absolutely cannot be rushed. This has cost opportunities." },
   },
 };
 

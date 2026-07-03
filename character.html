@@ -214,9 +214,12 @@ body.edit-mode .edit-hint  { display:block; }
     <!-- Credits -->
     <div class="xp-block">
       <div class="xp-label">Credits</div>
+      <div class="xp-row" style="margin-bottom:8px;">
+        <span style="font-size:22px; font-weight:800; color:#d4af37;">¢ <span id="credits-display">0</span></span>
+      </div>
       <div class="xp-row">
-        <span style="font-size:16px; color:#d4af37;">¢</span>
-        <input class="form-input" id="credits-input" type="number" min="0" step="1" placeholder="0" style="flex:1; font-size:13px; padding:8px 10px;" onchange="saveCreditsQuick()">
+        <input class="form-input" id="credits-adjust" type="number" placeholder="+/- amount" style="flex:1; font-size:12px; padding:6px 8px;" onkeydown="if(event.key==='Enter') applyCreditsAdjust()">
+        <button class="level-btn" style="width:auto; padding:0 12px; height:auto; align-self:stretch;" onclick="applyCreditsAdjust()">Apply</button>
       </div>
     </div>
 
@@ -244,6 +247,8 @@ body.edit-mode .edit-hint  { display:block; }
       <div class="edit-hint" id="edit-hint">✏️ Click stat values to edit. Changes are saved when you click Save.</div>
 
       <div class="species-ref" id="species-ref-box"></div>
+
+      <div class="species-ref" id="class-ref-box"></div>
 
       <div class="stats-grid" id="stats-grid"></div>
 
@@ -432,7 +437,52 @@ const SPECIES_REF = {
   arboran:     { bonuses:['+2 FIGHT','+1 FIX','−2 FLY','−1 FACE'], traits:['Photosynthetic — no rations required','Bark Skin','Slow but resilient'], diet:'Photosynthetic',  passive:'Requires only a light source — no food rations needed.' },
 };
 
-const ROLE_ICONS = { pilot:'🚀', engineer:'⚙️', gunsmith:'🔧', face:'🗣️', medic:'💊', navigator:'🧭', science:'🔭', heavy:'🛡️' };
+// The 4 mechanical classes — description + leveled actions match roles.html exactly.
+const CLASS_DATA = {
+  captain: {
+    icon:'👨‍✈️', name:'Captain', station:'The Bridge', stat:'face', color:'#d4af37',
+    desc:'This class acts as the general "leader" of a vessel — making strategic decisions for the group and handling comms with other vessels. As they level up, they learn key actions and skills to ensure their vessel runs smoothly in all situations: travel, combat, or otherwise.',
+    actions: [
+      { lv:1, pp:'0 PP', name:'Tactical Directives', desc:"Grant a flat +2 modifier to any single crew member's station dice check during the current Action Phase." },
+      { lv:1, pp:'0 PP', name:'Hailing Frequency', desc:'Requires a FACE check. This can be used to resolve encounters peacefully or stall an enemy before shots are fired. Effectiveness is at the discretion of the GM to provide you advantage/disadvantage on rolls for good roleplay.' },
+      { lv:3, pp:'2 PP', name:'Focus Fire', desc:'For the remainder of the round, any weapon fired from the ship adds a flat +5 bonus to AD checks.' },
+      { lv:3, pp:'2 PP', name:'Scramble Signals', desc:'Roll a FACE check against the enemy ship. On a success, the enemy vessel is jammed for 1 round, preventing their crew from communicating or using sensors / trackers.' },
+    ],
+  },
+  pilot: {
+    icon:'🚀', name:'Pilot', station:'The Helm', stat:'fly', color:'#40a0c8',
+    desc:'This class acts as the controller of the vessel, deciding the speed and direction of the ship. As a Pilot grows in skill they learn many tricks to get around quicker, dodge attacks, and outmanoeuvre opponents.',
+    actions: [
+      { lv:1, pp:'1 PP', name:'Full Power!', desc:'Increase your baseline tile movement layout for the current round based on the engine component specifications.' },
+      { lv:1, pp:'2 PP', name:'Evasive Manoeuvre', desc:'"Throw the vessel into a violent kinetic drift, spin, or hard roll." Requires a FLY check. On a success, instantly increase your ship\'s total AD by +10 for the remainder of the current round.' },
+      { lv:3, pp:'2 PP', name:'Thread the Needle', desc:'"Guide the ship flawlessly through dense debris." When utilising map obstacles (like asteroid belts or scrap fields) as cover, the AD penalty applied to enemies trying to target you increases from doubled to tripled for 1 round.' },
+      { lv:5, pp:'3 PP', name:'Slingshot Drift', desc:'"Execute an advanced physics-defying vector turn." Move the ship up to 3 tiles diagonally as a free action, dropping your ship into an opening that completely bypasses the target\'s obstacle AD protection for your Gunsmith\'s next attack.' },
+    ],
+  },
+  gunsmith: {
+    icon:'🔫', name:'Gunsmith', station:'Weapons Array', stat:'fight', color:'#c84040',
+    desc:"The Gunsmith manages the weaponry on board, targeting lock-ons, and ballistic array output as they fight enemies. Built to aim and fire.",
+    actions: [
+      { lv:1, pp:'[?]', name:'Fire Weapons', desc:'"Unleash a payload from an active, powered hardpoint turret." Requires a FIGHT check rolled directly against the target vessel\'s Total AD to hit successfully.' },
+      { lv:1, pp:'1 PP', name:'Target Lock', desc:'"Focus the ship\'s tracking sensors onto a specific hostile hull." Achieving a successful lock grants Advantage on all weapon fire checks against that exact ship on your next turn.' },
+      { lv:3, pp:'2 PP', name:'Stun Gun', desc:'"Fire a stun shot instead of a damaging shot." Requires a FIGHT check rolled directly against the target vessel\'s Total AD to hit successfully. If completed successfully, the target vessel has their shields "stunned" until the next round.' },
+      { lv:5, pp:'3 PP', name:'Overcharge Salvo', desc:'"Pump raw, unmetered plasma into your active weapon modules." Double the total weapon damage dice pool for this round. However, this creates extreme stress, and makes it harder to aim, reducing your FIGHT check roll by -3.' },
+    ],
+  },
+  technician: {
+    icon:'⚙️', name:'Technician', station:'Engineering Delta', stat:'fix', color:'#20a880',
+    desc:'The Technician regulates the reactor limits, clears heat overloads, and handles emergency repairs. The most strategic of the classes.',
+    actions: [
+      { lv:1, pp:'0 PP', name:'Reactor Overclock', desc:'"Override the safety protocols on the ship\'s primary power core." Roll a FIX check. On a success, generate +2 bonus PP to be added directly to the crew\'s power pool on the following round.' },
+      { lv:1, pp:'1 PP', name:'Shield Restore', desc:'"Reroute secondary juice into the deflector grids." Roll a FIX check. Regain 1d20 shield points for the initial cost, plus an additional 1d6 for every extra PP siphoned into the check.' },
+      { lv:1, pp:'2 PP', name:'Ship Repairs', desc:'"Execute a high-stakes mid-combat patch via the ship panels." Roll a FIX check to instantly recover 1d8 lost Hull Points or fix a damaged component\'s health.' },
+      { lv:3, pp:'2 PP', name:'Siphon Shields', desc:"Siphon hit points from your shield's HP to charge up PP. You can convert as much shield energy as you'd like into PP: 1d10 + 10 damage to shield = 2 PP." },
+      { lv:5, pp:'3 PP', name:'System Reboot', desc:'Roll a FIX check vs DC 10. On a success, instantly clear all effects (such as stuns etc.) from all components on the ship.' },
+    ],
+  },
+};
+
+const ROLE_ICONS = { captain:'👨‍✈️', pilot:'🚀', gunsmith:'🔫', technician:'⚙️', engineer:'⚙️', face:'🗣️', medic:'💊', navigator:'🧭', science:'🔭', heavy:'🛡️' };
 const SPECIES_ICONS_MAP = { human:'🧑', kragol:'🪨', skitterling:'🐾', myxos:'🫧', arboran:'🌿' };
 const SPECIES_IMGS = {
   human:'assets/NN_Species_HumanM_0.png', kragol:'assets/NN_Species_KragolM.png',
@@ -471,6 +521,7 @@ if (!charId) window.location.href = 'dashboard.html';
   populateNotes();
   await loadInventory();
   renderSpeciesRef();
+  renderClassRef();
 })();
 
 function mod(stat) { return Math.floor((stat - 10) / 2); }
@@ -505,7 +556,7 @@ function populateSidebar() {
   document.getElementById('hp-max-inp').value  = char.hp_max     || 10;
   document.getElementById('xp-level').textContent = char.level || 1;
   document.getElementById('xp-input').value    = char.xp || 0;
-  document.getElementById('credits-input').value = char.credits || 0;
+  document.getElementById('credits-display').textContent = (char.credits || 0).toLocaleString();
   document.getElementById('prof-bonus').textContent = profBonus();
   updateHPBar();
 
@@ -624,6 +675,55 @@ function renderSpeciesRef() {
     </div>`;
 }
 
+function renderClassRef() {
+  const box = document.getElementById('class-ref-box');
+  const cls = CLASS_DATA[char.role];
+  const picker = `
+    <select class="form-select" id="class-select" style="font-size:11px; padding:5px 8px; margin-top:8px;" onchange="onClassChange()">
+      <option value="">— No Class Selected —</option>
+      ${Object.entries(CLASS_DATA).map(([key, c]) => `<option value="${key}" ${char.role===key?'selected':''}>${c.icon} ${c.name}</option>`).join('')}
+    </select>`;
+
+  if (!cls) {
+    box.innerHTML = `
+      <div class="species-ref-title">Class</div>
+      <div class="species-ref-body">
+        <div style="font-size:12px; color:var(--text-faint);">No class selected yet — pick one to see your station, stat focus, and class actions.</div>
+        ${picker}
+      </div>`;
+    return;
+  }
+
+  const sd = STAT_DEFS.find(s => s.key === cls.stat);
+  box.innerHTML = `
+    <div class="species-ref-title">${cls.icon} ${cls.name} — Class Actions</div>
+    <div class="species-ref-body">
+      <div style="margin-bottom:8px; font-size:12px; color:var(--text-faint);">Station: <strong style="color:var(--text-dim);">${cls.station}</strong> · Stat Focus: <strong style="color:${sd?.color||cls.color};">${sd?.label||cls.stat.toUpperCase()}</strong></div>
+      <div style="margin-bottom:10px;">${esc(cls.desc)}</div>
+      ${cls.actions.map(a => `
+        <div style="background:var(--surface3); border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:6px; display:flex; gap:10px; align-items:flex-start;">
+          <div style="flex-shrink:0; display:flex; flex-direction:column; gap:3px; min-width:44px;">
+            <span style="font-size:9px; font-weight:800; text-align:center; background:rgba(255,255,255,.06); color:var(--text-faint); border-radius:4px; padding:2px 5px;">LV ${a.lv}</span>
+            <span style="font-size:9px; font-weight:800; text-align:center; background:${cls.color}; color:#0a0e18; opacity:.85; border-radius:4px; padding:2px 5px;">${a.pp}</span>
+          </div>
+          <div>
+            <div style="font-size:12px; font-weight:700; color:var(--text);">${esc(a.name)}</div>
+            <div style="font-size:11.5px; color:var(--text-faint); line-height:1.5;">${esc(a.desc)}</div>
+          </div>
+        </div>`).join('')}
+      ${picker}
+    </div>`;
+}
+
+async function onClassChange() {
+  const val = document.getElementById('class-select').value;
+  char.role = val || null;
+  const { error } = await db.from('characters').update({ role: char.role }).eq('id', charId);
+  if (error) { alert('Failed to save class: ' + error.message); return; }
+  renderClassRef();
+  populateSidebar();
+}
+
 function updateHPBar() {
   const cur = parseInt(document.getElementById('hp-cur').value) || 0;
   const max = parseInt(document.getElementById('hp-max-inp').value) || 1;
@@ -633,10 +733,14 @@ function updateHPBar() {
   bar.style.background = pct > 50 ? '#4acc7a' : pct > 25 ? '#d4af37' : '#cc4444';
 }
 
-async function saveCreditsQuick() {
-  const val = parseInt(document.getElementById('credits-input').value) || 0;
-  char.credits = val;
-  const { error } = await db.from('characters').update({ credits: val }).eq('id', charId);
+async function applyCreditsAdjust() {
+  const delta = parseInt(document.getElementById('credits-adjust').value);
+  if (!delta) return;
+  const next = Math.max(0, (char.credits || 0) + delta);
+  document.getElementById('credits-adjust').value = '';
+  char.credits = next;
+  document.getElementById('credits-display').textContent = next.toLocaleString();
+  const { error } = await db.from('characters').update({ credits: next }).eq('id', charId);
   if (error) alert('Failed to save credits: ' + error.message);
 }
 
