@@ -211,6 +211,15 @@ body.edit-mode .edit-hint  { display:block; }
       </div>
     </div>
 
+    <!-- Credits -->
+    <div class="xp-block">
+      <div class="xp-label">Credits</div>
+      <div class="xp-row">
+        <span style="font-size:16px; color:#d4af37;">¢</span>
+        <input class="form-input" id="credits-input" type="number" min="0" step="1" placeholder="0" style="flex:1; font-size:13px; padding:8px 10px;" onchange="saveCreditsQuick()">
+      </div>
+    </div>
+
     <!-- Species wiki link -->
     <a id="species-wiki-link" href="species.html" style="display:block; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; text-decoration:none; color:var(--text-dim); font-size:12px; transition:all .12s;"
        onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
@@ -364,6 +373,25 @@ body.edit-mode .edit-hint  { display:block; }
   </div>
 </div>
 
+<!-- Modal: Send to Ship Cargo -->
+<div class="modal-backdrop" id="modal-send-cargo">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header"><span class="modal-title">Send to Ship Cargo</span><button class="modal-close" onclick="closeModal('modal-send-cargo')">✕</button></div>
+    <div class="modal-body">
+      <p style="font-size:12px; color:var(--text-faint); margin-bottom:12px;">Move this item out of your personal inventory and into the shared cargo hold of one of your campaigns.</p>
+      <div class="form-group">
+        <label class="form-label">Campaign</label>
+        <select class="form-select" id="send-cargo-campaign"></select>
+      </div>
+      <div class="form-error" id="send-cargo-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('modal-send-cargo')">Cancel</button>
+      <button class="btn-primary" onclick="confirmSendToCargo()" style="width:auto; padding:10px 24px;">Send</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/config.js"></script>
 <script src="js/auth.js?v=2"></script>
 <script>
@@ -477,6 +505,7 @@ function populateSidebar() {
   document.getElementById('hp-max-inp').value  = char.hp_max     || 10;
   document.getElementById('xp-level').textContent = char.level || 1;
   document.getElementById('xp-input').value    = char.xp || 0;
+  document.getElementById('credits-input').value = char.credits || 0;
   document.getElementById('prof-bonus').textContent = profBonus();
   updateHPBar();
 
@@ -604,6 +633,13 @@ function updateHPBar() {
   bar.style.background = pct > 50 ? '#4acc7a' : pct > 25 ? '#d4af37' : '#cc4444';
 }
 
+async function saveCreditsQuick() {
+  const val = parseInt(document.getElementById('credits-input').value) || 0;
+  char.credits = val;
+  const { error } = await db.from('characters').update({ credits: val }).eq('id', charId);
+  if (error) alert('Failed to save credits: ' + error.message);
+}
+
 function changeLevel(delta) {
   const cur = parseInt(document.getElementById('xp-level').textContent) || 1;
   const nxt = Math.max(1, Math.min(20, cur + delta));
@@ -651,9 +687,52 @@ function renderInventory() {
       <td>${item.quantity}</td>
       <td>${(item.weight||0).toFixed(1)} kg</td>
       <td>${item.value||0} ¢</td>
-      <td><button class="inv-delete-btn" onclick="deleteItem('${item.id}')">🗑</button></td>
+      <td style="white-space:nowrap;">
+        <button class="btn-ghost" style="font-size:10px; padding:4px 8px; margin-right:4px;" onclick="openSendToCargo('${item.id}')">→ Ship</button>
+        <button class="inv-delete-btn" onclick="deleteItem('${item.id}')">🗑</button>
+      </td>
     </tr>
   `).join('');
+}
+
+let myCampaignsForChar = null, sendCargoItemId = null;
+
+async function openSendToCargo(itemId) {
+  sendCargoItemId = itemId;
+  showError('send-cargo-error', '');
+  if (!myCampaignsForChar) {
+    const { data } = await db.from('campaign_members')
+      .select('campaign_id, campaigns(name)')
+      .eq('character_id', charId);
+    myCampaignsForChar = data || [];
+  }
+  const sel = document.getElementById('send-cargo-campaign');
+  if (!myCampaignsForChar.length) {
+    sel.innerHTML = '<option value="">— Not in any campaign —</option>';
+  } else {
+    sel.innerHTML = myCampaignsForChar.map(c => `<option value="${c.campaign_id}">${esc(c.campaigns?.name || 'Campaign')}</option>`).join('');
+  }
+  openModal('modal-send-cargo');
+}
+
+async function confirmSendToCargo() {
+  const campaignId = document.getElementById('send-cargo-campaign').value;
+  if (!campaignId) return showError('send-cargo-error', 'This character isn\'t in a campaign yet — join one from the Dashboard first.');
+  const item = inventory.find(i => i.id === sendCargoItemId);
+  if (!item) return closeModal('modal-send-cargo');
+
+  const { error: insErr } = await db.from('campaign_cargo').insert({
+    campaign_id: campaignId, name: item.name, item_type: item.item_type,
+    quantity: item.quantity, weight: item.weight, value: item.value, description: item.description,
+    added_by: currentUser.id,
+  });
+  if (insErr) return showError('send-cargo-error', insErr.message);
+
+  const { error: delErr } = await db.from('character_inventory').delete().eq('id', item.id);
+  if (delErr) return showError('send-cargo-error', 'Item copied to the ship, but removing it from your inventory failed: ' + delErr.message);
+
+  closeModal('modal-send-cargo');
+  await loadInventory();
 }
 
 async function toggleEquip(id, equipped) {

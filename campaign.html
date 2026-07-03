@@ -137,6 +137,23 @@
 .crew-avatar { width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; color:#fff; flex-shrink:0; }
 .crew-name { font-size:13px; font-weight:600; color:#d0e4ff; }
 .crew-meta { font-size:11px; color:var(--text-faint); margin-top:2px; }
+.crew-credits { font-size:11px; color:#d4af37; margin-top:2px; }
+
+/* ── Cargo Hold ── */
+.cargo-columns { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+@media (max-width:900px) { .cargo-columns { grid-template-columns:1fr; } }
+.cargo-panel { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:14px; }
+.cargo-panel-title { font-size:12px; font-weight:700; color:#d0e4ff; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
+.cargo-list { display:flex; flex-direction:column; gap:6px; }
+.cargo-item { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:9px 12px; display:flex; align-items:center; gap:10px; }
+.cargo-item-main { flex:1; min-width:0; }
+.cargo-item-name { font-size:12.5px; font-weight:600; color:var(--text); }
+.cargo-item-meta { font-size:10.5px; color:var(--text-faint); margin-top:2px; }
+.cargo-item-desc { font-size:10.5px; color:var(--text-faint); margin-top:2px; font-style:italic; }
+.cargo-item-actions { display:flex; gap:6px; flex-shrink:0; }
+.cargo-btn { background:var(--surface3); border:1px solid var(--border); border-radius:6px; padding:4px 9px; font-size:10.5px; color:var(--text-dim); cursor:pointer; transition:all .12s; }
+.cargo-btn:hover { border-color:var(--accent); color:#fff; }
+.cargo-btn.danger:hover { border-color:#cc4444; color:#ff8888; }
 .gm-pip { display:inline-block; background:rgba(212,175,55,.15); border:1px solid rgba(212,175,55,.3); color:#d4af37; font-size:9px; padding:1px 5px; border-radius:3px; font-weight:700; }
 
 /* ── Initiative ── */
@@ -248,6 +265,7 @@
       <div class="sidebar-heading">Campaign</div>
       <a class="sidebar-link active" href="#ship">Ship</a>
       <a class="sidebar-link" href="#crew">Crew</a>
+      <a class="sidebar-link" href="#cargo">Cargo Hold</a>
       <a class="sidebar-link" href="#initiative">Initiative</a>
       <a class="sidebar-link" href="#quests">Quests</a>
       <a class="sidebar-link" href="#npcs">NPCs</a>
@@ -373,6 +391,24 @@
         </div>
       </div>
       <div class="crew-grid" id="crew-grid"><div style="color:var(--text-faint);font-size:13px;">Loading…</div></div>
+    </section>
+
+    <!-- CARGO HOLD -->
+    <section class="camp-section" id="cargo">
+      <div class="camp-section-hdr">
+        <span class="camp-section-title">Cargo Hold</span>
+        <button class="btn-secondary" onclick="openAddCargo()" style="font-size:11px; padding:5px 12px;">+ Item</button>
+      </div>
+      <div class="cargo-columns">
+        <div class="cargo-panel">
+          <div class="cargo-panel-title"><span>Shared Hold</span><span style="font-weight:400; color:var(--text-faint);" id="cargo-count-lbl">—</span></div>
+          <div class="cargo-list" id="cargo-list"><div style="color:var(--text-faint);font-size:12px;">Loading…</div></div>
+        </div>
+        <div class="cargo-panel">
+          <div class="cargo-panel-title"><span>My Inventory</span><span style="font-weight:400; color:var(--text-faint);" id="my-inv-char-lbl">—</span></div>
+          <div class="cargo-list" id="my-inventory-list"><div style="color:var(--text-faint);font-size:12px;">No character assigned.</div></div>
+        </div>
+      </div>
     </section>
 
     <!-- INITIATIVE -->
@@ -592,6 +628,34 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="modal-add-cargo">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header"><span class="modal-title">Add Item to Cargo Hold</span><button class="modal-close" onclick="closeModal('modal-add-cargo')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Item Name</label><input class="form-input" id="cargo-name-inp" placeholder="e.g. Spare Fuel Cell"></div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group"><label class="form-label">Type</label>
+          <select class="form-select" id="cargo-type-inp">
+            <option value="weapon">⚔️ Weapon</option>
+            <option value="armor">🛡️ Armor</option>
+            <option value="tool">🔧 Tool</option>
+            <option value="consumable">💊 Consumable</option>
+            <option value="misc" selected>📦 Misc</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Quantity</label><input class="form-input" id="cargo-qty-inp" type="number" min="1" value="1"></div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group"><label class="form-label">Weight (kg)</label><input class="form-input" id="cargo-weight-inp" type="number" step="0.1" min="0" value="0"></div>
+        <div class="form-group"><label class="form-label">Value (credits)</label><input class="form-input" id="cargo-value-inp" type="number" min="0" value="0"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" id="cargo-desc-inp" placeholder="Optional…" style="min-height:60px;"></textarea></div>
+      <div class="form-error" id="cargo-error"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-ghost" onclick="closeModal('modal-add-cargo')">Cancel</button><button class="btn-primary" onclick="saveCargoItem()" style="width:auto;padding:10px 24px;">Add Item</button></div>
+  </div>
+</div>
+
 <!-- My Character -->
 <div class="modal-backdrop" id="modal-my-character">
   <div class="modal" style="max-width:420px;">
@@ -668,7 +732,7 @@ function preloadImages() {
   document.getElementById('round-lbl').textContent    = 'Round ' + (c.round_num || 0);
 
   try {
-    await Promise.all([loadShip(), loadCrew(), loadInitiative(), loadQuests(), loadNPCs(), loadLog(), loadDiceHistory()]);
+    await Promise.all([loadShip(), loadCrew(), loadCargo(), loadInitiative(), loadQuests(), loadNPCs(), loadLog(), loadDiceHistory()]);
   } catch (err) {
     console.error('Campaign load error:', err);
     const errBanner = document.createElement('div');
@@ -691,6 +755,7 @@ function preloadImages() {
     .on('postgres_changes', { event:'*',      schema:'public', table:'initiative_tracker',filter:`campaign_id=eq.${campaignId}` }, loadInitiative)
     .on('postgres_changes', { event:'*',      schema:'public', table:'campaign_quests',   filter:`campaign_id=eq.${campaignId}` }, loadQuests)
     .on('postgres_changes', { event:'*',      schema:'public', table:'campaign_npcs',     filter:`campaign_id=eq.${campaignId}` }, loadNPCs)
+    .on('postgres_changes', { event:'*',      schema:'public', table:'campaign_cargo',    filter:`campaign_id=eq.${campaignId}` }, loadCargo)
     .on('postgres_changes', { event:'*',      schema:'public', table:'ship_log',          filter:`campaign_id=eq.${campaignId}` }, loadLog)
     .on('postgres_changes', { event:'INSERT', schema:'public', table:'dice_rolls',        filter:`campaign_id=eq.${campaignId}` }, loadDiceHistory)
     .subscribe();
@@ -2203,7 +2268,7 @@ new ResizeObserver(() => { if (shipViewMode === 'map') { mapResizeCanvas(); redr
 // ── Crew ────────────────────────────────────────────────────────
 async function loadCrew() {
   const { data } = await db.from('campaign_members')
-    .select('user_id,member_role,character_id,profiles(username,display_name,avatar_color),characters(name,species,role,rank)')
+    .select('user_id,member_role,character_id,profiles(username,display_name,avatar_color),characters(id,name,species,role,rank,credits)')
     .eq('campaign_id', campaignId);
   const grid = document.getElementById('crew-grid');
   document.getElementById('crew-count-lbl').textContent = data?.length || 0;
@@ -2213,14 +2278,144 @@ async function loadCrew() {
     const name = m.profiles?.display_name || m.profiles?.username || '?';
     const char = m.characters;
     const specImg = char ? SPECIES_IMGS[char.species] : null;
+    const isMine = m.user_id === currentUser.id;
     return `<div class="crew-card">
       <div class="crew-avatar" style="background:${m.profiles?.avatar_color||'#3a78d4'}">${getInitials(name)}</div>
       <div>
         <div class="crew-name">${esc(name)} ${m.member_role==='gm'?'<span class="gm-pip">GM</span>':''}</div>
         <div class="crew-meta">${char ? (specImg?`<img src="${specImg}" style="width:14px;height:14px;border-radius:2px;object-fit:cover;vertical-align:middle;margin-right:3px;">`:'')+esc(char.name) : ''}</div>
+        ${char ? `<div class="crew-credits">¢ ${(char.credits||0).toLocaleString()}${isMine ? ` <span style="cursor:pointer;text-decoration:underline;" onclick="editMyCredits('${char.id}', ${char.credits||0})">edit</span>` : ''}</div>` : ''}
       </div>
     </div>`;
   }).join('');
+}
+
+async function editMyCredits(characterId, current) {
+  const input = prompt('Set credit balance:', current);
+  if (input === null) return;
+  const val = parseInt(input);
+  if (isNaN(val) || val < 0) return alert('Enter a valid non-negative number.');
+  const { error } = await db.from('characters').update({ credits: val }).eq('id', characterId).eq('user_id', currentUser.id);
+  if (error) return alert('Failed to update credits: ' + error.message);
+  await loadCrew();
+}
+
+// ── Cargo Hold (shared party inventory) + My Inventory ───────────
+let cargoItems = [], myInventoryItems = [], myInventoryCharId = null;
+
+async function loadCargo() {
+  const { data } = await db.from('campaign_cargo').select('*').eq('campaign_id', campaignId).order('created_at');
+  cargoItems = data || [];
+  document.getElementById('cargo-count-lbl').textContent = cargoItems.length ? `${cargoItems.length} item${cargoItems.length===1?'':'s'}` : '—';
+  renderCargo();
+  await loadMyInventory();
+}
+
+function cargoItemRow(item, actionsHtml) {
+  return `<div class="cargo-item">
+    <div class="cargo-item-main">
+      <div class="cargo-item-name">${esc(item.name)} ${item.quantity > 1 ? `<span style="color:var(--text-faint);font-weight:400;">×${item.quantity}</span>` : ''}</div>
+      <div class="cargo-item-meta">${cap(item.item_type)} · ${(item.weight||0)} kg · ${item.value||0}¢</div>
+      ${item.description ? `<div class="cargo-item-desc">${esc(item.description)}</div>` : ''}
+    </div>
+    <div class="cargo-item-actions">${actionsHtml}</div>
+  </div>`;
+}
+
+function renderCargo() {
+  const list = document.getElementById('cargo-list');
+  if (!cargoItems.length) { list.innerHTML = '<div style="color:var(--text-faint);font-size:12px;">Cargo hold is empty.</div>'; return; }
+  list.innerHTML = cargoItems.map(item => cargoItemRow(item, `
+    ${myInventoryCharId ? `<button class="cargo-btn" onclick="takeCargoItem('${item.id}')">Take</button>` : ''}
+    <button class="cargo-btn danger" onclick="deleteCargoItem('${item.id}')">🗑</button>
+  `)).join('');
+}
+
+async function loadMyInventory() {
+  myInventoryCharId = myCharacterId;
+  const lbl = document.getElementById('my-inv-char-lbl');
+  const list = document.getElementById('my-inventory-list');
+  if (!myCharacterId) {
+    lbl.textContent = '—';
+    list.innerHTML = '<div style="color:var(--text-faint);font-size:12px;">Assign yourself a character ("My Character") to manage a personal inventory.</div>';
+    renderCargo();
+    return;
+  }
+  const { data: c } = await db.from('characters').select('name').eq('id', myCharacterId).single();
+  lbl.textContent = c?.name || '';
+  const { data } = await db.from('character_inventory').select('*').eq('character_id', myCharacterId).order('created_at');
+  myInventoryItems = data || [];
+  if (!myInventoryItems.length) {
+    list.innerHTML = '<div style="color:var(--text-faint);font-size:12px;">No items — send some to your inventory from the Cargo Hold, or take some from it below.</div>';
+  } else {
+    list.innerHTML = myInventoryItems.map(item => cargoItemRow(item, `
+      <button class="cargo-btn" onclick="sendToCargo('${item.id}')">Send to Hold</button>
+    `)).join('');
+  }
+  renderCargo();
+}
+
+async function takeCargoItem(id) {
+  if (!myCharacterId) return;
+  const item = cargoItems.find(i => i.id === id);
+  if (!item) return;
+  const { error: insErr } = await db.from('character_inventory').insert({
+    character_id: myCharacterId, name: item.name, item_type: item.item_type,
+    quantity: item.quantity, weight: item.weight, value: item.value, description: item.description,
+  });
+  if (insErr) return alert('Failed to take item: ' + insErr.message);
+  const { error: delErr } = await db.from('campaign_cargo').delete().eq('id', id);
+  if (delErr) return alert('Item copied to your inventory, but removing it from the hold failed: ' + delErr.message);
+  await loadCargo();
+}
+
+async function sendToCargo(itemId) {
+  const item = myInventoryItems.find(i => i.id === itemId);
+  if (!item) return;
+  const { error: insErr } = await db.from('campaign_cargo').insert({
+    campaign_id: campaignId, name: item.name, item_type: item.item_type,
+    quantity: item.quantity, weight: item.weight, value: item.value, description: item.description,
+    added_by: currentUser.id,
+  });
+  if (insErr) return alert('Failed to send item to hold: ' + insErr.message);
+  const { error: delErr } = await db.from('character_inventory').delete().eq('id', itemId);
+  if (delErr) return alert('Item copied to the hold, but removing it from your inventory failed: ' + delErr.message);
+  await loadCargo();
+}
+
+async function deleteCargoItem(id) {
+  if (!confirm('Remove this item from the cargo hold?')) return;
+  const { error } = await db.from('campaign_cargo').delete().eq('id', id);
+  if (error) return alert('Failed to remove item: ' + error.message);
+  await loadCargo();
+}
+
+function openAddCargo() {
+  document.getElementById('cargo-name-inp').value = '';
+  document.getElementById('cargo-qty-inp').value = 1;
+  document.getElementById('cargo-weight-inp').value = 0;
+  document.getElementById('cargo-value-inp').value = 0;
+  document.getElementById('cargo-desc-inp').value = '';
+  showError('cargo-error', '');
+  openModal('modal-add-cargo');
+}
+
+async function saveCargoItem() {
+  const name = document.getElementById('cargo-name-inp').value.trim();
+  if (!name) return showError('cargo-error', 'Item needs a name.');
+  const { error } = await db.from('campaign_cargo').insert({
+    campaign_id: campaignId,
+    name,
+    item_type:   document.getElementById('cargo-type-inp').value,
+    quantity:    parseInt(document.getElementById('cargo-qty-inp').value)    || 1,
+    weight:      parseFloat(document.getElementById('cargo-weight-inp').value) || 0,
+    value:       parseInt(document.getElementById('cargo-value-inp').value)  || 0,
+    description: document.getElementById('cargo-desc-inp').value.trim(),
+    added_by:    currentUser.id,
+  });
+  if (error) return showError('cargo-error', error.message);
+  closeModal('modal-add-cargo');
+  await loadCargo();
 }
 
 // ── My Character (assign/change which character you play as) ────
@@ -2257,6 +2452,7 @@ async function saveMyCharacter() {
   myCharacterId = charId;
   closeModal('modal-my-character');
   await loadCrew();
+  await loadMyInventory();
   if (isGM) {
     const { error: tokErr } = await ensureCrewTokens();
     if (tokErr) console.error('ensureCrewTokens failed:', tokErr);
