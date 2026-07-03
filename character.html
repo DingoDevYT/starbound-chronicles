@@ -194,6 +194,11 @@ body.edit-mode .edit-hint  { display:block; }
       <div class="hp-bar-wrap">
         <div class="hp-bar" id="hp-bar" style="width:100%; background:#4acc7a;"></div>
       </div>
+      <div class="xp-row" style="margin-top:8px;">
+        <input class="form-input" id="hp-amount" type="number" min="0" placeholder="Amount" style="flex:1; font-size:12px; padding:6px 8px;" onkeydown="if(event.key==='Enter') applyDamage()">
+        <button class="btn-danger" style="width:auto; padding:0 12px; font-size:11px;" onclick="applyDamage()">Damage</button>
+        <button class="btn-secondary" style="width:auto; padding:0 12px; font-size:11px;" onclick="applyHeal()">Heal</button>
+      </div>
     </div>
 
     <!-- Level / XP -->
@@ -695,22 +700,28 @@ function renderClassRef() {
   }
 
   const sd = STAT_DEFS.find(s => s.key === cls.stat);
+  const level = char.level || 1;
+  const unlockedCount = cls.actions.filter(a => level >= a.lv).length;
   box.innerHTML = `
-    <div class="species-ref-title">${cls.icon} ${cls.name} — Class Actions</div>
+    <div class="species-ref-title">${cls.icon} ${cls.name} — Class Actions <span style="font-weight:400; text-transform:none; letter-spacing:0;">(${unlockedCount}/${cls.actions.length} unlocked at Lv ${level})</span></div>
     <div class="species-ref-body">
       <div style="margin-bottom:8px; font-size:12px; color:var(--text-faint);">Station: <strong style="color:var(--text-dim);">${cls.station}</strong> · Stat Focus: <strong style="color:${sd?.color||cls.color};">${sd?.label||cls.stat.toUpperCase()}</strong></div>
       <div style="margin-bottom:10px;">${esc(cls.desc)}</div>
-      ${cls.actions.map(a => `
-        <div style="background:var(--surface3); border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:6px; display:flex; gap:10px; align-items:flex-start;">
+      ${cls.actions.map(a => {
+        const unlocked = level >= a.lv;
+        return `
+        <div style="background:var(--surface3); border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:6px; display:flex; gap:10px; align-items:flex-start; ${unlocked ? '' : 'opacity:.4;'}">
           <div style="flex-shrink:0; display:flex; flex-direction:column; gap:3px; min-width:44px;">
-            <span style="font-size:9px; font-weight:800; text-align:center; background:rgba(255,255,255,.06); color:var(--text-faint); border-radius:4px; padding:2px 5px;">LV ${a.lv}</span>
-            <span style="font-size:9px; font-weight:800; text-align:center; background:${cls.color}; color:#0a0e18; opacity:.85; border-radius:4px; padding:2px 5px;">${a.pp}</span>
+            <span style="font-size:9px; font-weight:800; text-align:center; background:${unlocked ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.03)'}; color:var(--text-faint); border-radius:4px; padding:2px 5px;">LV ${a.lv}</span>
+            <span style="font-size:9px; font-weight:800; text-align:center; background:${cls.color}; color:#0a0e18; opacity:${unlocked ? '.85' : '.35'}; border-radius:4px; padding:2px 5px;">${a.pp}</span>
           </div>
           <div>
-            <div style="font-size:12px; font-weight:700; color:var(--text);">${esc(a.name)}</div>
+            <div style="font-size:12px; font-weight:700; color:${unlocked ? 'var(--text)' : 'var(--text-faint)'};">${esc(a.name)} ${unlocked ? '' : '🔒'}</div>
             <div style="font-size:11.5px; color:var(--text-faint); line-height:1.5;">${esc(a.desc)}</div>
+            ${unlocked ? '' : `<div style="font-size:10.5px; color:#cc8844; margin-top:2px;">Unlocks at Level ${a.lv}</div>`}
           </div>
-        </div>`).join('')}
+        </div>`;
+      }).join('')}
       ${picker}
     </div>`;
 }
@@ -744,6 +755,22 @@ async function applyCreditsAdjust() {
   if (error) alert('Failed to save credits: ' + error.message);
 }
 
+async function applyDamage() { await adjustHP(-Math.abs(parseInt(document.getElementById('hp-amount').value) || 0)); }
+async function applyHeal()   { await adjustHP(Math.abs(parseInt(document.getElementById('hp-amount').value) || 0)); }
+
+async function adjustHP(delta) {
+  if (!delta) return;
+  const max = parseInt(document.getElementById('hp-max-inp').value) || 1;
+  const cur = parseInt(document.getElementById('hp-cur').value) || 0;
+  const next = Math.max(0, Math.min(max, cur + delta));
+  document.getElementById('hp-cur').value = next;
+  document.getElementById('hp-amount').value = '';
+  updateHPBar();
+  char.hp_current = next;
+  const { error } = await db.from('characters').update({ hp_current: next }).eq('id', charId);
+  if (error) alert('Failed to save HP: ' + error.message);
+}
+
 function changeLevel(delta) {
   const cur = parseInt(document.getElementById('xp-level').textContent) || 1;
   const nxt = Math.max(1, Math.min(20, cur + delta));
@@ -752,6 +779,7 @@ function changeLevel(delta) {
   document.getElementById('prof-bonus').textContent = profBonus();
   updateSkillBonuses();
   updateCombatStats();
+  renderClassRef();
 }
 
 function populateBackground() {

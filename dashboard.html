@@ -624,9 +624,17 @@ async function loadCampaigns() {
           <span>Invite: <strong style="color:var(--text); letter-spacing:.08em">${c.invite_code}</strong></span>
         </div>
         ${isGM ? '<div class="gm-badge">GM</div>' : ''}
+        ${isGM ? `<button class="btn-danger" style="position:absolute; top:10px; right:10px; width:auto; padding:4px 10px; font-size:11px;" onclick="event.stopPropagation(); deleteCampaign('${c.id}', '${esc(c.name).replace(/'/g,"\\'")}')">Delete</button>` : ''}
       </div>
     `;
   }).join('') + newCampCard();
+}
+
+async function deleteCampaign(id, name) {
+  if (!confirm(`Permanently delete "${name}"? This removes the campaign, its crew roster, quests, NPCs, ship log, and cargo hold for everyone. This cannot be undone.`)) return;
+  const { error } = await db.from('campaigns').delete().eq('id', id).eq('owner_id', currentUser.id);
+  if (error) return alert('Failed to delete campaign: ' + error.message);
+  await loadCampaigns();
 }
 
 function newCampCard() {

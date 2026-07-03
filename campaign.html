@@ -656,6 +656,14 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="modal-view-character">
+  <div class="modal" style="max-width:640px; max-height:85vh; overflow-y:auto;">
+    <div class="modal-header"><span class="modal-title" id="vc-title">Character Sheet</span><button class="modal-close" onclick="closeModal('modal-view-character')">✕</button></div>
+    <div class="modal-body" id="vc-body">Loading…</div>
+    <div class="modal-footer"><button class="btn-ghost" onclick="closeModal('modal-view-character')">Close</button></div>
+  </div>
+</div>
+
 <!-- My Character -->
 <div class="modal-backdrop" id="modal-my-character">
   <div class="modal" style="max-width:420px;">
@@ -720,8 +728,19 @@ function preloadImages() {
   if (!c) return location.href = 'dashboard.html';
   campaign = c; isGM = c.owner_id === currentUser.id;
 
-  const { data: myMembership } = await db.from('campaign_members')
+  let { data: myMembership } = await db.from('campaign_members')
     .select('character_id').eq('campaign_id', campaignId).eq('user_id', currentUser.id).maybeSingle();
+
+  // Self-heal: an owner/GM can end up with no campaign_members row (e.g. after
+  // accidentally clicking "Leave Campaign"), which used to lock them out of
+  // their own crew roster with no way back in. Since they still own the
+  // campaign, just restore their membership automatically.
+  if (!myMembership && isGM) {
+    const { data: restored } = await db.from('campaign_members')
+      .insert({ campaign_id: campaignId, user_id: currentUser.id, member_role: 'gm' })
+      .select('character_id').maybeSingle();
+    myMembership = restored;
+  }
   myCharacterId = myMembership?.character_id || null;
 
   document.title = c.name + ' — Starbound Chronicles';
@@ -2281,13 +2300,87 @@ async function loadCrew() {
     const isMine = m.user_id === currentUser.id;
     return `<div class="crew-card">
       <div class="crew-avatar" style="background:${m.profiles?.avatar_color||'#3a78d4'}">${getInitials(name)}</div>
-      <div>
+      <div style="flex:1; min-width:0;">
         <div class="crew-name">${esc(name)} ${m.member_role==='gm'?'<span class="gm-pip">GM</span>':''}</div>
         <div class="crew-meta">${char ? (specImg?`<img src="${specImg}" style="width:14px;height:14px;border-radius:2px;object-fit:cover;vertical-align:middle;margin-right:3px;">`:'')+esc(char.name) : ''}</div>
         ${char ? `<div class="crew-credits">¢ ${(char.credits||0).toLocaleString()}${isMine ? ` <span style="cursor:pointer;text-decoration:underline;" onclick="editMyCredits('${char.id}', ${char.credits||0})">edit</span>` : ''}</div>` : ''}
+        ${(isGM && char && !isMine) ? `<button class="cargo-btn" style="margin-top:6px;" onclick="openViewCharacter('${char.id}')">View Sheet</button>` : ''}
       </div>
     </div>`;
   }).join('');
+}
+
+// ── GM: read-only view of a crew member's character sheet ────────
+const CLASS_LABELS = { captain:'👨‍✈️ Captain', pilot:'🚀 Pilot', gunsmith:'🔫 Gunsmith', technician:'⚙️ Technician' };
+const VC_STAT_DEFS = [
+  { key:'fly',   label:'FLY',   color:'#40a0c8' },
+  { key:'fix',   label:'FIX',   color:'#20a880' },
+  { key:'fight', label:'FIGHT', color:'#c84040' },
+  { key:'face',  label:'FACE',  color:'#8040c8' },
+];
+function vcMod(v) { const m = Math.floor((v - 10) / 2); return m >= 0 ? '+' + m : '' + m; }
+
+async function openViewCharacter(characterId) {
+  if (!isGM) return;
+  openModal('modal-view-character');
+  document.getElementById('vc-body').innerHTML = 'Loading…';
+
+  const [{ data: c }, { data: items }] = await Promise.all([
+    db.from('characters').select('*').eq('id', characterId).single(),
+    db.from('character_inventory').select('*').eq('character_id', characterId).order('created_at'),
+  ]);
+  if (!c) { document.getElementById('vc-body').innerHTML = 'Could not load this character.'; return; }
+
+  document.getElementById('vc-title').textContent = `${c.name} — Character Sheet`;
+  const specImg = SPECIES_IMGS[c.species];
+  const cls = CLASS_LABELS[c.role];
+  const skillEntries = Object.entries(c.skills || {}).filter(([,v]) => v);
+
+  document.getElementById('vc-body').innerHTML = `
+    <div style="display:flex; gap:14px; align-items:center; margin-bottom:16px;">
+      ${specImg ? `<img src="${specImg}" style="width:56px;height:56px;object-fit:contain;border-radius:8px;background:var(--surface2);">` : ''}
+      <div>
+        <div style="font-size:16px; font-weight:800; color:var(--text);">${esc(c.name)}</div>
+        <div style="font-size:12px; color:var(--text-faint);">${cap(c.species)} · ${esc(c.rank||'Ensign')} · Lv ${c.level||1}${cls?` · ${cls}`:''}</div>
+      </div>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:14px;">
+      <div class="ship-stat"><div class="ship-stat-label">HP</div><div class="ship-stat-val">${c.hp_current ?? 0}/${c.hp_max ?? 0}</div></div>
+      <div class="ship-stat"><div class="ship-stat-label">Armor</div><div class="ship-stat-val">${c.armor ?? 10}</div></div>
+      <div class="ship-stat"><div class="ship-stat-label">Speed</div><div class="ship-stat-val">${c.speed ?? 30}</div></div>
+      <div class="ship-stat"><div class="ship-stat-label">Credits</div><div class="ship-stat-val">¢${(c.credits||0).toLocaleString()}</div></div>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:16px;">
+      ${VC_STAT_DEFS.map(s => `
+        <div class="ship-stat" style="border-color:${s.color}44;">
+          <div class="ship-stat-label" style="color:${s.color};">${s.label}</div>
+          <div class="ship-stat-val">${c.stats?.[s.key] ?? 10}</div>
+          <div class="ship-stat-sub">${vcMod(c.stats?.[s.key] ?? 10)}</div>
+        </div>`).join('')}
+    </div>
+    ${skillEntries.length ? `
+    <div style="margin-bottom:14px;">
+      <div class="cargo-panel-title"><span>Proficient Skills</span></div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        ${skillEntries.map(([k]) => `<span class="species-bonus-chip">${cap(k)}</span>`).join('')}
+      </div>
+    </div>` : ''}
+    <div style="margin-bottom:14px;">
+      <div class="cargo-panel-title"><span>Inventory</span><span style="font-weight:400; color:var(--text-faint);">${items?.length||0} item${items?.length===1?'':'s'}</span></div>
+      <div class="cargo-list">
+        ${(items||[]).length ? items.map(i => `
+          <div class="cargo-item">
+            <div class="cargo-item-main">
+              <div class="cargo-item-name">${esc(i.name)} ${i.quantity>1?`<span style="color:var(--text-faint);font-weight:400;">×${i.quantity}</span>`:''} ${i.is_equipped?'<span class="gm-pip">EQUIPPED</span>':''}</div>
+              <div class="cargo-item-meta">${cap(i.item_type)} · ${(i.weight||0)} kg · ${i.value||0}¢</div>
+              ${i.description ? `<div class="cargo-item-desc">${esc(i.description)}</div>` : ''}
+            </div>
+          </div>`).join('') : '<div style="color:var(--text-faint);font-size:12px;">No items.</div>'}
+      </div>
+    </div>
+    ${c.background ? `<div style="margin-bottom:10px;"><div class="cargo-panel-title"><span>Backstory</span></div><div style="font-size:12px; color:var(--text-dim); line-height:1.6;">${esc(c.background)}</div></div>` : ''}
+    ${c.notes ? `<div><div class="cargo-panel-title"><span>Notes</span></div><div style="font-size:12px; color:var(--text-dim); line-height:1.6; white-space:pre-wrap;">${esc(c.notes)}</div></div>` : ''}
+  `;
 }
 
 async function editMyCredits(characterId, current) {
@@ -2996,7 +3089,9 @@ function copyCode() {
   el.textContent='Copied!'; setTimeout(()=>el.textContent=o,1500);
 }
 async function leaveCampaign() {
-  if (!confirm('Leave this campaign?')) return;
+  if (isGM) {
+    if (!confirm("You're the GM of this campaign — leaving removes you from the crew roster, but you'll still own it and can rejoin automatically just by opening it again. If you want to get rid of the campaign entirely, delete it instead from the Dashboard. Leave anyway?")) return;
+  } else if (!confirm('Leave this campaign?')) return;
   await db.from('campaign_members').delete().eq('campaign_id',campaignId).eq('user_id',currentUser.id);
   location.href='dashboard.html';
 }
