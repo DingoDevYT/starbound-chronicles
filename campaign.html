@@ -591,6 +591,7 @@
           <input type="color" id="setup-ship-color" value="#2a4a6a" style="width:52px; height:40px; padding:2px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; cursor:pointer;">
         </div>
       </div>
+      <div id="setup-ship-equipped" style="display:none; margin-bottom:16px;"></div>
       <div class="form-label" style="margin-bottom:10px;">Choose Hull</div>
       <div id="hull-picker" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-height:340px;overflow-y:auto;">
         <div style="color:var(--text-faint);font-size:13px;grid-column:1/-1;">Loading hulls…</div>
@@ -766,11 +767,14 @@
         <select class="form-select" id="cargo-catalog-filter" style="width:140px;" onchange="renderCargoCatalogList()">
           <option value="">All Categories</option>
           <option value="weapon">Weapons</option>
+          <option value="armor">Armor</option>
           <option value="mineral">Minerals</option>
           <option value="ration">Rations</option>
           <option value="gear">Gear</option>
         </select>
+        <input class="form-input" id="cargo-catalog-qty" type="number" min="1" value="1" title="Quantity to add" style="width:64px;">
       </div>
+      <p style="font-size:10.5px; color:var(--text-faint); margin:-6px 0 10px;">Set a quantity, then click an item — it stacks onto a matching item already in the hold.</p>
       <div id="cargo-catalog-list" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; max-height:420px; overflow-y:auto;"></div>
       <div class="form-error" id="cargo-catalog-error"></div>
     </div>
@@ -1010,9 +1014,10 @@ async function loadShip() {
 // from schema-v14's seed data, with sane fallbacks for anything homebrewed later.
 const REACTOR_ICON = 'assets/interface/Interface Icons/1x/Battery - full 512 px.png';
 const WEAPON_ICONS = {
-  'Light Pulse Laser': 'assets/objects/hardpoints/laser_cannon/laser_cannon_turret.png',
-  'Mag-Accelerator Cannon': 'assets/objects/hardpoints/autocannon/autocannon2.png',
-  'Heavy Plasma Mortar': 'assets/objects/hardpoints/plasma_cannon/plasma_cannon.png',
+  'Pulse Laser': 'assets/objects/hardpoints/laser_cannon/laser_cannon_turret.png',
+  'Mag Cannon': 'assets/objects/hardpoints/autocannon/autocannon2.png',
+  'Plasma Mortar': 'assets/objects/hardpoints/plasma_cannon/plasma_cannon.png',
+  'Siege Railgun': 'assets/objects/hardpoints/heavy_laser_cannon/heavy_laser_cannon.png',
 };
 const WEAPON_ICON_FALLBACK = 'assets/objects/hardpoints/dual_laser_cannon/dual_laser_cannon_turret.png';
 function loadoutIcon(path, size) { return `<img src="${path}" style="width:${size||22}px;height:${size||22}px;object-fit:contain;image-rendering:pixelated;flex-shrink:0;" alt="">`; }
@@ -2813,16 +2818,30 @@ async function loadMyInventory() {
   renderCargo();
 }
 
+// Stack onto a matching row (same name + type) instead of creating a duplicate line.
+async function stackOrInsertCargoItem(payload, qty) {
+  qty = Math.max(1, qty || 1);
+  const existing = cargoItems.find(i => i.name === payload.name && i.item_type === payload.item_type);
+  if (existing) return db.from('campaign_cargo').update({ quantity: (existing.quantity||1) + qty }).eq('id', existing.id);
+  return db.from('campaign_cargo').insert({ ...payload, quantity: qty });
+}
+async function stackOrInsertMyInventoryItem(payload, qty) {
+  qty = Math.max(1, qty || 1);
+  const existing = myInventoryItems.find(i => i.name === payload.name && i.item_type === payload.item_type);
+  if (existing) return db.from('character_inventory').update({ quantity: (existing.quantity||1) + qty }).eq('id', existing.id);
+  return db.from('character_inventory').insert({ ...payload, quantity: qty });
+}
+
 async function takeCargoItem(id) {
   if (!myCharacterId) return;
   const item = cargoItems.find(i => i.id === id);
   if (!item) return;
-  const { error: insErr } = await db.from('character_inventory').insert({
+  const { error: insErr } = await stackOrInsertMyInventoryItem({
     character_id: myCharacterId, name: item.name, item_type: item.item_type,
-    quantity: item.quantity, weight: item.weight, value: item.value, description: item.description,
+    weight: item.weight, value: item.value, description: item.description,
     icon_path: item.icon_path, diet_tag: item.diet_tag,
-    damage_dice: item.damage_dice, accuracy_mod: item.accuracy_mod, range_m: item.range_m,
-  });
+    damage_dice: item.damage_dice, accuracy_mod: item.accuracy_mod, range_m: item.range_m, armor_dr: item.armor_dr,
+  }, item.quantity);
   if (insErr) return alert('Failed to take item: ' + insErr.message);
   const { error: delErr } = await db.from('campaign_cargo').delete().eq('id', id);
   if (delErr) return alert('Item copied to your inventory, but removing it from the hold failed: ' + delErr.message);
@@ -2832,12 +2851,13 @@ async function takeCargoItem(id) {
 async function sendToCargo(itemId) {
   const item = myInventoryItems.find(i => i.id === itemId);
   if (!item) return;
-  const { error: insErr } = await db.from('campaign_cargo').insert({
+  const { error: insErr } = await stackOrInsertCargoItem({
     campaign_id: campaignId, name: item.name, item_type: item.item_type,
-    quantity: item.quantity, weight: item.weight, value: item.value, description: item.description,
-    icon_path: item.icon_path, diet_tag: item.diet_tag,
+    weight: item.weight, value: item.value, description: item.description,
+    icon_path: item.icon_path, diet_tag: item.diet_tag, armor_dr: item.armor_dr,
+    damage_dice: item.damage_dice, accuracy_mod: item.accuracy_mod, range_m: item.range_m,
     added_by: currentUser.id,
-  });
+  }, item.quantity);
   if (insErr) return alert('Failed to send item to hold: ' + insErr.message);
   const { error: delErr } = await db.from('character_inventory').delete().eq('id', itemId);
   if (delErr) return alert('Item copied to the hold, but removing it from your inventory failed: ' + delErr.message);
@@ -2864,16 +2884,16 @@ function openAddCargo() {
 async function saveCargoItem() {
   const name = document.getElementById('cargo-name-inp').value.trim();
   if (!name) return showError('cargo-error', 'Item needs a name.');
-  const { error } = await db.from('campaign_cargo').insert({
+  const qty = parseInt(document.getElementById('cargo-qty-inp').value) || 1;
+  const { error } = await stackOrInsertCargoItem({
     campaign_id: campaignId,
     name,
     item_type:   document.getElementById('cargo-type-inp').value,
-    quantity:    parseInt(document.getElementById('cargo-qty-inp').value)    || 1,
     weight:      parseFloat(document.getElementById('cargo-weight-inp').value) || 0,
     value:       parseInt(document.getElementById('cargo-value-inp').value)  || 0,
     description: document.getElementById('cargo-desc-inp').value.trim(),
     added_by:    currentUser.id,
-  });
+  }, qty);
   if (error) return showError('cargo-error', error.message);
   closeModal('modal-add-cargo');
   await loadCargo();
@@ -2893,6 +2913,7 @@ function renderStoredIcon(iconPath, size) {
 function openCargoCatalog() {
   document.getElementById('cargo-catalog-search').value = '';
   document.getElementById('cargo-catalog-filter').value = '';
+  document.getElementById('cargo-catalog-qty').value = 1;
   showError('cargo-catalog-error', '');
   renderCargoCatalogList();
   openModal('modal-cargo-catalog');
@@ -2913,19 +2934,20 @@ function renderCargoCatalogList() {
 async function addCargoCatalogItem(key) {
   const item = catalogFind(key);
   if (!item) return;
+  const qty = Math.max(1, parseInt(document.getElementById('cargo-catalog-qty').value) || 1);
   const payload = {
     campaign_id: campaignId,
     name: item.name,
-    item_type: item.category === 'weapon' ? 'weapon' : item.category === 'ration' ? 'ration' : item.category === 'mineral' ? 'mineral' : 'misc',
-    quantity: 1,
+    item_type: item.category === 'weapon' ? 'weapon' : item.category === 'armor' ? 'armor' : item.category === 'ration' ? 'ration' : item.category === 'mineral' ? 'mineral' : 'misc',
     weight: item.weight || 0,
     value: item.value || 0,
     description: item.desc || '',
     icon_path: typeof item.icon === 'string' ? item.icon : JSON.stringify(item.icon),
     added_by: currentUser.id,
   };
+  if (item.category === 'armor') payload.armor_dr = item.dr;
   if (item.category === 'ration') payload.diet_tag = (item.dietTags || []).join(',');
-  const { error } = await db.from('campaign_cargo').insert(payload);
+  const { error } = await stackOrInsertCargoItem(payload, qty);
   if (error) return showError('cargo-catalog-error', error.message);
   await loadCargo();
 }
@@ -3762,6 +3784,26 @@ document.getElementById('log-txt').addEventListener('keydown',  e => { if (e.key
 // ── Ship Setup (GM) ──────────────────────────────────────────────
 let allHullTypes = [], selectedHullId = null;
 
+// Shows what's currently equipped so renaming/recoloring the ship (or even swapping the
+// hull) doesn't feel like it might silently wipe the loadout — it's preserved per-slot
+// whenever the new hull size is still compatible (see createCampaignShip()).
+function renderSetupShipEquipped() {
+  const box = document.getElementById('setup-ship-equipped');
+  if (!shipData) { box.style.display = 'none'; return; }
+  const slots = [
+    ['Left Wing', shipComponents.left_wing], ['Right Wing', shipComponents.right_wing],
+    ['Thruster', shipComponents.thruster], ['Reactor', shipComponents.reactor],
+    ...(shipComponents.guns || []).map((g, i) => [`Hardpoint ${i+1}`, g]),
+  ];
+  box.style.display = 'block';
+  box.innerHTML = `
+    <div class="form-label" style="margin-bottom:6px;">Currently Equipped</div>
+    <div style="display:flex; flex-wrap:wrap; gap:6px;">
+      ${slots.map(([label, c]) => `<span class="species-bonus-chip ${c?'pos':''}">${label}: ${c ? esc(c.name) : '—'}</span>`).join('')}
+    </div>
+    <p style="font-size:10.5px; color:var(--text-faint); margin-top:6px;">Kept automatically if you rename the ship or pick a same-size hull — only unequipped if genuinely incompatible with a new hull's size.</p>`;
+}
+
 async function openSetupShip() {
   selectedHullId = shipData?.ship_type_id || null;
   document.getElementById('setup-ship-name').value = shipData?.ship_name || '';
@@ -3769,6 +3811,7 @@ async function openSetupShip() {
   document.getElementById('modal-setup-ship').querySelector('.modal-title').textContent = shipData ? 'Edit Campaign Ship' : 'Assign Campaign Ship';
   document.getElementById('setup-ship-save-btn').textContent = shipData ? 'Save Changes' : 'Assign Ship';
   showError('setup-ship-error', '');
+  renderSetupShipEquipped();
 
   const picker = document.getElementById('hull-picker');
   picker.innerHTML = '<div style="color:var(--text-faint);font-size:13px;grid-column:1/-1;">Loading hulls…</div>';

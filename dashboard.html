@@ -761,9 +761,11 @@ document.getElementById('create-char-btn').addEventListener('click', async () =>
   const personality = getPlaceholder(selectedSpecies, r, 'personality');
   const bonds       = getPlaceholder(selectedSpecies, r, 'bonds');
   const flaws       = getPlaceholder(selectedSpecies, r, 'flaws');
-  const flyMod = Math.floor((stats.fly - 10) / 2);
   const fightMod = Math.floor((stats.fight - 10) / 2);
   const hp_max = 8 + fightMod + 1;
+  // Armor is flat damage reduction (not to-hit) — species base only at creation;
+  // equipping armor gear on the sheet adds on top of this.
+  const SPECIES_BASE_ARMOR = { human:0, kragol:2, skitterling:0, myxos:0, arboran:1 };
 
   setLoading(btn, true);
   const { data: newChar, error } = await db.from('characters').insert({
@@ -771,7 +773,7 @@ document.getElementById('create-char-btn').addEventListener('click', async () =>
     name, species: selectedSpecies, role: r, rank,
     stats, background, personality, bonds, flaws,
     hp_current: hp_max, hp_max, level: 1, xp: 0,
-    armor: 10 + flyMod, speed: 30,
+    armor: SPECIES_BASE_ARMOR[selectedSpecies] ?? 0, speed: 30,
     appearance: { gender: selectedGender, variant: selectedVariant },
   }).select().single();
   setLoading(btn, false);

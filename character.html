@@ -429,11 +429,14 @@ body.edit-mode .edit-hint  { display:block; }
         <select class="form-select" id="catalog-filter" style="width:140px;" onchange="renderCatalogList()">
           <option value="">All Categories</option>
           <option value="weapon">Weapons</option>
+          <option value="armor">Armor</option>
           <option value="mineral">Minerals</option>
           <option value="ration">Rations</option>
           <option value="gear">Gear</option>
         </select>
+        <input class="form-input" id="catalog-qty" type="number" min="1" value="1" title="Quantity to add" style="width:64px;">
       </div>
+      <p style="font-size:10.5px; color:var(--text-faint); margin:-6px 0 10px;">Set a quantity above, then click an item to add that many. Adding more of something you already carry stacks onto the existing row.</p>
       <div id="catalog-list" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; max-height:420px; overflow-y:auto;"></div>
       <div class="form-error" id="catalog-error"></div>
     </div>
@@ -695,19 +698,22 @@ function updateCombatStats() {
   const stats = char.stats || {};
   const initiative = mod(stats.fly   ?? 10);
   const maxHP      = 8 + mod(stats.fight ?? 10) + ((char.level||1) - 1) * (1 + mod(stats.fight ?? 10));
-  const armor      = char.armor || 10;
+  const speciesArmor = SPECIES_BASE_ARMOR[char.species || 'human'] ?? 0;
+  const equippedArmor = (inventory || []).find(i => i.item_type === 'armor' && i.is_equipped);
+  const armor      = char.armor ?? speciesArmor;
   const speed      = char.speed || 30;
 
   const row = document.getElementById('combat-row');
   row.innerHTML = [
     { label:'Initiative', val: fmtMod(initiative) },
     { label:'Base HP',    val: maxHP },
-    { label:'Armor',      val: armor },
+    { label:'Armor',      val: armor, sub: `${speciesArmor} species${equippedArmor ? ` + ${equippedArmor.armor_dr||0} gear` : ''}` },
     { label:'Speed',      val: speed + 'm' },
   ].map(c => `
     <div class="combat-stat">
       <div class="combat-stat-label">${c.label}</div>
       <div class="combat-stat-val">${c.val}</div>
+      ${c.sub ? `<div style="font-size:9.5px; color:var(--text-faint); margin-top:2px;">${c.sub}</div>` : ''}
     </div>`).join('');
 }
 
@@ -938,6 +944,7 @@ async function loadInventory() {
   inventory = data || [];
   renderInventory();
   renderRations();
+  await recomputeArmor();
 }
 
 // ── Rations ────────────────────────────────────────────────────
@@ -994,12 +1001,16 @@ function renderInventory() {
   }
   tbody.innerHTML = inventory.map(item => {
     const isWeapon = item.item_type === 'weapon';
+    const isArmor  = item.item_type === 'armor';
+    const isEquippable = isWeapon || isArmor;
     const weaponMeta = isWeapon && (item.damage_dice || item.range_m)
       ? `<br><span style="font-size:11px; color:#c88;">${item.damage_dice ? esc(item.damage_dice)+' dmg' : ''}${item.accuracy_mod ? ` · ${item.accuracy_mod>0?'+':''}${item.accuracy_mod} acc` : ''}${item.range_m ? ` · ${item.range_m}m` : ''}${item.is_equipped ? ' · <strong style="color:#4acc7a;">EQUIPPED</strong>' : ''}</span>`
+      : isArmor
+      ? `<br><span style="font-size:11px; color:#8ab8ff;">${item.armor_dr || 0} DR${item.is_equipped ? ' · <strong style="color:#4acc7a;">EQUIPPED</strong>' : ''}</span>`
       : '';
     return `
     <tr>
-      <td><div class="inv-equipped ${item.is_equipped ? 'active' : ''}" title="${isWeapon ? 'Equip weapon (only one at a time)' : 'Mark equipped'}" onclick="toggleEquip('${item.id}', ${!item.is_equipped}, ${isWeapon})"></div></td>
+      <td><div class="inv-equipped ${item.is_equipped ? 'active' : ''}" title="${isEquippable ? `Equip (only one ${item.item_type} at a time)` : 'Mark equipped'}" onclick="toggleEquip('${item.id}', ${!item.is_equipped}, '${item.item_type}')"></div></td>
       <td><div style="display:flex; align-items:center; gap:8px;">${item.icon_path ? renderStoredIcon(item.icon_path, 24) : ''}<div><strong style="color:var(--text)">${esc(item.name)}</strong>${item.description ? `<br><span style="font-size:11px; color:var(--text-faint)">${esc(item.description)}</span>` : ''}${weaponMeta}</div></div></td>
       <td><span class="inv-type-badge type-${item.item_type}">${cap(item.item_type)}</span></td>
       <td>${item.quantity}</td>
@@ -1042,7 +1053,8 @@ async function confirmSendToCargo() {
   const { error: insErr } = await db.from('campaign_cargo').insert({
     campaign_id: campaignId, name: item.name, item_type: item.item_type,
     quantity: item.quantity, weight: item.weight, value: item.value, description: item.description,
-    icon_path: item.icon_path, diet_tag: item.diet_tag,
+    icon_path: item.icon_path, diet_tag: item.diet_tag, armor_dr: item.armor_dr,
+    damage_dice: item.damage_dice, accuracy_mod: item.accuracy_mod, range_m: item.range_m,
     added_by: currentUser.id,
   });
   if (insErr) return showError('send-cargo-error', insErr.message);
@@ -1054,14 +1066,29 @@ async function confirmSendToCargo() {
   await loadInventory();
 }
 
-async function toggleEquip(id, equipped, isWeapon) {
-  // Only ONE weapon can be equipped at a time — equipping one unequips the rest.
-  if (isWeapon && equipped) {
+async function toggleEquip(id, equipped, itemType) {
+  // Only ONE weapon, and separately only ONE armor, can be equipped at a time —
+  // equipping a new one unequips whatever else of that same type was equipped.
+  if (equipped && (itemType === 'weapon' || itemType === 'armor')) {
     await db.from('character_inventory').update({ is_equipped: false })
-      .eq('character_id', charId).eq('item_type', 'weapon');
+      .eq('character_id', charId).eq('item_type', itemType);
   }
   await db.from('character_inventory').update({ is_equipped: equipped }).eq('id', id);
   await loadInventory();
+}
+
+// ── Armor (species base + one equipped armor item, capped by the item's own DR) ──
+const SPECIES_BASE_ARMOR = { human:0, kragol:2, skitterling:0, myxos:0, arboran:1 };
+
+async function recomputeArmor() {
+  const base = SPECIES_BASE_ARMOR[char.species || 'human'] ?? 0;
+  const equippedArmor = inventory.find(i => i.item_type === 'armor' && i.is_equipped);
+  const total = base + (equippedArmor?.armor_dr || 0);
+  if (char.armor !== total) {
+    char.armor = total;
+    await db.from('characters').update({ armor: total }).eq('id', charId);
+  }
+  updateCombatStats();
 }
 
 function toggleWeaponFields() {
@@ -1091,6 +1118,7 @@ function renderStoredIcon(iconPath, size) {
 function openCatalogBrowser() {
   document.getElementById('catalog-search').value = '';
   document.getElementById('catalog-filter').value = '';
+  document.getElementById('catalog-qty').value = 1;
   showError('catalog-error', '');
   renderCatalogList();
   openModal('modal-catalog');
@@ -1114,14 +1142,28 @@ function renderCatalogList() {
   }).join('') || '<div style="grid-column:1/-1;color:var(--text-faint);font-size:12px;text-align:center;padding:20px;">No items match.</div>';
 }
 
+// Adding an item you already carry stacks onto the existing row (matched by name + type)
+// instead of creating a duplicate line — weapons/armor stack too; is_equipped just marks
+// which one out of the stack you're currently using.
+async function stackOrInsertInventoryItem(payload, qty) {
+  qty = Math.max(1, qty || 1);
+  const existing = inventory.find(i => i.name === payload.name && i.item_type === payload.item_type);
+  if (existing) {
+    const { error } = await db.from('character_inventory').update({ quantity: (existing.quantity || 1) + qty }).eq('id', existing.id);
+    return error;
+  }
+  const { error } = await db.from('character_inventory').insert({ ...payload, quantity: qty });
+  return error;
+}
+
 async function addCatalogItem(key) {
   const item = catalogFind(key);
   if (!item) return;
+  const qty = Math.max(1, parseInt(document.getElementById('catalog-qty').value) || 1);
   const payload = {
     character_id: charId,
     name: item.name,
-    item_type: item.category === 'weapon' ? 'weapon' : item.category === 'ration' ? 'ration' : item.category === 'mineral' ? 'mineral' : 'misc',
-    quantity: 1,
+    item_type: item.category === 'weapon' ? 'weapon' : item.category === 'armor' ? 'armor' : item.category === 'ration' ? 'ration' : item.category === 'mineral' ? 'mineral' : 'misc',
     weight: item.weight || 0,
     value: item.value || 0,
     description: item.desc || '',
@@ -1130,10 +1172,13 @@ async function addCatalogItem(key) {
   if (item.category === 'weapon') {
     payload.damage_dice = item.dmg; payload.accuracy_mod = item.acc; payload.range_m = item.range;
   }
+  if (item.category === 'armor') {
+    payload.armor_dr = item.dr;
+  }
   if (item.category === 'ration') {
     payload.diet_tag = (item.dietTags || []).join(',');
   }
-  const { error } = await db.from('character_inventory').insert(payload);
+  const error = await stackOrInsertInventoryItem(payload, qty);
   if (error) return showError('catalog-error', error.message);
   await loadInventory();
 }
@@ -1156,11 +1201,11 @@ async function addItem() {
   const name = document.getElementById('item-name').value.trim();
   if (!name) return showError('item-error', 'Item needs a name.');
   const type = document.getElementById('item-type').value;
+  const qty = parseInt(document.getElementById('item-qty').value) || 1;
   const payload = {
     character_id: charId,
     name,
     item_type:   type,
-    quantity:    parseInt(document.getElementById('item-qty').value)    || 1,
     weight:      parseFloat(document.getElementById('item-weight').value) || 0,
     value:       parseInt(document.getElementById('item-value').value)  || 0,
     description: document.getElementById('item-desc').value.trim(),
@@ -1170,7 +1215,7 @@ async function addItem() {
     payload.accuracy_mod = parseInt(document.getElementById('item-acc').value) || 0;
     payload.range_m      = parseInt(document.getElementById('item-range').value) || 0;
   }
-  const { error } = await db.from('character_inventory').insert(payload);
+  const error = await stackOrInsertInventoryItem(payload, qty);
   if (error) return showError('item-error', error.message);
   closeModal('modal-add-item');
   await loadInventory();

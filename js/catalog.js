@@ -85,12 +85,24 @@ MINERAL_FAMILIES.forEach(fam => {
 
 // ── RATIONS ────────────────────────────────────────────────────
 const RATIONS = [
-  { key:'ration_meat',   name:'Preserved Meat Ration',  dietTags:[DIET.OMNIVORE, DIET.HYPER], icon: MISC_ICON(28), desc:'Vacuum-sealed protein block. Tastes like a memory of meat.', weight:0.3, value:8 },
-  { key:'ration_plant',  name:'Vac-Packed Plant Ration',dietTags:[DIET.OMNIVORE, DIET.HYPER], icon: MISC_ICON(29), desc:'Dense nutrient greens, freeze-dried for transit.', weight:0.2, value:6 },
-  { key:'ration_baked',  name:'Ration Bread Loaf',      dietTags:[DIET.OMNIVORE, DIET.HYPER], icon: MISC_ICON(30), desc:'Dense, long-life baked ration bar. Better than the paste, barely.', weight:0.3, value:7 },
-  { key:'ration_paste',  name:'Synthetic Nutrient Paste',dietTags:[DIET.OMNIVORE, DIET.HYPER], icon: MISC_ICON(31), desc:'Standard GAC-issue nutrient paste. Nobody likes it, everybody eats it.', weight:0.2, value:4 },
-  { key:'ration_rock',   name:'Mineral Feed Block',     dietTags:[DIET.LITHIVORE], icon: TOOL_ICON(30), desc:'Compressed ore chips, ground fine enough for a Kragol to grind down.', weight:0.6, value:9 },
-  { key:'ration_sludge', name:'Reclaimed Waste Slurry', dietTags:[DIET.DISSOLVENT], icon: MISC_ICON(32), desc:'Bio-processed chemical waste — a Myxos delicacy, allegedly.', weight:0.3, value:5 },
+  { key:'ration_meat',   name:'Preserved Meat Ration',  category:'ration', dietTags:[DIET.OMNIVORE, DIET.HYPER], icon: MISC_ICON(28), desc:'Vacuum-sealed protein block. Tastes like a memory of meat.', weight:0.3, value:8 },
+  { key:'ration_plant',  name:'Vac-Packed Plant Ration',category:'ration', dietTags:[DIET.OMNIVORE, DIET.HYPER], icon: MISC_ICON(29), desc:'Dense nutrient greens, freeze-dried for transit.', weight:0.2, value:6 },
+  { key:'ration_baked',  name:'Ration Bread Loaf',      category:'ration', dietTags:[DIET.OMNIVORE, DIET.HYPER], icon: MISC_ICON(30), desc:'Dense, long-life baked ration bar. Better than the paste, barely.', weight:0.3, value:7 },
+  { key:'ration_paste',  name:'Synthetic Nutrient Paste',category:'ration', dietTags:[DIET.OMNIVORE, DIET.HYPER], icon: MISC_ICON(31), desc:'Standard GAC-issue nutrient paste. Nobody likes it, everybody eats it.', weight:0.2, value:4 },
+  { key:'ration_rock',   name:'Mineral Feed Block',     category:'ration', dietTags:[DIET.LITHIVORE], icon: TOOL_ICON(30), desc:'Compressed ore chips, ground fine enough for a Kragol to grind down.', weight:0.6, value:9 },
+  { key:'ration_sludge', name:'Reclaimed Waste Slurry', category:'ration', dietTags:[DIET.DISSOLVENT], icon: MISC_ICON(32), desc:'Bio-processed chemical waste — a Myxos delicacy, allegedly.', weight:0.3, value:5 },
+];
+
+// ── ARMOR ──────────────────────────────────────────────────────
+// Flat damage reduction (DR), capped at 5 — armor never affects the to-hit (AD) check, only
+// how much of a landed hit's damage actually gets through.
+const ARMOR_ITEMS = [
+  { key:'armor_padded',   name:'Padded Undersuit',  category:'armor', dr:1, icon: MISC_ICON(33), desc:'Basic quilted lining under a flight suit. Barely there, but better than nothing.', weight:1.0, value:60 },
+  { key:'armor_synthweave',name:'Synthweave Vest',   category:'armor', dr:2, icon: MISC_ICON(34), desc:'Layered synthetic fibre vest, standard frontier issue.', weight:1.8, value:140 },
+  { key:'armor_riot',     name:'Riot Plating',       category:'armor', dr:3, icon: MISC_ICON(35), desc:'Rigid plate sections over a padded harness. Bulky but dependable.', weight:3.2, value:260 },
+  { key:'armor_composite',name:'Composite Vest',     category:'armor', dr:3, icon: MISC_ICON(36), desc:'Ceramic-composite panels, lighter than riot plating for the same protection.', weight:2.4, value:320 },
+  { key:'armor_kec_hauler',name:'KEC Hauler Rig',    category:'armor', dr:4, icon: MISC_ICON(37), desc:'Reinforced mining exosuit padding, built to take a beating from rockfall.', weight:4.0, value:420 },
+  { key:'armor_gac_combat',name:'GAC Combat Plate',  category:'armor', dr:5, icon: MISC_ICON(38), desc:'Full military-grade plating. Top-of-the-line, priced like it.', weight:5.5, value:650 },
 ];
 
 // ── GEAR ───────────────────────────────────────────────────────
@@ -123,7 +135,7 @@ const MINING_TOOLS = MINING_TOOL_NAMES.map((name, i) => ({
   weight: 1.5 + (i % 4) * 0.6, value: 60 + i * 20,
 }));
 
-const ITEM_CATALOG = [...WEAPONS, ...MINERALS, ...RATIONS, ...GEAR, ...MINING_TOOLS];
+const ITEM_CATALOG = [...WEAPONS, ...ARMOR_ITEMS, ...MINERALS, ...RATIONS, ...GEAR, ...MINING_TOOLS];
 
 function catalogByCategory(cat) { return ITEM_CATALOG.filter(i => i.category === cat); }
 function catalogFind(key) { return ITEM_CATALOG.find(i => i.key === key); }
