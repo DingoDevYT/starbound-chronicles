@@ -792,6 +792,62 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="modal-mining-game">
+  <div class="modal" style="max-width:760px; max-height:92vh; overflow-y:auto;">
+    <div class="modal-header"><span class="modal-title" id="mining-game-title">Asteroid Excavation</span><button class="modal-close" onclick="closeMiningGameModal()">✕</button></div>
+    <div class="modal-body">
+
+      <!-- Setup step: pick asteroid + tool -->
+      <div id="mining-setup-panel">
+        <div class="form-group">
+          <label class="form-label">Target Asteroid</label>
+          <div id="mining-setup-asteroids" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px;"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mining Tool</label>
+          <div id="mining-setup-tools" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px;"></div>
+        </div>
+        <div class="form-error" id="mining-setup-error"></div>
+      </div>
+
+      <!-- Active dig step -->
+      <div id="mining-dig-panel" style="display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:700; font-size:13px;" id="mining-dig-asteroid-name">—</div>
+            <div style="font-size:10.5px; color:var(--text-faint);" id="mining-dig-tool-name">—</div>
+          </div>
+          <div style="min-width:140px;">
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-faint); margin-bottom:3px;">
+              <span>Charges</span><span id="mining-charge-lbl">—</span>
+            </div>
+            <div class="mining-charge-bar"><div class="mining-charge-bar-fill" id="mining-charge-fill" style="width:100%;"></div></div>
+          </div>
+        </div>
+        <div class="mining-grid-wrap" id="mining-grid-el"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap;">
+          <div style="font-size:10.5px; color:var(--text-faint);" id="mining-status-line">Scan first to reveal likely vein locations, then start digging.</div>
+          <button class="btn-secondary" id="mining-scan-btn" onclick="scanMiningHotspots()" style="font-size:11px; padding:5px 12px; white-space:nowrap;">📡 Scan for Hotspots</button>
+        </div>
+      </div>
+
+      <!-- Results step -->
+      <div id="mining-results-panel" style="display:none; text-align:center;">
+        <div style="font-size:32px; margin-bottom:6px;" id="mining-result-emoji">🏆</div>
+        <div style="font-size:16px; font-weight:800;" id="mining-result-title">Veins Depleted</div>
+        <div style="font-size:11.5px; color:var(--text-faint); margin:6px 0 14px;" id="mining-result-desc"></div>
+        <div id="mining-result-loot" style="display:flex; flex-direction:column; gap:6px; text-align:left; max-width:360px; margin:0 auto;"></div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeMiningGameModal()" id="mining-cancel-btn">Cancel</button>
+      <button class="btn-primary" onclick="startMiningDig()" id="mining-begin-btn" style="width:auto;padding:10px 24px;">Begin Expedition</button>
+      <button class="btn-primary" onclick="closeMiningGameModal()" id="mining-done-btn" style="width:auto;padding:10px 24px;display:none;">Done</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-cargo-catalog">
   <div class="modal" style="max-width:640px; max-height:85vh; overflow-y:auto;">
     <div class="modal-header"><span class="modal-title">Item Catalog — Add to Cargo Hold</span><button class="modal-close" onclick="closeModal('modal-cargo-catalog')">✕</button></div>
@@ -2788,6 +2844,7 @@ function renderMiningSessions() {
       ${loot.length ? `<div style="display:flex; gap:6px; flex-wrap:wrap;">${loot.map(l => `<span style="font-size:10.5px; padding:2px 6px; border-radius:4px; background:var(--surface2); border:1px solid var(--border);">${esc(l.name)}</span>`).join('')}</div>` : ''}
       <div style="display:flex; gap:8px;">
         ${(isMine && s.status === 'pending') ? `<button class="cargo-btn" onclick="beginMiningSession('${s.id}')">Begin Mining</button>` : ''}
+        ${(isMine && s.status === 'active') ? `<button class="cargo-btn" onclick="beginMiningSession('${s.id}')">Continue Mining</button>` : ''}
         ${(isGM && (s.status === 'pending' || s.status === 'active')) ? `<button class="cargo-btn danger" onclick="abortMiningSession('${s.id}')">Abort</button>` : ''}
       </div>
     </div>`;
@@ -2801,9 +2858,306 @@ async function abortMiningSession(id) {
   await loadMiningSessions();
 }
 
-function beginMiningSession(id) {
-  // TODO(task 40): open the actual grid-dig minigame modal for this session.
-  alert('The mining minigame is coming very soon — hang tight!');
+// ── Mining minigame (player side) ─────────────────────────────────
+const MINING_GRID_SIZE = 8;
+const MINING_TILE_HP = 10;
+const MINING_VEIN_COUNT = 5;
+let miningGame = null; // { session, asteroid, tool, charges, maxCharges, tiles, veins, foundLoot, locked, done }
+
+function beginMiningSession(sessionId) {
+  const session = miningSessions.find(s => s.id === sessionId);
+  if (!session || session.character_id !== myCharacterId) return;
+  miningGame = { session, asteroid: null, tool: null, charges: 0, maxCharges: 0, tiles: null, veins: [], foundLoot: [], locked: false, done: false };
+
+  document.getElementById('mining-game-title').textContent = 'Asteroid Excavation';
+  document.getElementById('mining-setup-panel').style.display = '';
+  document.getElementById('mining-dig-panel').style.display = 'none';
+  document.getElementById('mining-results-panel').style.display = 'none';
+  document.getElementById('mining-begin-btn').style.display = 'inline-block';
+  document.getElementById('mining-cancel-btn').style.display = 'inline-block';
+  document.getElementById('mining-done-btn').style.display = 'none';
+  showError('mining-setup-error', '');
+
+  const offered = (session.offered_asteroids || []).map(k => ASTEROID_PRESETS.find(a => a.key === k)).filter(Boolean);
+  document.getElementById('mining-setup-asteroids').innerHTML = offered.map(a => `
+    <div class="mining-pick-card" data-key="${a.key}" onclick="pickMiningAsteroid('${a.key}')">
+      <div style="font-weight:700; font-size:12px;">${esc(a.name)}</div>
+      <div style="font-size:10px; color:var(--text-faint); margin:3px 0;">${esc(a.desc)}</div>
+      <div style="font-size:10px; color:var(--text-dim);">${cap(a.hardness)} · DR ${a.dr}${a.rareChance ? ` · <span style="color:#ffaa00;">${Math.round(a.rareChance*100)}% rare shot</span>` : ''}</div>
+    </div>`).join('') || '<div style="color:var(--text-faint);font-size:12px;">No asteroids were offered.</div>';
+
+  const tools = myInventoryItems.filter(i => i.item_type === 'tool' && i.mining_modifier != null);
+  document.getElementById('mining-setup-tools').innerHTML = tools.length ? tools.map(t => `
+    <div class="mining-pick-card" data-id="${t.id}" onclick="pickMiningTool('${t.id}')">
+      <div style="font-weight:700; font-size:12px;">${esc(t.name)}</div>
+      <div style="font-size:10px; color:var(--text-faint); margin:3px 0;">${t.quantity > 1 ? `×${t.quantity} · ` : ''}Roll ${t.mining_modifier >= 0 ? '+' : ''}${t.mining_modifier} · ${t.mining_size}×${t.mining_size} blast</div>
+      <div style="font-size:10px; color:var(--text-dim);">Charges: ${t.mining_max_charges} · Best vs ${t.mining_best_against}</div>
+    </div>`).join('') : '<div style="color:var(--text-faint);font-size:12px;">No mining tools in your inventory.</div>';
+
+  openModal('modal-mining-game');
+}
+
+function pickMiningAsteroid(key) {
+  miningGame.asteroid = ASTEROID_PRESETS.find(a => a.key === key);
+  document.querySelectorAll('#mining-setup-asteroids .mining-pick-card').forEach(el => el.classList.toggle('selected', el.dataset.key === key));
+}
+function pickMiningTool(id) {
+  miningGame.tool = myInventoryItems.find(i => i.id === id);
+  document.querySelectorAll('#mining-setup-tools .mining-pick-card').forEach(el => el.classList.toggle('selected', el.dataset.id === id));
+}
+
+async function startMiningDig() {
+  if (!miningGame.asteroid) return showError('mining-setup-error', 'Pick an asteroid to mine.');
+  if (!miningGame.tool) return showError('mining-setup-error', 'Pick a mining tool.');
+
+  const t = miningGame.tool;
+  miningGame.charges = t.mining_max_charges;
+  miningGame.maxCharges = t.mining_max_charges;
+  miningGame.scanned = false;
+
+  const { data: charRow } = await db.from('characters').select('fix').eq('id', myCharacterId).single();
+  miningGame.fixMod = Math.floor(((charRow?.fix ?? 10) - 10) / 2);
+
+  await db.from('mining_sessions').update({
+    status: 'active', selected_asteroid: miningGame.asteroid.key, selected_tool_item_id: t.id,
+  }).eq('id', miningGame.session.id);
+
+  buildMiningGrid();
+  document.getElementById('mining-setup-panel').style.display = 'none';
+  document.getElementById('mining-dig-panel').style.display = '';
+  document.getElementById('mining-begin-btn').style.display = 'none';
+  document.getElementById('mining-dig-asteroid-name').textContent = miningGame.asteroid.name;
+  document.getElementById('mining-dig-tool-name').textContent = `${t.name} · Roll ${t.mining_modifier >= 0 ? '+' : ''}${t.mining_modifier} · ${t.mining_size}×${t.mining_size} blast`;
+  const scanBtn = document.getElementById('mining-scan-btn');
+  scanBtn.disabled = false;
+  scanBtn.textContent = '📡 Scan for Hotspots';
+  document.getElementById('mining-status-line').textContent = 'Scan first to reveal likely vein locations, then start digging.';
+  updateMiningChargeDisplay();
+  renderMiningGrid();
+  await loadMiningSessions();
+}
+
+function scanMiningHotspots() {
+  if (!miningGame || miningGame.scanned || miningGame.done) return;
+  miningGame.scanned = true;
+  const scanBtn = document.getElementById('mining-scan-btn');
+  scanBtn.disabled = true;
+  scanBtn.textContent = 'Scanner Used';
+
+  const roll = Math.floor(Math.random() * 20) + 1;
+  const total = roll + (miningGame.fixMod || 0);
+  const hotspotCount = total >= 18 ? 12 : total >= 12 ? 7 : 4;
+
+  const veinCoords = [];
+  miningGame.veins.forEach(v => { if (!v.uncovered) v.coords.forEach(c => veinCoords.push(c)); });
+  veinCoords.sort(() => Math.random() - 0.5);
+  veinCoords.slice(0, hotspotCount).forEach(([x, y]) => {
+    document.getElementById(`mining-tile-${x}-${y}`)?.classList.add('hotspot');
+  });
+
+  document.getElementById('mining-status-line').textContent = `Scan: d20 (${roll}) + FIX (${miningGame.fixMod >= 0 ? '+' : ''}${miningGame.fixMod}) = ${total} — ${hotspotCount} hotspots pinged on the grid.`;
+}
+
+function buildMiningGrid() {
+  const tiles = [];
+  for (let y = 0; y < MINING_GRID_SIZE; y++) {
+    tiles[y] = [];
+    for (let x = 0; x < MINING_GRID_SIZE; x++) tiles[y][x] = { hp: MINING_TILE_HP, maxHp: MINING_TILE_HP, vein: null };
+  }
+  const veins = [];
+  for (let i = 0; i < MINING_VEIN_COUNT; i++) {
+    const lootItem = rollAsteroidLoot(miningGame.asteroid.key);
+    if (!lootItem) continue;
+    const size = lootItem.digSize || { x: 1, y: 1 };
+    let placed = false, attempts = 0;
+    while (!placed && attempts < 150) {
+      attempts++;
+      const ox = Math.floor(Math.random() * (MINING_GRID_SIZE - size.x + 1));
+      const oy = Math.floor(Math.random() * (MINING_GRID_SIZE - size.y + 1));
+      let valid = true;
+      const coords = [];
+      for (let dy = 0; dy < size.y; dy++) {
+        for (let dx = 0; dx < size.x; dx++) {
+          const cx = ox + dx, cy = oy + dy;
+          if (tiles[cy][cx].vein !== null) { valid = false; break; }
+          coords.push([cx, cy]);
+        }
+        if (!valid) break;
+      }
+      if (valid) {
+        const vein = { item: lootItem, coords, uncovered: false };
+        coords.forEach(([cx, cy]) => { tiles[cy][cx].vein = vein; });
+        veins.push(vein);
+        placed = true;
+      }
+    }
+  }
+  miningGame.tiles = tiles;
+  miningGame.veins = veins;
+}
+
+function renderMiningGrid() {
+  const el = document.getElementById('mining-grid-el');
+  el.innerHTML = '';
+  for (let y = 0; y < MINING_GRID_SIZE; y++) {
+    for (let x = 0; x < MINING_GRID_SIZE; x++) {
+      const tile = document.createElement('div');
+      tile.className = 'mining-tile';
+      tile.id = `mining-tile-${x}-${y}`;
+      tile.onclick = () => strikeMiningTile(x, y);
+      el.appendChild(tile);
+      paintMiningTile(x, y);
+    }
+  }
+}
+
+function paintMiningTile(x, y) {
+  const t = miningGame.tiles[y][x];
+  const el = document.getElementById(`mining-tile-${x}-${y}`);
+  if (!el) return;
+  const fraction = t.hp / t.maxHp;
+  if (t.hp <= 0) {
+    el.classList.add('cleared');
+    el.classList.remove('hotspot');
+    const shown = t.vein && t.vein.uncovered ? catalogIconHtml(t.vein.item.icon, 26) : '';
+    el.innerHTML = shown;
+    el.style.background = '#05070d';
+  } else {
+    const brightness = 0.25 + fraction * 0.55;
+    el.style.background = `rgb(${Math.round(90*brightness)}, ${Math.round(65*brightness)}, ${Math.round(50*brightness)})`;
+  }
+}
+
+function updateMiningChargeDisplay() {
+  document.getElementById('mining-charge-lbl').textContent = `${miningGame.charges} / ${miningGame.maxCharges}`;
+  document.getElementById('mining-charge-fill').style.width = `${Math.max(0, miningGame.charges / miningGame.maxCharges * 100)}%`;
+}
+
+function spawnMiningFloatText(x, y, text, color) {
+  const el = document.getElementById(`mining-tile-${x}-${y}`);
+  if (!el) return;
+  const span = document.createElement('span');
+  span.className = 'mining-float-txt';
+  span.style.color = color || '#e0ecff';
+  span.textContent = text;
+  el.appendChild(span);
+  setTimeout(() => span.remove(), 900);
+}
+
+async function strikeMiningTile(x, y) {
+  if (miningGame.locked || miningGame.done) return;
+  const tile = miningGame.tiles[y][x];
+  if (tile.hp <= 0) return;
+  if (miningGame.charges <= 0) return;
+
+  miningGame.locked = true;
+  miningGame.charges--;
+  updateMiningChargeDisplay();
+
+  const roll = Math.floor(Math.random() * 20) + 1;
+  const tool = miningGame.tool;
+  const ast = miningGame.asteroid;
+
+  if (roll === 1) {
+    document.getElementById('mining-tile-'+x+'-'+y).classList.add('jammed');
+    spawnMiningFloatText(x, y, 'JAMMED!', '#ff6666');
+    document.getElementById('mining-status-line').textContent = `Nat 1 — drill jammed. 0 damage.`;
+    setTimeout(() => document.getElementById('mining-tile-'+x+'-'+y)?.classList.remove('jammed'), 300);
+  } else if (roll === 20) {
+    spawnMiningFloatText(x, y, 'CRIT!', '#ffcc00');
+    document.getElementById('mining-status-line').textContent = `Nat 20 — full ${tool.mining_size}×${tool.mining_size} blast obliterated!`;
+    applyMiningBlast(x, y, tool.mining_size, true, 0);
+  } else {
+    const dmg = Math.max(1, roll + tool.mining_modifier - ast.dr);
+    spawnMiningFloatText(x, y, `-${dmg} HP`, '#66ddff');
+    document.getElementById('mining-status-line').textContent = `Roll ${roll} + ${tool.mining_modifier} - DR ${ast.dr} = ${dmg} damage.`;
+    applyMiningBlast(x, y, tool.mining_size, false, dmg);
+  }
+
+  await checkMiningVeinUncover();
+  miningGame.locked = false;
+  await checkMiningTermination();
+}
+
+function applyMiningBlast(cx, cy, size, instantClear, damage) {
+  const offset = Math.floor(size / 2);
+  for (let dy = -offset; dy <= offset; dy++) {
+    for (let dx = -offset; dx <= offset; dx++) {
+      const x = cx + dx, y = cy + dy;
+      if (x < 0 || x >= MINING_GRID_SIZE || y < 0 || y >= MINING_GRID_SIZE) continue;
+      const tile = miningGame.tiles[y][x];
+      tile.hp = instantClear ? 0 : Math.max(0, tile.hp - damage);
+      paintMiningTile(x, y);
+    }
+  }
+}
+
+async function checkMiningVeinUncover() {
+  const newlyFound = [];
+  for (const vein of miningGame.veins) {
+    if (vein.uncovered) continue;
+    if (vein.coords.every(([cx, cy]) => miningGame.tiles[cy][cx].hp <= 0)) {
+      vein.uncovered = true;
+      vein.coords.forEach(([cx, cy]) => paintMiningTile(cx, cy));
+      miningGame.foundLoot.push(vein.item);
+      newlyFound.push(vein.item);
+    }
+  }
+  if (newlyFound.length) {
+    const lootSoFar = miningGame.foundLoot.map(i => ({ name: i.name, value: i.value, icon_path: typeof i.icon === 'string' ? i.icon : JSON.stringify(i.icon) }));
+    await db.from('mining_sessions').update({ loot_found: lootSoFar }).eq('id', miningGame.session.id);
+  }
+}
+
+async function checkMiningTermination() {
+  if (miningGame.done) return;
+  const remaining = miningGame.veins.filter(v => !v.uncovered).length;
+  if (remaining === 0) { miningGame.done = true; await finishMiningExpedition(true); }
+  else if (miningGame.charges <= 0) { miningGame.done = true; await finishMiningExpedition(false); }
+}
+
+async function finishMiningExpedition(victory) {
+  document.getElementById('mining-dig-panel').style.display = 'none';
+  document.getElementById('mining-results-panel').style.display = '';
+  document.getElementById('mining-cancel-btn').style.display = 'none';
+  document.getElementById('mining-done-btn').style.display = 'inline-block';
+
+  document.getElementById('mining-result-emoji').textContent = victory ? '🏆' : '⚠️';
+  document.getElementById('mining-result-title').textContent = victory ? 'Veins Depleted' : 'Charges Exhausted';
+  document.getElementById('mining-result-desc').textContent = victory
+    ? 'Every seam on this rock has been fully cleared out.'
+    : 'Your tool ran dry before the last seam could be cleared.';
+
+  const lootList = document.getElementById('mining-result-loot');
+  if (!miningGame.foundLoot.length) {
+    lootList.innerHTML = '<div style="color:var(--text-faint);font-size:12px;text-align:center;">Nothing secured this run.</div>';
+  } else {
+    let total = 0;
+    lootList.innerHTML = miningGame.foundLoot.map(item => {
+      total += item.value || 0;
+      return `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 8px; background:var(--surface2); border:1px solid var(--border); border-radius:6px;">
+        <span style="display:flex; align-items:center; gap:8px;">${catalogIconHtml(item.icon, 24)}<span style="font-size:12px;">${esc(item.name)}</span></span>
+        <span style="font-size:11.5px; color:#ffcc55; font-weight:700;">${(item.value||0).toLocaleString()}¢</span>
+      </div>`;
+    }).join('') + `<div style="display:flex; justify-content:space-between; font-weight:800; font-size:12.5px; padding-top:4px; border-top:1px solid var(--border);"><span>Total</span><span>${total.toLocaleString()}¢</span></div>`;
+  }
+
+  // Write loot into the player's personal inventory.
+  for (const item of miningGame.foundLoot) {
+    await stackOrInsertMyInventoryItem({
+      character_id: myCharacterId, name: item.name,
+      item_type: item.category === 'mineral' ? 'mineral' : 'misc',
+      weight: item.weight || 0, value: item.value || 0, description: item.desc || '',
+      icon_path: typeof item.icon === 'string' ? item.icon : JSON.stringify(item.icon),
+    }, 1);
+  }
+  await db.from('mining_sessions').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', miningGame.session.id);
+  await Promise.all([loadMiningSessions(), loadMyInventory()]);
+}
+
+function closeMiningGameModal() {
+  closeModal('modal-mining-game');
+  miningGame = null;
 }
 
 // ── GM: read-only view of a crew member's character sheet ────────
