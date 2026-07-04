@@ -765,22 +765,48 @@ document.getElementById('create-char-btn').addEventListener('click', async () =>
   const hp_max = 8 + fightMod + 1;
 
   setLoading(btn, true);
-  const { error } = await db.from('characters').insert({
+  const { data: newChar, error } = await db.from('characters').insert({
     user_id: currentUser.id,
     name, species: selectedSpecies, role: r, rank,
     stats, background, personality, bonds, flaws,
     hp_current: hp_max, hp_max, level: 1, xp: 0,
     armor: 10 + flyMod, speed: 30,
     appearance: { gender: selectedGender, variant: selectedVariant },
-  });
+  }).select().single();
   setLoading(btn, false);
 
   if (error) return showError('new-char-error', error.message);
+
+  // Give every new character a real starting weapon (class-led, species-flavoured) instead
+  // of an empty inventory — one equipped weapon is your entire offense in combat.
+  const weapon = STARTING_WEAPON[r] || STARTING_WEAPON.default;
+  await db.from('character_inventory').insert({
+    character_id: newChar.id,
+    name: weapon.name(selectedSpecies), item_type: 'weapon', quantity: 1,
+    weight: weapon.weight, value: weapon.value, description: weapon.desc,
+    damage_dice: weapon.dmg, accuracy_mod: weapon.acc, range_m: weapon.range,
+    is_equipped: true,
+  });
 
   closeModal('modal-new-char');
   document.getElementById('new-char-name').value = '';
   await loadCharacters();
 });
+
+// Starting weapon per class — flavoured by species, but the combat stats are fixed per role
+// so every crew role starts balanced regardless of which species picks it.
+const SPECIES_WEAPON_ADJ = {
+  kragol: n => `Heavy ${n}`, arboran: n => `Bio-Etched ${n}`, myxos: n => `Sealed ${n}`,
+  skitterling: n => `Compact ${n}`, human: n => n,
+};
+function flavorWeaponName(species, base) { return (SPECIES_WEAPON_ADJ[species] || (n=>n))(base); }
+const STARTING_WEAPON = {
+  captain:    { name: s => flavorWeaponName(s, 'Service Sidearm'),   dmg:'1d10', acc: 1, range: 25, weight:1.2, value:150, desc:'Standard-issue GAC sidearm — reliable, unremarkable, gets the job done.' },
+  pilot:      { name: s => flavorWeaponName(s, 'Pulse Pistol'),      dmg:'1d8',  acc: 2, range: 20, weight:0.8, value:180, desc:'Light, fast-cycling pistol favoured for close-quarters cockpit defence.' },
+  gunsmith:   { name: s => flavorWeaponName(s, 'Mag-Slug Carbine'),  dmg:'2d6',  acc: 1, range: 40, weight:2.4, value:320, desc:'A hard-hitting mag-accelerator carbine, built for sustained ship-to-ship boarding actions.' },
+  technician: { name: s => flavorWeaponName(s, 'Arc Welder Pistol'), dmg:'1d10', acc: 0, range: 15, weight:1.6, value:160, desc:'Repurposed industrial arc welder — improvised, but it hits like one.' },
+  default:    { name: s => flavorWeaponName(s, 'Battered Sidearm'),  dmg:'1d8',  acc: 0, range: 20, weight:1.0, value:100, desc:'A worn but functional sidearm — nothing special, but it fires.' },
+};
 
 // ── Create Campaign ─────────────────────────────────────────────
 document.getElementById('create-camp-btn').addEventListener('click', async () => {

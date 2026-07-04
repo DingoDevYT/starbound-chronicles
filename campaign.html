@@ -198,7 +198,11 @@
 .init-hp    { display:flex; align-items:center; gap:4px; }
 .hp-adj-btn { background:var(--surface3); border:1px solid var(--border); border-radius:4px; color:var(--text-dim); width:22px; height:22px; cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center; font-family:inherit; transition:all .12s; }
 .hp-adj-btn:hover { border-color:var(--border2); color:var(--text); }
+.hp-adj-dmg:hover { border-color:#7a2020; color:#ff8888; }
+.hp-adj-heal:hover { border-color:#2a7a46; color:#4acc7a; }
 .init-hp-val { font-size:13px; color:var(--text); min-width:38px; text-align:center; }
+.init-hp-amt { width:44px; background:var(--surface); border:1px solid var(--border); border-radius:4px; color:var(--text); padding:3px 5px; font-size:11px; }
+.init-hidden { color:var(--text-faint); font-size:13px; font-style:italic; letter-spacing:.1em; }
 .cond-chip { display:inline-block; background:rgba(180,130,20,.2); border:1px solid rgba(180,130,20,.4); color:#d4af37; font-size:10px; padding:1px 6px; border-radius:3px; margin:1px; }
 .init-npc  { background:rgba(180,40,40,.12); border:1px solid rgba(180,40,40,.2); color:#ff8888; font-size:10px; padding:1px 6px; border-radius:3px; }
 .del-btn   { background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:14px; padding:3px 6px; border-radius:4px; transition:all .12s; }
@@ -392,8 +396,9 @@
             <div class="ship-stat-val" id="stat-ad">—</div>
           </div>
           <div class="ship-stat">
-            <div class="ship-stat-label">Max PP</div>
+            <div class="ship-stat-label">PP Available</div>
             <div class="ship-stat-val" id="stat-pp">—</div>
+            <div class="ship-stat-sub" id="stat-pp-max"></div>
           </div>
           <div class="ship-stat">
             <div class="ship-stat-label">Crew</div>
@@ -945,10 +950,13 @@ async function loadShip() {
     document.getElementById('stat-armor').textContent = shipData.armor ?? '—';
     document.getElementById('stat-speed').textContent = shipData.speed ?? '—';
     document.getElementById('stat-fuel').textContent  = shipData.fuel_current ?? '—';
-    document.getElementById('stat-fuel-max').textContent = shipData.fuel_max ? '/ ' + shipData.fuel_max : '';
+    const dailyRate = shipData.fuel_daily_rate || 10;
+    const daysLeft = dailyRate > 0 ? Math.floor((shipData.fuel_current ?? 0) / dailyRate) : '∞';
+    document.getElementById('stat-fuel-max').textContent = (shipData.fuel_max ? '/ ' + shipData.fuel_max : '') + ` · ${daysLeft}d left`;
     document.getElementById('stat-shield').textContent = shipData.shield_current ?? 0;
     document.getElementById('stat-shield-max').textContent = shipData.shield_max ? '/ ' + shipData.shield_max : '';
-    document.getElementById('stat-pp').textContent = shipData.pp_max ?? 6;
+    document.getElementById('stat-pp').textContent = `${shipData.pp_current ?? shipData.pp_max ?? 6}`;
+    document.getElementById('stat-pp-max').textContent = '/ ' + (shipData.pp_max ?? 6);
     document.getElementById('stat-ad').textContent = shipData.ad_total ?? (shipType?.base_ad ?? 10);
 
     const hpPct = shipData.hp_max ? shipData.hp_current / shipData.hp_max : 1;
@@ -1011,26 +1019,74 @@ function renderLoadout() {
       <button class="btn-danger" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('hull',-1)">Damage</button>
       <button class="btn-secondary" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('hull',1)">Repair</button>
       <span style="font-size:10.5px; color:var(--text-faint); flex-basis:100%;">Damage hits shields first; overflow spills into the hull automatically.</span>
+    </div>
+    <div class="combat-shield-ctl">
+      <span class="loadout-slot-label" style="margin:0;">PP</span>
+      <input type="number" id="ship-pp-amt" placeholder="amt">
+      <button class="btn-danger" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('pp',-1)">Spend</button>
+      <button class="btn-secondary" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('pp',1)">Restore</button>
+      <button class="btn-ghost" style="width:auto;padding:4px 10px;font-size:11px;" onclick="resetPP()">Reset to Full</button>
+      <span style="width:14px;"></span>
+      <span class="loadout-slot-label" style="margin:0;">Fuel</span>
+      <input type="number" id="ship-fuel-amt" placeholder="amt">
+      <button class="btn-danger" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('fuel',-1)">Burn</button>
+      <button class="btn-secondary" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('fuel',1)">Refuel</button>
+      <button class="btn-ghost" style="width:auto;padding:4px 10px;font-size:11px;" onclick="useDailyFuel()">Use 1 Day (${shipData?.fuel_daily_rate ?? 10})</button>
+      <span style="width:14px;"></span>
+      <span class="loadout-slot-label" style="margin:0;">Daily Rate</span>
+      <input type="number" id="ship-daily-rate" value="${shipData?.fuel_daily_rate ?? 10}" onchange="setFuelRate(this.value)">
     </div>` : ''}`;
 }
 
-// GM: damage or heal the party ship's shields / hull. Damage to shields overflows into hull.
+// GM: damage/heal the party ship's shields, hull, PP pool, or fuel. Shield damage overflows into hull.
 async function adjustShipBar(bar, sign) {
   if (!isGM || !shipData) return;
-  const amt = Math.abs(parseInt(document.getElementById(bar === 'shield' ? 'ship-shield-amt' : 'ship-hull-amt').value) || 0);
+  const inputId = { shield:'ship-shield-amt', hull:'ship-hull-amt', pp:'ship-pp-amt', fuel:'ship-fuel-amt' }[bar];
+  const amt = Math.abs(parseInt(document.getElementById(inputId).value) || 0);
   if (!amt) return;
+
   let shield = shipData.shield_current ?? 0, hull = shipData.hp_current ?? 0;
+  let pp = shipData.pp_current ?? shipData.pp_max ?? 6, fuel = shipData.fuel_current ?? 0;
   const shieldMax = shipData.shield_max ?? 0, hullMax = shipData.hp_max ?? 0;
+  const ppMax = shipData.pp_max ?? 6, fuelMax = shipData.fuel_max ?? 0;
+
   if (bar === 'shield') {
     if (sign > 0) shield = Math.min(shieldMax, shield + amt);
     else { const leftover = amt - shield; shield = Math.max(0, shield - amt); if (leftover > 0) hull = Math.max(0, hull - leftover); }
-  } else {
-    if (sign > 0) hull = Math.min(hullMax, hull + amt);
-    else hull = Math.max(0, hull - amt);
+  } else if (bar === 'hull') {
+    hull = sign > 0 ? Math.min(hullMax, hull + amt) : Math.max(0, hull - amt);
+  } else if (bar === 'pp') {
+    pp = sign > 0 ? Math.min(ppMax, pp + amt) : Math.max(0, pp - amt);
+  } else if (bar === 'fuel') {
+    fuel = sign > 0 ? Math.min(fuelMax, fuel + amt) : Math.max(0, fuel - amt);
   }
-  const { error } = await db.from('campaign_ships').update({ shield_current: shield, hp_current: hull }).eq('campaign_id', campaignId);
+  const { error } = await db.from('campaign_ships').update({
+    shield_current: shield, hp_current: hull, pp_current: pp, fuel_current: fuel,
+  }).eq('campaign_id', campaignId);
   if (error) return alert('Failed to update ship: ' + error.message);
+  document.getElementById(inputId).value = '';
   await loadShip();
+}
+
+async function resetPP() {
+  if (!isGM || !shipData) return;
+  await db.from('campaign_ships').update({ pp_current: shipData.pp_max ?? 6 }).eq('campaign_id', campaignId);
+  await loadShip();
+}
+
+async function useDailyFuel() {
+  if (!isGM || !shipData) return;
+  const rate = shipData.fuel_daily_rate ?? 10;
+  const next = Math.max(0, (shipData.fuel_current ?? 0) - rate);
+  await db.from('campaign_ships').update({ fuel_current: next }).eq('campaign_id', campaignId);
+  await loadShip();
+}
+
+async function setFuelRate(val) {
+  if (!isGM || !shipData) return;
+  const rate = Math.max(0, parseInt(val) || 0);
+  await db.from('campaign_ships').update({ fuel_daily_rate: rate }).eq('campaign_id', campaignId);
+  shipData.fuel_daily_rate = rate;
 }
 
 async function loadTokens() {
@@ -2766,22 +2822,43 @@ function renderInitiative() {
   if (!combatants.length) { tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text-faint);padding:20px;">No combatants.</td></tr>'; return; }
   tbody.innerHTML = combatants.map((c, i) => {
     const isActive = i === activeTurn % combatants.length;
+    const isMine = c.character_id && c.character_id === myCharacterId;
+    // GM always sees everything. Players only see their own combatant's numbers unless
+    // the GM has explicitly revealed that row to the whole table.
+    const canSeeStats = isGM || isMine || c.revealed;
+
+    const initCell = canSeeStats ? `<div class="init-init">${c.initiative}</div>` : `<div class="init-hidden" title="Hidden by the GM">???</div>`;
+    const hpCell = canSeeStats
+      ? `<div class="init-hp">
+          <span class="init-hp-val">${c.hp_current??'—'}${c.hp_max?'/'+c.hp_max:''}</span>
+          ${isGM ? `
+          <input type="number" class="init-hp-amt" id="hp-amt-${c.id}" placeholder="amt" onkeydown="if(event.key==='Enter') adjHP('${c.id}',-1)">
+          <button class="hp-adj-btn hp-adj-dmg" title="Damage" onclick="adjHP('${c.id}',-1)">−</button>
+          <button class="hp-adj-btn hp-adj-heal" title="Heal" onclick="adjHP('${c.id}',+1)">+</button>` : ''}
+        </div>`
+      : `<div class="init-hidden" title="Hidden by the GM">???</div>`;
+    const condCell = canSeeStats
+      ? ((c.conditions||[]).map(cd=>`<span class="cond-chip">${esc(cd)}</span>`).join('')||'<span style="color:var(--text-faint);font-size:12px;">—</span>')
+      : `<span class="init-hidden">???</span>`;
+
     return `<tr class="${isActive?'active-turn':''}">
       <td style="color:var(--text-faint);font-size:12px;">${i+1}</td>
       <td><div class="init-name">${esc(c.combatant)} ${c.is_npc?'<span class="init-npc">NPC</span>':''}</div></td>
-      <td><div class="init-init">${c.initiative}</div></td>
-      <td><div class="init-hp">
-        <button class="hp-adj-btn" onclick="adjHP('${c.id}',-1)">−</button>
-        <span class="init-hp-val">${c.hp_current??'—'}${c.hp_max?'/'+c.hp_max:''}</span>
-        <button class="hp-adj-btn" onclick="adjHP('${c.id}',+1)">+</button>
-      </div></td>
-      <td>${(c.conditions||[]).map(cd=>`<span class="cond-chip">${esc(cd)}</span>`).join('')||'<span style="color:var(--text-faint);font-size:12px;">—</span>'}</td>
+      <td>${initCell}</td>
+      <td>${hpCell}</td>
+      <td>${condCell}</td>
       <td style="white-space:nowrap;">
-        <button class="del-btn" onclick="openEditCombatant('${c.id}')" style="color:var(--text-dim);">Edit</button>
-        <button class="del-btn" onclick="removeCombatant('${c.id}')">✕</button>
+        ${isGM ? `<button class="del-btn" title="${c.revealed?'Hide from players':'Reveal to players'}" onclick="toggleReveal('${c.id}', ${!c.revealed})" style="color:${c.revealed?'#4acc7a':'var(--text-faint)'};">${c.revealed?'👁':'🙈'}</button>` : ''}
+        ${isGM ? `<button class="del-btn" onclick="openEditCombatant('${c.id}')" style="color:var(--text-dim);">Edit</button>` : ''}
+        ${isGM ? `<button class="del-btn" onclick="removeCombatant('${c.id}')">✕</button>` : ''}
       </td>
     </tr>`;
   }).join('');
+}
+
+async function toggleReveal(id, revealed) {
+  if (!isGM) return;
+  await db.from('initiative_tracker').update({ revealed }).eq('id', id);
 }
 
 function openAddCombatant() {
@@ -2824,9 +2901,15 @@ async function saveCombatant() {
   closeModal('modal-add-init');
 }
 
-async function adjHP(id, delta) {
+async function adjHP(id, sign) {
   const c = combatants.find(x => x.id === id); if (!c) return;
-  await db.from('initiative_tracker').update({ hp_current: (c.hp_current || 0) + delta }).eq('id', id);
+  const input = document.getElementById('hp-amt-' + id);
+  const amt = Math.abs(parseInt(input?.value) || 0);
+  if (!amt) return;
+  const max = c.hp_max ?? Infinity;
+  const next = Math.max(0, Math.min(max, (c.hp_current || 0) + amt * sign));
+  if (input) input.value = '';
+  await db.from('initiative_tracker').update({ hp_current: next }).eq('id', id);
 }
 
 async function removeCombatant(id) {
@@ -3509,29 +3592,54 @@ async function createCampaignShip() {
 
   const payload = { campaign_id: campaignId, ship_type_id: hull.id, ship_name: name, color };
   if (hullChanged) {
-    // Only unequip a wing/thruster/gun if it's genuinely incompatible with the new hull size —
-    // previously this always force-reset BOTH wings to the same shared default component,
-    // which looked like "editing one wing edits the other" any time the hull changed and wiped
-    // out a deliberately mismatched left/right pair. Now each slot is checked independently.
-    const prevIds = [shipData?.left_wing_id, shipData?.right_wing_id, shipData?.thruster_id, shipData?.reactor_id, ...(shipData?.gun_ids||[])].filter(Boolean);
-    let compatMap = {};
-    if (prevIds.length) {
-      const { data: prevComps } = await db.from('ship_components').select('id,compatible_sizes').in('id', prevIds);
-      compatMap = Object.fromEntries((prevComps||[]).map(c => [c.id, c.compatible_sizes||[]]));
-    }
-    const keepIfCompatible = id => id && compatMap[id]?.includes(hull.size) ? id : null;
-    const keptGuns = (shipData?.gun_ids||[]).map(keepIfCompatible).filter(Boolean).slice(0, hull.gun_slots || 1);
-
     Object.assign(payload, {
-      left_wing_id: keepIfCompatible(shipData?.left_wing_id),
-      right_wing_id: keepIfCompatible(shipData?.right_wing_id),
-      thruster_id: keepIfCompatible(shipData?.thruster_id),
-      reactor_id: keepIfCompatible(shipData?.reactor_id),
-      gun_ids: keptGuns,
       hp_current: hull.hp_base, hp_max: hull.hp_base,
       armor: hull.armor_base, speed: hull.speed_base,
       fuel_current: hull.fuel_capacity, fuel_max: hull.fuel_capacity,
+      fuel_daily_rate: 10, pp_current: 6,
     });
+
+    if (!shipData) {
+      // Brand-new ship — auto-outfit every slot with a sensible default so it never starts
+      // completely bare. Wings/thruster/reactor default to the first compatible component;
+      // gun hardpoints (one per hull.gun_slots) default to the cheapest compatible weapon.
+      const [{ data: wings }, { data: thrusters }, { data: reactors }, { data: weapons }] = await Promise.all([
+        db.from('ship_components').select('id').eq('type','wing').contains('compatible_sizes',[hull.size]).order('cost_credits').limit(1),
+        db.from('ship_components').select('id').eq('type','thruster').contains('compatible_sizes',[hull.size]).order('cost_credits').limit(1),
+        db.from('ship_components').select('id').eq('type','reactor').contains('compatible_sizes',[hull.size]).order('cost_credits').limit(1),
+        db.from('ship_components').select('id').eq('type','weapon').contains('compatible_sizes',[hull.size]).order('cost_credits').limit(hull.gun_slots || 1),
+      ]);
+      const defaultWing = wings?.[0]?.id || null;
+      Object.assign(payload, {
+        left_wing_id: defaultWing,
+        right_wing_id: defaultWing,
+        thruster_id: thrusters?.[0]?.id || null,
+        reactor_id: reactors?.[0]?.id || null,
+        gun_ids: (weapons || []).map(w => w.id),
+      });
+    } else {
+      // Hull changed on an EXISTING ship — only unequip a wing/thruster/gun/reactor if it's
+      // genuinely incompatible with the new hull size. Previously this force-reset BOTH wings
+      // to the same shared default component on every hull change, which looked like "editing
+      // one wing edits the other" and wiped out a deliberately mismatched left/right pair.
+      // Now each slot is checked independently and only touched if actually incompatible.
+      const prevIds = [shipData.left_wing_id, shipData.right_wing_id, shipData.thruster_id, shipData.reactor_id, ...(shipData.gun_ids||[])].filter(Boolean);
+      let compatMap = {};
+      if (prevIds.length) {
+        const { data: prevComps } = await db.from('ship_components').select('id,compatible_sizes').in('id', prevIds);
+        compatMap = Object.fromEntries((prevComps||[]).map(c => [c.id, c.compatible_sizes||[]]));
+      }
+      const keepIfCompatible = id => id && compatMap[id]?.includes(hull.size) ? id : null;
+      const keptGuns = (shipData.gun_ids||[]).map(keepIfCompatible).filter(Boolean).slice(0, hull.gun_slots || 1);
+
+      Object.assign(payload, {
+        left_wing_id: keepIfCompatible(shipData.left_wing_id),
+        right_wing_id: keepIfCompatible(shipData.right_wing_id),
+        thruster_id: keepIfCompatible(shipData.thruster_id),
+        reactor_id: keepIfCompatible(shipData.reactor_id),
+        gun_ids: keptGuns,
+      });
+    }
   }
 
   const { error } = await db.from('campaign_ships').upsert(payload, { onConflict: 'campaign_id' });
@@ -3694,6 +3802,7 @@ async function recomputeShipStats() {
     shield_current: Math.min(sd.shield_current ?? newShieldMax, newShieldMax),
     ad_total: newAdTotal,
     pp_max: newPpMax,
+    pp_current: Math.min(sd.pp_current ?? newPpMax, newPpMax),
   }).eq('campaign_id', campaignId);
 
   await loadShip();
