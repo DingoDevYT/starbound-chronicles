@@ -476,6 +476,15 @@
       <div class="crew-grid" id="crew-grid"><div style="color:var(--text-faint);font-size:13px;">Loading…</div></div>
     </section>
 
+    <!-- MINING -->
+    <section class="camp-section" id="mining">
+      <div class="camp-section-hdr">
+        <span class="camp-section-title">Mining Operations</span>
+        <button class="btn-secondary" id="start-mining-btn" onclick="openStartMining()" style="font-size:11px; padding:5px 12px; display:none;">⛏ Send Mining Expedition</button>
+      </div>
+      <div class="mining-session-list" id="mining-session-list" style="display:flex; flex-direction:column; gap:8px;"><div style="color:var(--text-faint);font-size:13px;">No mining expeditions yet.</div></div>
+    </section>
+
     <!-- CARGO HOLD -->
     <section class="camp-section" id="cargo">
       <div class="camp-section-hdr">
@@ -765,6 +774,24 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="modal-start-mining">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header"><span class="modal-title">Send Mining Expedition</span><button class="modal-close" onclick="closeModal('modal-start-mining')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Crew Member</label>
+        <select class="form-select" id="mining-char-select"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Offer Asteroids (pick 2-4)</label>
+        <div id="mining-asteroid-picker" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px;"></div>
+      </div>
+      <div class="form-error" id="mining-start-error"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-ghost" onclick="closeModal('modal-start-mining')">Cancel</button><button class="btn-primary" onclick="sendMiningExpedition()" style="width:auto;padding:10px 24px;">Send Expedition</button></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-cargo-catalog">
   <div class="modal" style="max-width:640px; max-height:85vh; overflow-y:auto;">
     <div class="modal-header"><span class="modal-title">Item Catalog — Add to Cargo Hold</span><button class="modal-close" onclick="closeModal('modal-cargo-catalog')">✕</button></div>
@@ -907,9 +934,10 @@ function preloadImages() {
   document.getElementById('round-lbl').textContent    = 'Round ' + (c.round_num || 0);
   document.getElementById('day-num').textContent      = c.day_num || 1;
   document.getElementById('day-controls').style.display = isGM ? 'flex' : 'none';
+  document.getElementById('start-mining-btn').style.display = isGM ? 'inline-block' : 'none';
 
   try {
-    await Promise.all([loadShip(), loadCrew(), loadCargo(), loadInitiative(), loadQuests(), loadNPCs(), loadLog(), loadDiceHistory()]);
+    await Promise.all([loadShip(), loadCrew(), loadCargo(), loadInitiative(), loadQuests(), loadNPCs(), loadLog(), loadDiceHistory(), loadMiningSessions()]);
   } catch (err) {
     console.error('Campaign load error:', err);
     const errBanner = document.createElement('div');
@@ -938,6 +966,7 @@ function preloadImages() {
     .on('postgres_changes', { event:'*',      schema:'public', table:'campaign_cargo',    filter:`campaign_id=eq.${campaignId}` }, loadCargo)
     .on('postgres_changes', { event:'*',      schema:'public', table:'ship_log',          filter:`campaign_id=eq.${campaignId}` }, loadLog)
     .on('postgres_changes', { event:'INSERT', schema:'public', table:'dice_rolls',        filter:`campaign_id=eq.${campaignId}` }, loadDiceHistory)
+    .on('postgres_changes', { event:'*',      schema:'public', table:'mining_sessions',   filter:`campaign_id=eq.${campaignId}` }, loadMiningSessions)
     .subscribe();
 })();
 
@@ -2662,10 +2691,12 @@ function jumpToSearchResult(i) {
 new ResizeObserver(() => { if (shipViewMode === 'map') { mapResizeCanvas(); redrawSpaceMap(); } }).observe(mapCanvas);
 
 // ── Crew ────────────────────────────────────────────────────────
+let crewData = [];
 async function loadCrew() {
   const { data } = await db.from('campaign_members')
     .select('user_id,member_role,character_id,profiles(username,display_name,avatar_color),characters(id,name,species,role,rank,credits,appearance)')
     .eq('campaign_id', campaignId);
+  crewData = data || [];
   const grid = document.getElementById('crew-grid');
   document.getElementById('crew-count-lbl').textContent = data?.length || 0;
   if (!data?.length) { grid.innerHTML='<div style="color:var(--text-faint);font-size:13px;">No crew yet.</div>'; return; }
@@ -2684,6 +2715,95 @@ async function loadCrew() {
       </div>
     </div>`;
   }).join('');
+}
+
+// ── Mining Operations ─────────────────────────────────────────────
+let miningSessions = [];
+let selectedMiningAsteroids = [];
+
+function openStartMining() {
+  if (!isGM) return;
+  selectedMiningAsteroids = [];
+  showError('mining-start-error', '');
+  const sel = document.getElementById('mining-char-select');
+  const withChar = crewData.filter(m => m.characters);
+  sel.innerHTML = withChar.length
+    ? withChar.map(m => `<option value="${m.characters.id}">${esc(m.characters.name)} (${esc(m.profiles?.display_name || m.profiles?.username || '?')})</option>`).join('')
+    : '<option value="">No characters assigned yet</option>';
+  document.getElementById('mining-asteroid-picker').innerHTML = ASTEROID_PRESETS.map(a => `
+    <div class="hull-card" data-key="${a.key}" onclick="toggleAsteroidPick('${a.key}')" style="padding:8px; text-align:center; cursor:pointer;">
+      <div class="hull-card-name" style="font-size:11.5px;">${esc(a.name)}</div>
+      <div class="hull-card-desc" style="font-size:10.5px;">${cap(a.hardness)} · DR ${a.dr}${a.rareChance ? ` · ${Math.round(a.rareChance*100)}% rare` : ''}</div>
+    </div>`).join('');
+  openModal('modal-start-mining');
+}
+
+function toggleAsteroidPick(key) {
+  const idx = selectedMiningAsteroids.indexOf(key);
+  if (idx >= 0) selectedMiningAsteroids.splice(idx, 1);
+  else { if (selectedMiningAsteroids.length >= 4) return; selectedMiningAsteroids.push(key); }
+  document.querySelectorAll('#mining-asteroid-picker .hull-card').forEach(el => {
+    el.classList.toggle('selected', selectedMiningAsteroids.includes(el.dataset.key));
+  });
+}
+
+async function sendMiningExpedition() {
+  const charId = document.getElementById('mining-char-select').value;
+  if (!charId) return showError('mining-start-error', 'Pick a crew member with a character assigned.');
+  if (selectedMiningAsteroids.length < 2) return showError('mining-start-error', 'Offer at least 2 asteroids.');
+  const { error } = await db.from('mining_sessions').insert({
+    campaign_id: campaignId, character_id: charId, status: 'pending',
+    offered_asteroids: selectedMiningAsteroids, created_by: currentUser.id,
+  });
+  if (error) return showError('mining-start-error', error.message);
+  closeModal('modal-start-mining');
+  await loadMiningSessions();
+}
+
+const MINING_STATUS_LABEL = { pending: '⏳ Awaiting Player', active: '⛏ Mining…', completed: '✅ Complete', aborted: '✕ Aborted' };
+
+async function loadMiningSessions() {
+  const { data } = await db.from('mining_sessions')
+    .select('*,characters(name)')
+    .eq('campaign_id', campaignId)
+    .order('created_at', { ascending: false })
+    .limit(20);
+  miningSessions = data || [];
+  renderMiningSessions();
+}
+
+function renderMiningSessions() {
+  const list = document.getElementById('mining-session-list');
+  if (!miningSessions.length) { list.innerHTML = '<div style="color:var(--text-faint);font-size:13px;">No mining expeditions yet.</div>'; return; }
+  list.innerHTML = miningSessions.map(s => {
+    const isMine = s.character_id === myCharacterId;
+    const loot = s.loot_found || [];
+    const offeredNames = (s.offered_asteroids || []).map(k => ASTEROID_PRESETS.find(a => a.key === k)?.name || k);
+    return `<div class="hull-card" style="text-align:left; padding:10px 12px; display:flex; flex-direction:column; gap:6px; cursor:default;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <div style="font-weight:700; font-size:12.5px;">${esc(s.characters?.name || '?')}</div>
+        <span style="font-size:10.5px; color:var(--text-faint); white-space:nowrap;">${MINING_STATUS_LABEL[s.status] || s.status}</span>
+      </div>
+      <div style="font-size:10.5px; color:var(--text-faint);">Offered: ${offeredNames.map(esc).join(', ')}</div>
+      ${loot.length ? `<div style="display:flex; gap:6px; flex-wrap:wrap;">${loot.map(l => `<span style="font-size:10.5px; padding:2px 6px; border-radius:4px; background:var(--surface2); border:1px solid var(--border);">${esc(l.name)}</span>`).join('')}</div>` : ''}
+      <div style="display:flex; gap:8px;">
+        ${(isMine && s.status === 'pending') ? `<button class="cargo-btn" onclick="beginMiningSession('${s.id}')">Begin Mining</button>` : ''}
+        ${(isGM && (s.status === 'pending' || s.status === 'active')) ? `<button class="cargo-btn danger" onclick="abortMiningSession('${s.id}')">Abort</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function abortMiningSession(id) {
+  if (!isGM) return;
+  if (!confirm('Abort this mining expedition?')) return;
+  await db.from('mining_sessions').update({ status: 'aborted' }).eq('id', id);
+  await loadMiningSessions();
+}
+
+function beginMiningSession(id) {
+  // TODO(task 40): open the actual grid-dig minigame modal for this session.
+  alert('The mining minigame is coming very soon — hang tight!');
 }
 
 // ── GM: read-only view of a crew member's character sheet ────────
@@ -2945,15 +3065,22 @@ async function addCargoCatalogItem(key) {
   const payload = {
     campaign_id: campaignId,
     name: item.name,
-    item_type: item.category === 'weapon' ? 'weapon' : item.category === 'armor' ? 'armor' : item.category === 'ration' ? 'ration' : item.category === 'mineral' ? 'mineral' : 'misc',
+    item_type: item.category === 'weapon' ? 'weapon' : item.category === 'armor' ? 'armor' : item.category === 'ration' ? 'ration' : item.category === 'mineral' ? 'mineral' : item.category === 'tool' ? 'tool' : 'misc',
     weight: item.weight || 0,
     value: item.value || 0,
     description: item.desc || '',
     icon_path: typeof item.icon === 'string' ? item.icon : JSON.stringify(item.icon),
     added_by: currentUser.id,
   };
+  if (item.category === 'weapon') { payload.damage_dice = item.dmg; payload.accuracy_mod = item.acc; payload.range_m = item.range; }
   if (item.category === 'armor') payload.armor_dr = item.dr;
   if (item.category === 'ration') payload.diet_tag = (item.dietTags || []).join(',');
+  if (item.category === 'tool' && item.subcategory === 'mining_tool') {
+    payload.mining_modifier = item.miningModifier;
+    payload.mining_size = item.miningSize;
+    payload.mining_max_charges = item.miningMaxCharges;
+    payload.mining_best_against = item.miningBestAgainst;
+  }
   const { error } = await stackOrInsertCargoItem(payload, qty);
   if (error) return showError('cargo-catalog-error', error.message);
   await loadCargo();

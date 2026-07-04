@@ -1277,7 +1277,7 @@ async function addCatalogItem(key) {
   const payload = {
     character_id: charId,
     name: item.name,
-    item_type: item.category === 'weapon' ? 'weapon' : item.category === 'armor' ? 'armor' : item.category === 'ration' ? 'ration' : item.category === 'mineral' ? 'mineral' : 'misc',
+    item_type: item.category === 'weapon' ? 'weapon' : item.category === 'armor' ? 'armor' : item.category === 'ration' ? 'ration' : item.category === 'mineral' ? 'mineral' : item.category === 'tool' ? 'tool' : 'misc',
     weight: item.weight || 0,
     value: item.value || 0,
     description: item.desc || '',
@@ -1291,6 +1291,12 @@ async function addCatalogItem(key) {
   }
   if (item.category === 'ration') {
     payload.diet_tag = (item.dietTags || []).join(',');
+  }
+  if (item.category === 'tool' && item.subcategory === 'mining_tool') {
+    payload.mining_modifier = item.miningModifier;
+    payload.mining_size = item.miningSize;
+    payload.mining_max_charges = item.miningMaxCharges;
+    payload.mining_best_against = item.miningBestAgainst;
   }
   const error = await stackOrInsertInventoryItem(payload, qty);
   if (error) return showError('catalog-error', error.message);
