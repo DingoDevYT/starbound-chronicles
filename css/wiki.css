@@ -6,17 +6,17 @@
 
 :root {
   --bg:          #070c13;
-  --surface:     #0c1420;
-  --surface2:    #101c2e;
-  --surface3:    #162038;
-  --border:      #1a2d4a;
-  --border2:     #243d60;
+  --surface:     #0b1220;
+  --surface2:    #142239;
+  --surface3:    #1e3153;
+  --border:      #223c5e;
+  --border2:     #2f4d76;
   --accent:      #3a78d4;
   --accent-glow: rgba(58,120,212,0.25);
   --accent-dim:  #1e4080;
-  --text:        #c4d4e8;
-  --text-dim:    #8aa8c4;
-  --text-faint:  #6482a0;
+  --text:        #d2e0f2;
+  --text-dim:    #9bb6d0;
+  --text-faint:  #7699b8;
   --gold:        #d4af37;
   --gold-dim:    #7a5f0a;
   --nav-width:   260px;
@@ -32,6 +32,36 @@ body {
   font-size: 15px;
   line-height: 1.7;
   min-height: 100vh;
+  position: relative;
+}
+
+/* ── Cosmic background vfx ──────────────────────────────────────
+   Fixed behind everything: a couple of soft nebula-glow blobs plus a
+   faint starfield, so pages read as "deep space" instead of flat navy. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 900px 600px at 12% -8%, rgba(58,120,212,0.16), transparent 60%),
+    radial-gradient(ellipse 700px 500px at 100% 10%, rgba(140,80,200,0.10), transparent 55%),
+    radial-gradient(ellipse 800px 700px at 50% 110%, rgba(20,160,130,0.08), transparent 60%),
+    var(--bg);
+}
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image:
+    radial-gradient(rgba(200,220,255,0.9) 1px, transparent 1px),
+    radial-gradient(rgba(200,220,255,0.5) 1px, transparent 1px);
+  background-size: 180px 180px, 240px 240px;
+  background-position: 0 0, 90px 110px;
 }
 
 /* ===== SCROLLBAR ===== */

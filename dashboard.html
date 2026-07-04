@@ -344,7 +344,11 @@ const SPECIES_BONUSES = {
 
 const PB_COST   = { 8:0, 9:1, 10:2, 11:3, 12:4, 13:5, 14:6 };
 const PB_MAX    = 14;
-const PB_BUDGET = 20;
+// D&D 5e spends 27 points across 6 stats (4.5/stat) to force real dump-stat tradeoffs.
+// With only 4 stats here, keeping that same 20-point budget let players max out nearly
+// every stat at once — scaled down proportionally (27 * 4/6 = 18, rounded down a touch
+// tighter) so specializing still means giving something up.
+const PB_BUDGET = 16;
 
 const SPECIES_LABELS = { human:'Human', kragol:'Kragol', skitterling:'Skitterling', myxos:'Myxos', arboran:'Arboran' };
 

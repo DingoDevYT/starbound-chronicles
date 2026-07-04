@@ -34,13 +34,13 @@
 .char-bio-name { font-size:20px; font-weight:800; color:#e0ecff; text-align:center; }
 .char-bio-sub  { font-size:12px; color:var(--text-faint); text-align:center; margin-top:2px; }
 .char-badges   { display:flex; flex-wrap:wrap; gap:5px; justify-content:center; }
-.char-badge    { background:var(--surface3); border:1px solid var(--border); color:var(--text-dim); font-size:10px; padding:3px 8px; border-radius:20px; }
+.char-badge    { background:var(--surface3); border:1px solid var(--border); color:var(--text-dim); font-size:11px; padding:3px 8px; border-radius:20px; }
 .char-badge.rank { border-color:#d4af37; color:#d4af37; background:rgba(212,175,55,.1); }
 
 .hp-block {
   background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px;
 }
-.hp-label { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:8px; }
+.hp-label { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:8px; }
 .hp-row { display:flex; align-items:center; gap:8px; }
 .hp-input { background:var(--surface3); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:6px; font-size:18px; font-weight:700; text-align:center; width:60px; outline:none; font-family:inherit; }
 .hp-input:focus { border-color:var(--accent); }
@@ -49,7 +49,7 @@
 .hp-bar { height:100%; border-radius:3px; transition:width .3s, background .3s; }
 
 .xp-block { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px; }
-.xp-label { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:6px; }
+.xp-label { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:6px; }
 .xp-row   { display:flex; align-items:center; gap:8px; }
 .xp-level { font-size:24px; font-weight:800; color:#7aaeff; min-width:32px; }
 .level-btn { background:var(--surface3); border:1px solid var(--border); border-radius:5px; color:var(--text-dim); width:24px; height:24px; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; transition:all .12s; font-family:inherit; }
@@ -67,13 +67,17 @@
 .tab-pane.active { display:block; }
 
 /* Stats grid */
-.stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:28px; }
+.stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+@media (max-width:720px) { .stats-grid { grid-template-columns:repeat(2,1fr); } }
 .stat-card {
-  background:var(--surface); border:1px solid var(--border); border-radius:12px;
+  background: radial-gradient(ellipse at top, color-mix(in srgb, var(--stat-color,var(--accent)) 16%, var(--surface)) 0%, var(--surface) 75%);
+  border:1px solid var(--border); border-radius:12px;
   padding:16px; text-align:center; position:relative; overflow:hidden;
+  transition: border-color .15s;
 }
-.stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--stat-color,var(--accent)); }
-.stat-name { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:8px; }
+.stat-card:hover { border-color: var(--stat-color, var(--border2)); }
+.stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--stat-color,var(--accent)); box-shadow:0 0 10px var(--stat-color,var(--accent)); }
+.stat-name { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:8px; }
 .stat-val  { font-size:36px; font-weight:900; color:#e0ecff; line-height:1; }
 .stat-mod  { font-size:14px; color:var(--text-dim); margin-top:4px; }
 .stat-mod.pos { color:#4acc7a; }
@@ -84,10 +88,19 @@
   outline:none; font-family:inherit; font-weight:700; display:none;
 }
 
+/* Loadout summary (equipped weapon/armor) */
+.loadout-summary { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+.loadout-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; display:flex; align-items:center; gap:12px; }
+.loadout-card-label { font-size:9.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
+.loadout-card-name { font-size:14px; font-weight:800; color:#e0ecff; margin-top:2px; }
+.loadout-card-meta { font-size:11px; color:var(--text-faint); margin-top:2px; }
+.loadout-card-empty-btn { background:var(--surface2); border:1px dashed var(--border2); border-radius:8px; color:var(--text-dim); padding:6px 12px; font-size:12px; cursor:pointer; font-family:inherit; transition:all .12s; }
+.loadout-card-empty-btn:hover { border-color:var(--accent); color:#7aaeff; }
+
 /* Combat stats */
 .combat-row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:28px; }
 .combat-stat { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px; text-align:center; }
-.combat-stat-label { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
+.combat-stat-label { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
 .combat-stat-val   { font-size:22px; font-weight:800; color:#c8d8f0; margin-top:4px; }
 
 /* Skills */
@@ -102,16 +115,16 @@
 .skill-bonus { font-size:13px; font-weight:700; min-width:28px; text-align:right; }
 .skill-bonus.pos { color:#4acc7a; }
 .skill-bonus.neg { color:#ff8888; }
-.skill-stat-tag { font-size:10px; color:var(--text-faint); min-width:28px; }
+.skill-stat-tag { font-size:11px; color:var(--text-faint); min-width:28px; }
 
 /* Inventory */
 .inv-table { width:100%; border-collapse:collapse; }
-.inv-table th { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); }
+.inv-table th { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); }
 .inv-table td { padding:9px 10px; font-size:13px; color:var(--text-dim); border-bottom:1px solid rgba(255,255,255,.04); vertical-align:middle; }
 .inv-table tr:hover td { background:var(--surface2); }
 .inv-equipped { width:12px; height:12px; border-radius:3px; border:2px solid var(--border2); cursor:pointer; }
 .inv-equipped.active { background:var(--accent); border-color:var(--accent); }
-.inv-type-badge { font-size:10px; padding:2px 7px; border-radius:3px; letter-spacing:.05em; }
+.inv-type-badge { font-size:11px; padding:2px 7px; border-radius:3px; letter-spacing:.05em; }
 .type-weapon   { background:rgba(180,40,40,.2); color:#ff8888; }
 .type-armor    { background:rgba(58,120,212,.2); color:#7aaeff; }
 .type-tool     { background:rgba(80,160,80,.2);  color:#80cc80; }
@@ -135,7 +148,7 @@
   background:var(--surface); border:1px solid var(--border); border-radius:10px;
   padding:14px; margin-bottom:20px;
 }
-.species-ref-title { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:8px; }
+.species-ref-title { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:8px; }
 .species-ref-body  { font-size:13px; color:var(--text-dim); line-height:1.6; }
 .species-bonus-chip { display:inline-block; background:var(--surface3); border:1px solid var(--border); color:var(--text-dim); font-size:11px; padding:2px 8px; border-radius:4px; margin:2px; }
 .species-bonus-chip.pos { border-color:#2a7a46; color:#4acc7a; background:rgba(40,120,70,.15); }
@@ -266,13 +279,15 @@ body.edit-mode .edit-hint  { display:block; }
     <div class="tab-pane active" id="tab-stats">
       <div class="edit-hint" id="edit-hint">✏️ Click stat values to edit. Changes are saved when you click Save.</div>
 
+      <div class="stats-grid" id="stats-grid"></div>
+
+      <div class="loadout-summary" id="loadout-summary"></div>
+
+      <div class="combat-row" id="combat-row"></div>
+
       <div class="species-ref" id="species-ref-box"></div>
 
       <div class="species-ref" id="class-ref-box"></div>
-
-      <div class="stats-grid" id="stats-grid"></div>
-
-      <div class="combat-row" id="combat-row"></div>
     </div>
 
     <!-- SKILLS TAB -->
@@ -460,6 +475,23 @@ body.edit-mode .edit-hint  { display:block; }
     <div class="modal-footer">
       <button class="btn-ghost" onclick="closeModal('modal-appearance')">Cancel</button>
       <button class="btn-primary" onclick="saveAppearance()" style="width:auto; padding:10px 24px;">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Confirm Damage (offers armor reduction) -->
+<div class="modal-backdrop" id="modal-damage-confirm">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-header"><span class="modal-title">Apply Damage</span><button class="modal-close" onclick="closeModal('modal-damage-confirm')">✕</button></div>
+    <div class="modal-body">
+      <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--text-dim); margin-bottom:6px;"><span>Incoming damage</span><strong id="dmg-confirm-raw" style="color:#ff8888;">0</strong></div>
+      <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--text-dim); margin-bottom:6px;"><span>Your armor (DR)</span><strong id="dmg-confirm-armor" style="color:#8ab8ff;">0</strong></div>
+      <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--text-dim);"><span>Damage after armor</span><strong id="dmg-confirm-reduced" style="color:#4acc7a;">0</strong></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('modal-damage-confirm')">Cancel</button>
+      <button class="btn-secondary" style="width:auto; padding:10px 18px;" onclick="confirmDamage(false)">Apply Full</button>
+      <button class="btn-primary" style="width:auto; padding:10px 18px;" onclick="confirmDamage(true)">Apply with Armor</button>
     </div>
   </div>
 </div>
@@ -694,10 +726,19 @@ function populateCombat() {
   updateCombatStats();
 }
 
+// Base HP by species (before FIGHT modifier / level scaling) — Kragol run tankiest,
+// Skitterling/Myxos are the squishiest, everyone else sits in the 20-25 baseline.
+const SPECIES_BASE_HP = { human:20, kragol:25, skitterling:18, myxos:18, arboran:22 };
+function calcMaxHP(species, level, fightStat) {
+  const base = SPECIES_BASE_HP[species || 'human'] ?? 20;
+  const fmod = mod(fightStat ?? 10);
+  return base + fmod + (Math.max(1, level||1) - 1) * (3 + fmod);
+}
+
 function updateCombatStats() {
   const stats = char.stats || {};
   const initiative = mod(stats.fly   ?? 10);
-  const maxHP      = 8 + mod(stats.fight ?? 10) + ((char.level||1) - 1) * (1 + mod(stats.fight ?? 10));
+  const maxHP      = calcMaxHP(char.species, char.level, stats.fight);
   const speciesArmor = SPECIES_BASE_ARMOR[char.species || 'human'] ?? 0;
   const equippedArmor = (inventory || []).find(i => i.item_type === 'armor' && i.is_equipped);
   const armor      = char.armor ?? speciesArmor;
@@ -810,8 +851,8 @@ function renderClassRef() {
         return `
         <div style="background:var(--surface3); border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:6px; display:flex; gap:10px; align-items:flex-start; ${unlocked ? '' : 'opacity:.4;'}">
           <div style="flex-shrink:0; display:flex; flex-direction:column; gap:3px; min-width:44px;">
-            <span style="font-size:9px; font-weight:800; text-align:center; background:${unlocked ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.03)'}; color:var(--text-faint); border-radius:4px; padding:2px 5px;">LV ${a.lv}</span>
-            <span style="font-size:9px; font-weight:800; text-align:center; background:${cls.color}; color:#0a0e18; opacity:${unlocked ? '.85' : '.35'}; border-radius:4px; padding:2px 5px;">${a.pp}</span>
+            <span style="font-size:10.5px; font-weight:800; text-align:center; background:${unlocked ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.03)'}; color:var(--text-faint); border-radius:4px; padding:2px 5px;">LV ${a.lv}</span>
+            <span style="font-size:10.5px; font-weight:800; text-align:center; background:${cls.color}; color:#0a0e18; opacity:${unlocked ? '.85' : '.35'}; border-radius:4px; padding:2px 5px;">${a.pp}</span>
           </div>
           <div>
             <div style="font-size:12px; font-weight:700; color:${unlocked ? 'var(--text)' : 'var(--text-faint)'};">${esc(a.name)} ${unlocked ? '' : '🔒'}</div>
@@ -900,7 +941,26 @@ async function saveAppearance() {
   populateSidebar();
 }
 
-async function applyDamage() { await adjustHP(-Math.abs(parseInt(document.getElementById('hp-amount').value) || 0)); }
+let pendingDamage = 0;
+function applyDamage() {
+  const amt = Math.abs(parseInt(document.getElementById('hp-amount').value) || 0);
+  if (!amt) return;
+  const armor = char.armor || 0;
+  // No armor to reduce with — nothing to ask, just apply it.
+  if (!armor) { document.getElementById('hp-amount').value = ''; return adjustHP(-amt); }
+  pendingDamage = amt;
+  document.getElementById('dmg-confirm-raw').textContent = amt;
+  document.getElementById('dmg-confirm-armor').textContent = armor;
+  document.getElementById('dmg-confirm-reduced').textContent = Math.max(0, amt - armor);
+  openModal('modal-damage-confirm');
+}
+async function confirmDamage(useArmor) {
+  const armor = char.armor || 0;
+  const final = useArmor ? Math.max(0, pendingDamage - armor) : pendingDamage;
+  closeModal('modal-damage-confirm');
+  document.getElementById('hp-amount').value = '';
+  await adjustHP(-final);
+}
 async function applyHeal()   { await adjustHP(Math.abs(parseInt(document.getElementById('hp-amount').value) || 0)); }
 
 async function adjustHP(delta) {
@@ -916,15 +976,33 @@ async function adjustHP(delta) {
   if (error) alert('Failed to save HP: ' + error.message);
 }
 
-function changeLevel(delta) {
+async function changeLevel(delta) {
   const cur = parseInt(document.getElementById('xp-level').textContent) || 1;
   const nxt = Math.max(1, Math.min(20, cur + delta));
+  if (nxt === cur) return;
+
+  // Levelling up (or down) moves max HP by the formula's delta, and carries current HP
+  // along with it — so the boost (or reduction) is felt immediately, not just shown as a
+  // reference number you'd otherwise have to notice and copy over by hand.
+  const oldMax = calcMaxHP(char.species, cur, char.stats?.fight);
+  const newMax = calcMaxHP(char.species, nxt, char.stats?.fight);
+  const hpDelta = newMax - oldMax;
+  const curHP = parseInt(document.getElementById('hp-cur').value) || 0;
+
   document.getElementById('xp-level').textContent = nxt;
+  document.getElementById('hp-max-inp').value = newMax;
+  document.getElementById('hp-cur').value = Math.max(0, Math.min(newMax, curHP + hpDelta));
+  updateHPBar();
   char.level = nxt;
+  char.hp_max = newMax;
+  char.hp_current = parseInt(document.getElementById('hp-cur').value);
   document.getElementById('prof-bonus').textContent = profBonus();
   updateSkillBonuses();
   updateCombatStats();
   renderClassRef();
+
+  const { error } = await db.from('characters').update({ level: nxt, hp_max: newMax, hp_current: char.hp_current }).eq('id', charId);
+  if (error) alert('Failed to save level-up: ' + error.message);
 }
 
 function populateBackground() {
@@ -944,7 +1022,43 @@ async function loadInventory() {
   inventory = data || [];
   renderInventory();
   renderRations();
+  renderLoadoutSummary();
   await recomputeArmor();
+}
+
+function goToInventoryTab() {
+  document.querySelector('.tab-pill[data-tab="inventory"]')?.click();
+}
+
+function renderLoadoutSummary() {
+  const box = document.getElementById('loadout-summary');
+  const weapon = inventory.find(i => i.item_type === 'weapon' && i.is_equipped);
+  const armor  = inventory.find(i => i.item_type === 'armor'  && i.is_equipped);
+
+  function card(label, item, emptyLabel) {
+    if (!item) return `
+      <div class="loadout-card">
+        <div style="flex:1;">
+          <div class="loadout-card-label">${label}</div>
+          <div class="loadout-card-meta">Nothing equipped</div>
+        </div>
+        <button class="loadout-card-empty-btn" onclick="goToInventoryTab()">${emptyLabel}</button>
+      </div>`;
+    const meta = item.item_type === 'weapon'
+      ? `${item.damage_dice ? esc(item.damage_dice)+' dmg' : ''}${item.accuracy_mod ? ` · ${item.accuracy_mod>0?'+':''}${item.accuracy_mod} acc` : ''}${item.range_m ? ` · ${item.range_m}m` : ''}`
+      : `${item.armor_dr || 0} DR`;
+    return `
+      <div class="loadout-card">
+        ${item.icon_path ? renderStoredIcon(item.icon_path, 32) : ''}
+        <div style="flex:1;">
+          <div class="loadout-card-label">${label}</div>
+          <div class="loadout-card-name">${esc(item.name)}</div>
+          <div class="loadout-card-meta">${meta}</div>
+        </div>
+      </div>`;
+  }
+
+  box.innerHTML = card('Equipped Weapon', weapon, '+ Equip a Weapon') + card('Equipped Armor', armor, '+ Equip Armor');
 }
 
 // ── Rations ────────────────────────────────────────────────────
@@ -1017,7 +1131,7 @@ function renderInventory() {
       <td>${(item.weight||0).toFixed(1)} kg</td>
       <td>${item.value||0} ¢</td>
       <td style="white-space:nowrap;">
-        <button class="btn-ghost" style="font-size:10px; padding:4px 8px; margin-right:4px;" onclick="openSendToCargo('${item.id}')">→ Ship</button>
+        <button class="btn-ghost" style="font-size:11px; padding:4px 8px; margin-right:4px;" onclick="openSendToCargo('${item.id}')">→ Ship</button>
         <button class="inv-delete-btn" onclick="deleteItem('${item.id}')">🗑</button>
       </td>
     </tr>`;
@@ -1137,7 +1251,7 @@ function renderCatalogList() {
     <div class="hull-card" style="padding:8px; text-align:center; ${dietMismatch?'opacity:.5;':''}" onclick="addCatalogItem('${i.key}')" title="${dietMismatch ? 'Not compatible with your species diet, but you can still carry it.' : ''}">
       <div style="display:flex; justify-content:center; margin-bottom:6px;">${catalogIconHtml(i.icon, 36)}</div>
       <div class="hull-card-name" style="font-size:11.5px;">${esc(i.name)}</div>
-      <div class="hull-card-desc" style="font-size:10px; -webkit-line-clamp:2;">${i.category === 'weapon' ? `${esc(i.dmg)} dmg · ${i.range}m` : i.category === 'ration' ? esc((i.dietTags||[]).join(', ')) : `${i.value}¢`}</div>
+      <div class="hull-card-desc" style="font-size:11px; -webkit-line-clamp:2;">${i.category === 'weapon' ? `${esc(i.dmg)} dmg · ${i.range}m` : i.category === 'ration' ? esc((i.dietTags||[]).join(', ')) : `${i.value}¢`}</div>
     </div>`;
   }).join('') || '<div style="grid-column:1/-1;color:var(--text-faint);font-size:12px;text-align:center;padding:20px;">No items match.</div>';
 }

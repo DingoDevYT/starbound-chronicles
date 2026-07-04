@@ -32,13 +32,20 @@
 .ship-stat {
   flex:1; min-width:80px; display:flex; flex-direction:column; align-items:center;
   padding:10px 12px; border-right:1px solid var(--border);
+  background: radial-gradient(ellipse at top, color-mix(in srgb, var(--tint,var(--accent)) 14%, transparent) 0%, transparent 75%);
 }
 .ship-stat:last-child { border-right:none; }
-.ship-stat-label { font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
+.ship-stat:nth-child(1) { --tint:#ff5a5a; } /* Ship HP */
+.ship-stat:nth-child(2) { --tint:#4ad0ff; } /* Shield HP */
+.ship-stat:nth-child(3) { --tint:#ffd23a; } /* PP */
+.ship-stat:nth-child(4) { --tint:#c896ff; } /* Total AD */
+.ship-stat:nth-child(5) { --tint:#40a0c8; } /* Speed */
+.ship-stat:nth-child(6) { --tint:#4acc7a; } /* Fuel */
+.ship-stat-label { font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
 .ship-stat-val   { font-size:19px; font-weight:800; color:#d0e4ff; margin-top:3px; line-height:1; }
 .ship-stat-val.danger  { color:#ff8888; }
 .ship-stat-val.ok      { color:#4acc7a; }
-.ship-stat-sub   { font-size:10px; color:var(--text-faint); }
+.ship-stat-sub   { font-size:11px; color:var(--text-faint); }
 .ship-name-bar {
   padding:10px 18px; border-bottom:1px solid var(--border);
   display:flex; align-items:center; justify-content:space-between; background:var(--surface);
@@ -56,7 +63,7 @@
 .loadout-slot { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px; cursor:default; transition:all .12s; }
 .loadout-slot[onclick] { cursor:pointer; }
 .loadout-slot[onclick]:hover { border-color:var(--accent); background:var(--surface3); }
-.loadout-slot-label { font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:4px; }
+.loadout-slot-label { font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:4px; }
 .loadout-slot-name { font-size:12px; font-weight:700; color:var(--text); }
 .loadout-slot-meta { font-size:10.5px; color:var(--text-faint); margin-top:2px; }
 .loadout-slot-empty { font-size:11px; color:var(--text-faint); font-style:italic; }
@@ -73,7 +80,7 @@
 .combat-map-opt:hover { border-color:var(--border2); }
 .combat-cheatsheet { padding:12px 18px; border-top:1px solid var(--border); background:var(--surface); display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
 .combat-cheat-name { font-size:14px; font-weight:800; color:#e0ecff; }
-.combat-cheat-tag { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
+.combat-cheat-tag { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
 .combat-cheat-chip { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:12px; color:var(--text-dim); }
 .combat-cheat-chip strong { color:#d0e4ff; }
 .combat-shield-ctl { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
@@ -85,7 +92,7 @@
 .resource-ctl-icon { width:18px; text-align:center; font-size:13px; flex-shrink:0; }
 .resource-ctl-label { font-size:11.5px; color:var(--text-dim); width:48px; flex-shrink:0; font-weight:700; }
 .resource-ctl-amt { width:52px; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:5px 7px; font-size:12px; }
-.resource-ctl-hint { font-size:10px; color:var(--text-faint); margin-left:4px; }
+.resource-ctl-hint { font-size:11px; color:var(--text-faint); margin-left:4px; }
 .icon-btn { width:26px; height:26px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; padding:0; transition:all .12s; }
 .icon-btn img { width:14px; height:14px; opacity:.85; image-rendering:pixelated; }
 .icon-btn:hover { border-color:var(--border2); }
@@ -121,7 +128,7 @@
 .map-layers-menu.open { display:block; }
 .map-layer-item { display:flex; align-items:center; gap:8px; padding:6px 8px; font-size:12px; color:var(--text-dim); cursor:pointer; border-radius:5px; }
 .map-layer-item:hover { background:var(--surface3); color:var(--text); }
-.map-result-addr { font-size:10px; color:var(--text-faint); margin-top:1px; }
+.map-result-addr { font-size:11px; color:var(--text-faint); margin-top:1px; }
 .map-breadcrumb { font-size:11px; color:var(--text-faint); flex:1; text-align:center; min-width:140px; }
 .map-zoom-controls { display:flex; gap:4px; }
 #space-map-canvas { display:block; width:100%; cursor:grab; }
@@ -132,7 +139,7 @@
   box-shadow:0 8px 24px rgba(0,0,0,.4);
 }
 .map-info-card h4 { font-size:13px; font-weight:800; color:#d0e4ff; margin-bottom:4px; }
-.map-info-card .addr { font-size:10px; color:var(--text-faint); margin-bottom:8px; }
+.map-info-card .addr { font-size:11px; color:var(--text-faint); margin-bottom:8px; }
 .map-info-card p { font-size:12px; color:var(--text-dim); line-height:1.5; margin-bottom:10px; }
 .map-route-banner {
   position:absolute; top:44px; left:16px; right:16px; max-width:360px;
@@ -150,7 +157,7 @@
   padding:16px 14px; display:flex; flex-direction:column; gap:14px;
   position:sticky; top:58px; height:calc(100vh - 58px); overflow-y:auto;
 }
-.dice-panel-title { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
+.dice-panel-title { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
 .dice-expr-row { display:flex; gap:6px; }
 .dice-expr { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:9px 12px; font-size:15px; font-family:inherit; outline:none; letter-spacing:.05em; }
 .dice-expr:focus { border-color:var(--accent); }
@@ -166,7 +173,7 @@
 .dice-history-item { display:flex; align-items:center; justify-content:space-between; padding:6px 8px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:4px; }
 .dice-hist-expr { font-size:12px; color:var(--text-dim); }
 .dice-hist-val { font-size:15px; font-weight:700; color:#8ab8ff; }
-.dice-hist-who { font-size:10px; color:var(--text-faint); }
+.dice-hist-who { font-size:11px; color:var(--text-faint); }
 
 /* ── Sections ── */
 .camp-section { margin-bottom:44px; scroll-margin-top:80px; }
@@ -196,13 +203,13 @@
 .cargo-btn { background:var(--surface3); border:1px solid var(--border); border-radius:6px; padding:4px 9px; font-size:10.5px; color:var(--text-dim); cursor:pointer; transition:all .12s; }
 .cargo-btn:hover { border-color:var(--accent); color:#fff; }
 .cargo-btn.danger:hover { border-color:#cc4444; color:#ff8888; }
-.gm-pip { display:inline-block; background:rgba(212,175,55,.15); border:1px solid rgba(212,175,55,.3); color:#d4af37; font-size:9px; padding:1px 5px; border-radius:3px; font-weight:700; }
+.gm-pip { display:inline-block; background:rgba(212,175,55,.15); border:1px solid rgba(212,175,55,.3); color:#d4af37; font-size:10.5px; padding:1px 5px; border-radius:3px; font-weight:700; }
 
 /* ── Initiative ── */
 .init-controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
 .round-badge { background:rgba(58,120,212,.15); border:1px solid var(--accent-dim); color:#7aaeff; font-size:12px; padding:5px 12px; border-radius:6px; font-weight:600; }
 .init-table { width:100%; border-collapse:collapse; }
-.init-table th { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); }
+.init-table th { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); }
 .init-table td { padding:8px 10px; border-bottom:1px solid rgba(255,255,255,.04); vertical-align:middle; }
 .init-table tr.active-turn td { background:rgba(58,120,212,.1); }
 .init-table tr.active-turn td:first-child { border-left:3px solid var(--accent); }
@@ -216,8 +223,8 @@
 .init-hp-val { font-size:13px; color:var(--text); min-width:38px; text-align:center; }
 .init-hp-amt { width:44px; background:var(--surface); border:1px solid var(--border); border-radius:4px; color:var(--text); padding:3px 5px; font-size:11px; }
 .init-hidden { color:var(--text-faint); font-size:13px; font-style:italic; letter-spacing:.1em; }
-.cond-chip { display:inline-block; background:rgba(180,130,20,.2); border:1px solid rgba(180,130,20,.4); color:#d4af37; font-size:10px; padding:1px 6px; border-radius:3px; margin:1px; }
-.init-npc  { background:rgba(180,40,40,.12); border:1px solid rgba(180,40,40,.2); color:#ff8888; font-size:10px; padding:1px 6px; border-radius:3px; }
+.cond-chip { display:inline-block; background:rgba(180,130,20,.2); border:1px solid rgba(180,130,20,.4); color:#d4af37; font-size:11px; padding:1px 6px; border-radius:3px; margin:1px; }
+.init-npc  { background:rgba(180,40,40,.12); border:1px solid rgba(180,40,40,.2); color:#ff8888; font-size:11px; padding:1px 6px; border-radius:3px; }
 .del-btn   { background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:14px; padding:3px 6px; border-radius:4px; transition:all .12s; }
 .del-btn:hover { color:#ff8888; background:rgba(180,40,40,.15); }
 
@@ -227,7 +234,7 @@
 .quest-card:hover { background:var(--surface2); }
 .quest-hdr { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
 .quest-title { font-size:14px; font-weight:700; color:#d0e4ff; flex:1; }
-.quest-status { font-size:10px; padding:3px 8px; border-radius:4px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+.quest-status { font-size:11px; padding:3px 8px; border-radius:4px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
 .status-active    { background:rgba(58,120,212,.2); color:#7aaeff; }
 .status-completed { background:rgba(40,160,80,.2);  color:#4acc7a; }
 .status-failed    { background:rgba(160,40,40,.2);  color:#ff8888; }
@@ -261,7 +268,7 @@
 .log-author { font-size:12px; font-weight:600; color:#7aaeff; }
 .log-time   { font-size:11px; color:var(--text-faint); }
 .log-text   { font-size:13px; color:var(--text-dim); line-height:1.6; }
-.log-badge  { font-size:9px; padding:2px 6px; border-radius:3px; letter-spacing:.06em; font-weight:700; text-transform:uppercase; margin-right:6px; }
+.log-badge  { font-size:10.5px; padding:2px 6px; border-radius:3px; letter-spacing:.06em; font-weight:700; text-transform:uppercase; margin-right:6px; }
 .lb-note { background:rgba(58,120,212,.15); color:#7aaeff; }
 .lb-event { background:rgba(80,180,80,.15); color:#80cc80; }
 .lb-combat { background:rgba(200,60,60,.15); color:#ff8888; }
@@ -275,7 +282,7 @@
 .hull-card:hover { border-color:var(--border2); background:var(--surface3); }
 .hull-card.selected { border-color:var(--accent); background:rgba(58,120,212,.1); }
 .hull-card-name { font-size:15px; font-weight:700; color:#d0e4ff; }
-.hull-card-size { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:6px; }
+.hull-card-size { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:6px; }
 .hull-card-desc { font-size:12px; color:var(--text-dim); line-height:1.5; margin-bottom:10px; }
 .hull-card-stats { display:flex; gap:8px; flex-wrap:wrap; }
 .hull-card-stats span { font-size:11px; background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:2px 7px; color:var(--text-faint); }
@@ -324,7 +331,7 @@
       <div style="padding:6px 14px;">
         <div style="font-size:11px; color:var(--text-faint); margin-bottom:8px;" id="camp-title-side">—</div>
         <div style="background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
-          <div style="font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-faint); font-weight:700;">Stardate</div>
+          <div style="font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-faint); font-weight:700;">Stardate</div>
           <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:4px;">
             <span style="font-size:16px; font-weight:800; color:#d0e4ff;">Day <span id="day-num">1</span></span>
             <div id="day-controls" style="display:none; gap:4px;">
@@ -343,7 +350,7 @@
           style="font-size:18px; font-weight:700; color:#7aaeff; letter-spacing:.2em; cursor:pointer;
                  background:var(--surface2); border:1px solid var(--border); border-radius:6px;
                  padding:8px; text-align:center;">——</div>
-        <div style="font-size:10px; color:var(--text-faint); text-align:center; margin-top:4px;">Click to copy</div>
+        <div style="font-size:11px; color:var(--text-faint); text-align:center; margin-top:4px;">Click to copy</div>
       </div>
     </div>
     <div class="sidebar-divider"></div>
@@ -380,7 +387,7 @@
       <div id="ship-view-panel" style="position:relative;">
         <canvas id="ship-canvas" height="520"></canvas>
         <div id="eta-widget" style="display:none; position:absolute; top:14px; right:14px; background:rgba(6,10,18,.82); border:1px solid rgba(120,160,210,.35); border-radius:8px; padding:8px 14px; text-align:right; backdrop-filter:blur(3px);">
-          <div style="font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-faint); font-weight:700;">ETA — <span id="eta-dest">—</span></div>
+          <div style="font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-faint); font-weight:700;">ETA — <span id="eta-dest">—</span></div>
           <div style="font-size:18px; font-weight:800; color:#4ad0ff;" id="eta-days">—</div>
         </div>
         <div id="ship-hint" style="display:none; padding:6px 18px; font-size:11px; color:var(--text-faint); background:var(--surface); border-top:1px solid var(--border);">Click a wing or thruster slot to equip a component. Drag crew tokens to reposition them. Scroll to zoom, drag empty space to pan, double-click to reset.</div>
@@ -567,7 +574,7 @@
       <div style="font-size:13px; color:var(--text-faint);">Roll some dice!</div>
     </div>
     <div>
-      <div style="font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:8px;">Recent Rolls</div>
+      <div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; margin-bottom:8px;">Recent Rolls</div>
       <div id="dice-history"></div>
     </div>
   </div>
@@ -1051,7 +1058,7 @@ function renderLoadout() {
         <div>
           <div class="loadout-slot-label">Reactor</div>
           ${r
-            ? `<div class="loadout-slot-name">${esc(r.name)}</div><div class="loadout-slot-meta">${r.pp_cap_mod} PP cap · +${r.pp_regen_mod} PP/turn</div>`
+            ? `<div class="loadout-slot-name">${esc(r.name)}</div><div class="loadout-slot-meta">${r.pp_cap_mod} PP cap · +${r.pp_regen_mod} PP/turn${r.shield_hp_mod ? ` · ${r.shield_hp_mod} Shield` : ''}</div>`
             : `<div class="loadout-slot-empty">${isGM ? '+ Equip Reactor' : 'Empty'}</div>`}
         </div>
       </div>
@@ -2927,7 +2934,7 @@ function renderCargoCatalogList() {
     <div class="hull-card" style="padding:8px; text-align:center;" onclick="addCargoCatalogItem('${i.key}')">
       <div style="display:flex; justify-content:center; margin-bottom:6px;">${catalogIconHtml(i.icon, 36)}</div>
       <div class="hull-card-name" style="font-size:11.5px;">${esc(i.name)}</div>
-      <div class="hull-card-desc" style="font-size:10px;">${i.category === 'weapon' ? `${esc(i.dmg)} dmg · ${i.range}m` : `${i.value}¢`}</div>
+      <div class="hull-card-desc" style="font-size:11px;">${i.category === 'weapon' ? `${esc(i.dmg)} dmg · ${i.range}m` : `${i.value}¢`}</div>
     </div>`).join('') || '<div style="grid-column:1/-1;color:var(--text-faint);font-size:12px;text-align:center;padding:20px;">No items match.</div>';
 }
 
@@ -3564,7 +3571,7 @@ async function loadQuests() {
       <div class="quest-hdr">
         <span class="quest-title">${esc(q.title)}</span>
         <span class="quest-status status-${q.status}">${q.status}</span>
-        <span style="font-size:10px;padding:3px 7px;border-radius:3px;background:var(--surface3);color:var(--text-faint);">${q.priority}</span>
+        <span style="font-size:11px;padding:3px 7px;border-radius:3px;background:var(--surface3);color:var(--text-faint);">${q.priority}</span>
       </div>
       ${q.description?`<div class="quest-desc">${esc(q.description)}</div>`:''}
       <div class="quest-actions">
@@ -4063,7 +4070,9 @@ async function recomputeShipStats() {
   const newArmor   = hull.armor_base + sum('armor_mod');
   const newSpeed   = hull.speed_base + sum('speed_mod');
   const newFuelMax = hull.fuel_capacity + sum('fuel_mod');
-  const newShieldMax = (lw?.shield_hp_mod||0) + (rw?.shield_hp_mod||0);
+  // Shields are primarily the reactor's job (the Technician's component) — wings still
+  // contribute a smaller amount on top, matching their "deflector anchor" flavour.
+  const newShieldMax = (rc?.shield_hp_mod||0) + (lw?.shield_hp_mod||0) + (rw?.shield_hp_mod||0);
   const newAdTotal = (hull.base_ad||10) + (lw?.ad_mod||0) + (rw?.ad_mod||0);
   const newPpMax = rc?.pp_cap_mod || 6;
 
