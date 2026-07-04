@@ -79,6 +79,19 @@
 .combat-shield-ctl { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
 .combat-shield-ctl input { width:56px; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:5px 7px; font-size:12px; }
 
+/* ── Compact ship resource controls (Shields/Hull/PP/Fuel) ── */
+.resource-ctl-panel { display:flex; flex-direction:column; gap:6px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
+.resource-ctl-row { display:flex; align-items:center; gap:8px; }
+.resource-ctl-icon { width:18px; text-align:center; font-size:13px; flex-shrink:0; }
+.resource-ctl-label { font-size:11.5px; color:var(--text-dim); width:48px; flex-shrink:0; font-weight:700; }
+.resource-ctl-amt { width:52px; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:5px 7px; font-size:12px; }
+.resource-ctl-hint { font-size:10px; color:var(--text-faint); margin-left:4px; }
+.icon-btn { width:26px; height:26px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; padding:0; transition:all .12s; }
+.icon-btn img { width:14px; height:14px; opacity:.85; image-rendering:pixelated; }
+.icon-btn:hover { border-color:var(--border2); }
+.icon-btn.dmg:hover { border-color:#7a2020; background:rgba(160,40,40,.15); }
+.icon-btn.heal:hover { border-color:#2a7a46; background:rgba(40,120,70,.15); }
+
 /* ── Ship / Map view toggle ── */
 .view-toggle { display:flex; background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:2px; gap:2px; }
 .view-toggle-btn { background:none; border:none; color:var(--text-dim); font-size:11px; font-weight:600; padding:5px 12px; border-radius:5px; cursor:pointer; font-family:inherit; transition:all .12s; }
@@ -364,8 +377,12 @@
       </div>
 
       <!-- SHIP VIEW -->
-      <div id="ship-view-panel">
+      <div id="ship-view-panel" style="position:relative;">
         <canvas id="ship-canvas" height="520"></canvas>
+        <div id="eta-widget" style="display:none; position:absolute; top:14px; right:14px; background:rgba(6,10,18,.82); border:1px solid rgba(120,160,210,.35); border-radius:8px; padding:8px 14px; text-align:right; backdrop-filter:blur(3px);">
+          <div style="font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-faint); font-weight:700;">ETA — <span id="eta-dest">—</span></div>
+          <div style="font-size:18px; font-weight:800; color:#4ad0ff;" id="eta-days">—</div>
+        </div>
         <div id="ship-hint" style="display:none; padding:6px 18px; font-size:11px; color:var(--text-faint); background:var(--surface); border-top:1px solid var(--border);">Click a wing or thruster slot to equip a component. Drag crew tokens to reposition them. Scroll to zoom, drag empty space to pan, double-click to reset.</div>
         <div class="ship-stat-bar">
           <div class="ship-stat">
@@ -703,9 +720,9 @@
       </div>
       <div class="form-group">
         <label class="form-label">Battlefield</label>
-        <div id="combat-map-picker" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;"></div>
+        <div id="combat-map-picker" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px;"></div>
       </div>
-      <p style="font-size:11px; color:var(--text-faint); margin:0;">Every combatant currently in the Initiative tracker becomes a token, clustered at the centre — drag them into position once the battle opens. Add enemies to Initiative first if you haven't.</p>
+      <p style="font-size:11px; color:var(--text-faint); margin:0;">Every combatant currently in the Initiative tracker becomes a token, clustered at the centre — drag them into position once the battle opens. Add enemies to Initiative first if you haven't. On-foot battlefields are randomly scattered with terrain fresh each time.</p>
       <div class="form-error" id="combat-error"></div>
     </div>
     <div class="modal-footer"><button class="btn-ghost" onclick="closeModal('modal-start-combat')">Cancel</button><button class="btn-primary" onclick="startCombat()" style="width:auto;padding:10px 24px;">Begin Battle</button></div>
@@ -900,6 +917,7 @@ function preloadImages() {
         document.getElementById('day-num').textContent = p.new.day_num || 1;
         if (shipViewMode === 'map') redrawSpaceMap();
         if (shipViewMode === 'combat') { refreshCombatUI(); drawCombatMap(); }
+        renderETAWidget();
       })
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'campaign_ships',    filter:`campaign_id=eq.${campaignId}` }, async p => { await loadShip(); })
     .on('postgres_changes', { event:'*',      schema:'public', table:'ship_tokens',       filter:`campaign_id=eq.${campaignId}` }, async () => { await loadTokens(); drawShipMap(); })
@@ -981,6 +999,7 @@ async function loadShip() {
   }
 
   renderLoadout();
+  renderETAWidget();
   await loadTokens();
   await ensureCrewTokens();
   drawShipMap();
@@ -1034,34 +1053,32 @@ function renderLoadout() {
       ${gunSlotsHtml}
     </div>
     ${isGM ? `
-    <div class="combat-shield-ctl">
-      <span class="loadout-slot-label" style="margin:0;">Shields</span>
-      <input type="number" id="ship-shield-amt" placeholder="amt">
-      <button class="btn-danger" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('shield',-1)">Damage</button>
-      <button class="btn-secondary" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('shield',1)">Restore</button>
-      <span style="width:14px;"></span>
-      <span class="loadout-slot-label" style="margin:0;">Hull</span>
-      <input type="number" id="ship-hull-amt" placeholder="amt">
-      <button class="btn-danger" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('hull',-1)">Damage</button>
-      <button class="btn-secondary" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('hull',1)">Repair</button>
-      <span style="font-size:10.5px; color:var(--text-faint); flex-basis:100%;">Damage hits shields first; overflow spills into the hull automatically.</span>
-    </div>
-    <div class="combat-shield-ctl">
-      <span class="loadout-slot-label" style="margin:0;">PP</span>
-      <input type="number" id="ship-pp-amt" placeholder="amt">
-      <button class="btn-danger" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('pp',-1)">Spend</button>
-      <button class="btn-secondary" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('pp',1)">Restore</button>
-      <button class="btn-ghost" style="width:auto;padding:4px 10px;font-size:11px;" onclick="resetPP()">Reset to Full</button>
-      <span style="width:14px;"></span>
-      <span class="loadout-slot-label" style="margin:0;">Fuel</span>
-      <input type="number" id="ship-fuel-amt" placeholder="amt">
-      <button class="btn-danger" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('fuel',-1)">Burn</button>
-      <button class="btn-secondary" style="width:auto;padding:4px 10px;font-size:11px;" onclick="adjustShipBar('fuel',1)">Refuel</button>
-      <button class="btn-ghost" style="width:auto;padding:4px 10px;font-size:11px;" onclick="useDailyFuel()">Use 1 Day (${shipData?.fuel_daily_rate ?? 10})</button>
-      <span style="width:14px;"></span>
-      <span class="loadout-slot-label" style="margin:0;">Daily Rate</span>
-      <input type="number" id="ship-daily-rate" value="${shipData?.fuel_daily_rate ?? 10}" onchange="setFuelRate(this.value)">
+    <div class="resource-ctl-panel">
+      ${resourceCtlRow('shield', '🛡️', 'Shields', 'Damage hits shields first; overflow spills into the hull.')}
+      ${resourceCtlRow('hull',   '🚢', 'Hull')}
+      ${resourceCtlRow('pp',     '⚡', 'PP', null, `<button class="icon-btn" title="Reset to full" onclick="resetPP()">${ICON_RESET}</button>`)}
+      ${resourceCtlRow('fuel',   '⛽', 'Fuel', null, `<button class="icon-btn" title="Burn ${shipData?.fuel_daily_rate ?? 10} fuel for 1 day" onclick="useDailyFuel()">${ICON_DAY}</button>
+        <input type="number" class="resource-ctl-amt" style="width:44px;" id="ship-daily-rate" value="${shipData?.fuel_daily_rate ?? 10}" title="Daily fuel burn rate" onchange="setFuelRate(this.value)">`)}
     </div>` : ''}`;
+}
+
+const ICON_DMG   = `<img src="assets/interface/Interface Icons/1x/Danger sign 1 512 px.png" alt="Damage">`;
+const ICON_HEAL  = `<img src="assets/interface/Interface Icons/1x/Wrench 1 512 px.png" alt="Repair">`;
+const ICON_RESET = `<img src="assets/interface/Interface Icons/1x/Battery - full 512 px.png" alt="Reset">`;
+const ICON_DAY   = `<img src="assets/interface/Interface Icons/1x/Next 512 px.png" alt="Advance">`;
+
+// One compact row per resource: icon, label, single amount field, damage/heal icon buttons,
+// and an optional extra control (reset/daily-rate) — replaces the old wall of text buttons.
+function resourceCtlRow(bar, icon, label, hint, extra) {
+  return `<div class="resource-ctl-row">
+    <span class="resource-ctl-icon">${icon}</span>
+    <span class="resource-ctl-label">${label}</span>
+    <input type="number" class="resource-ctl-amt" id="ship-${bar}-amt" placeholder="0">
+    <button class="icon-btn dmg" title="Damage" onclick="adjustShipBar('${bar}',-1)">${ICON_DMG}</button>
+    <button class="icon-btn heal" title="Heal / Restore" onclick="adjustShipBar('${bar}',1)">${ICON_HEAL}</button>
+    ${extra || ''}
+    ${hint ? `<span class="resource-ctl-hint">${hint}</span>` : ''}
+  </div>`;
 }
 
 // GM: damage/heal the party ship's shields, hull, PP pool, or fuel. Shield damage overflows into hull.
@@ -2049,6 +2066,21 @@ function computeTravelDays(distanceWorldUnits, speed) {
   return sectors * 3 * (10 / (speed || 10));
 }
 
+// Days-to-destination widget, shown top-right of the Ship view — same math as the Space Map's
+// route banner, just visible without needing to switch views.
+function renderETAWidget() {
+  const widget = document.getElementById('eta-widget');
+  if (!widget) return;
+  const curPos  = resolveLocationWorldPos(campaign?.current_sector, campaign?.current_system, campaign?.current_planet);
+  const destPos = resolveLocationWorldPos(campaign?.destination_sector, campaign?.destination_system, campaign?.destination_planet);
+  if (!curPos || !destPos) { widget.style.display = 'none'; return; }
+  const dist = Math.hypot(destPos.x - curPos.x, destPos.y - curPos.y);
+  const days = computeTravelDays(dist, shipData?.speed);
+  widget.style.display = 'block';
+  document.getElementById('eta-dest').textContent = campaign.destination_planet || campaign.destination_system || campaign.destination_sector || '—';
+  document.getElementById('eta-days').textContent  = `${days.toFixed(1)}d`;
+}
+
 // Flat searchable index — every sector (even uncharted ones), plus every galaxy/system/planet/object
 function buildSearchIndex() {
   const idx = [];
@@ -2510,6 +2542,7 @@ async function applyCampaignUpdate(updates) {
   // clicked sees it immediately even if realtime is slow (or, before schema-v10, wasn't wired at all).
   Object.assign(campaign, updates);
   if (shipViewMode === 'map') redrawSpaceMap();
+  renderETAWidget();
   return true;
 }
 
@@ -3080,6 +3113,10 @@ function movementSquares(speed) { return Math.max(1, Math.floor((speed ?? 30) / 
 
 // Preset battlefields. obstacles are [col,row] cells that block movement and grant cover.
 function rect(x0,y0,x1,y1){ const o=[]; for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)o.push([x,y]); return o; }
+// Space maps keep fixed, hand-placed obstacle layouts (unchanged).
+// Outside (on-foot) maps are tile-textured and procedurally scattered with obstacles fresh
+// every time combat starts — density is a rough fraction of the grid, biome picks the hue/
+// saturation/brightness filter applied over the shared grass tileset (see drawCombatMap).
 const COMBAT_MAPS = {
   space: {
     open:     { label:'Open Space', w:34, h:20, obstacles:[] },
@@ -3087,11 +3124,40 @@ const COMBAT_MAPS = {
     debris:   { label:'Debris Corridor', w:34, h:20, obstacles:[...rect(10,0,11,7),...rect(22,12,23,19),[16,9],[17,10],[16,11]] },
   },
   outside: {
-    open:   { label:'Open Plain', w:26, h:18, obstacles:[] },
-    canyon: { label:'Rocky Canyon', w:26, h:18, obstacles:[...rect(0,0,25,2),...rect(0,15,25,17),[8,7],[9,7],[8,8],[16,9],[17,9],[17,10],[12,12]] },
-    ruins:  { label:'Ruins', w:26, h:18, obstacles:[[5,4],[6,4],[7,4],[5,5],[5,6],[18,5],[19,5],[20,5],[20,6],[20,7],[10,11],[11,11],[12,11],[15,13],[16,13]] },
+    open:   { label:'Open Plain',   w:26, h:18, biome:'grass',  density:0 },
+    canyon: { label:'Rocky Canyon', w:26, h:18, biome:'rocky',  density:0.16 },
+    ruins:  { label:'Ruins',        w:26, h:18, biome:'rocky',  density:0.11 },
+    desert: { label:'Desert Wastes',w:26, h:18, biome:'desert', density:0.06 },
   },
 };
+
+// Biome -> canvas filter applied to the shared grass tileset pattern, so one texture covers
+// every on-foot terrain type instead of needing separate art per biome.
+const BIOME_FILTERS = {
+  grass:  'none',
+  rocky:  'saturate(0.25) brightness(0.75) hue-rotate(160deg)',
+  desert: 'saturate(0.85) brightness(1.25) hue-rotate(75deg)',
+};
+
+// Scatter `density` fraction of the grid as obstacles, avoiding a clear zone in the centre
+// so combatants always have somewhere open to start.
+function generateObstacles(w, h, density) {
+  if (!density) return [];
+  const obstacles = [];
+  const cx = w / 2, cy = h / 2, clearR = Math.min(w, h) * 0.18;
+  const count = Math.round(w * h * density);
+  const seen = new Set();
+  let tries = 0;
+  while (obstacles.length < count && tries < count * 20) {
+    tries++;
+    const x = Math.floor(Math.random() * w), y = Math.floor(Math.random() * h);
+    const key = x + ',' + y;
+    if (seen.has(key) || Math.hypot(x - cx, y - cy) < clearR) continue;
+    seen.add(key);
+    obstacles.push([x, y]);
+  }
+  return obstacles;
+}
 
 function combatState() { return campaign?.combat_state || { active:false }; }
 
@@ -3122,13 +3188,16 @@ function selectCombatMap(k) {
 async function startCombat() {
   if (!isGM) return;
   const preset = COMBAT_MAPS[selectedCombatType][selectedCombatMap];
+  // Space maps use their fixed hand-placed layout; outside maps get a fresh random scatter
+  // every time, so the same "Rocky Canyon" pick never looks identical twice.
+  const obstacles = selectedCombatType === 'space' ? preset.obstacles : generateObstacles(preset.w, preset.h, preset.density);
   const state = {
     active: true, type: selectedCombatType, map: selectedCombatMap,
-    w: preset.w, h: preset.h, obstacles: preset.obstacles,
+    w: preset.w, h: preset.h, obstacles, biome: preset.biome || null,
   };
   // Cluster every current combatant near the centre so the GM can drag them out.
   const cx = Math.floor(preset.w / 2), cy = Math.floor(preset.h / 2);
-  const obstacleSet = new Set(preset.obstacles.map(o => o[0]+','+o[1]));
+  const obstacleSet = new Set(obstacles.map(o => o[0]+','+o[1]));
   let placed = 0;
   for (const c of combatants) {
     let gx, gy, tries = 0;
@@ -3220,6 +3289,16 @@ function cellFromPoint(px, py) {
   return { cx: Math.floor((px - cbOffX) / cbCell), cy: Math.floor((py - cbOffY) / cbCell) };
 }
 
+let grassTileImg = null;
+function getGrassTileImage() {
+  if (!grassTileImg) {
+    grassTileImg = new Image();
+    grassTileImg.onload = () => { if (shipViewMode === 'combat') drawCombatMap(); };
+    grassTileImg.src = 'assets/tilesets/earth-like-planet/Grass.png';
+  }
+  return grassTileImg;
+}
+
 function drawCombatMap() {
   const W = combatCanvas.offsetWidth || 800;
   combatCanvas.width = W;
@@ -3242,6 +3321,31 @@ function drawCombatMap() {
   cbCell = Math.min((W - pad*2) / gw, (H - pad*2) / gh);
   cbOffX = (W - gw * cbCell) / 2;
   cbOffY = (H - gh * cbCell) / 2;
+  const isSpace = st.type === 'space';
+
+  // Textured ground for on-foot maps — one tileset image, recoloured per biome via a canvas
+  // filter (hue-rotate/saturate/brightness) instead of needing separate art per terrain type.
+  if (!isSpace) {
+    const img = getGrassTileImage();
+    if (spriteReady(img)) {
+      combatCtx.save();
+      combatCtx.beginPath();
+      combatCtx.rect(cbOffX, cbOffY, gw*cbCell, gh*cbCell);
+      combatCtx.clip();
+      combatCtx.filter = BIOME_FILTERS[st.biome] || 'none';
+      const pattern = combatCtx.createPattern(img, 'repeat');
+      const tileScreenSize = cbCell * 2.2; // how big one tileset tile appears on screen
+      const scale = tileScreenSize / img.naturalWidth;
+      combatCtx.translate(cbOffX, cbOffY);
+      combatCtx.scale(scale, scale);
+      combatCtx.fillStyle = pattern;
+      combatCtx.fillRect(0, 0, gw*cbCell/scale, gh*cbCell/scale);
+      combatCtx.restore();
+    } else {
+      combatCtx.fillStyle = '#141c0e';
+      combatCtx.fillRect(cbOffX, cbOffY, gw*cbCell, gh*cbCell);
+    }
+  }
 
   // Grid
   combatCtx.strokeStyle = 'rgba(90,120,160,.14)';
@@ -3250,7 +3354,6 @@ function drawCombatMap() {
   for (let y = 0; y <= gh; y++) { combatCtx.beginPath(); combatCtx.moveTo(cbOffX, cbOffY+y*cbCell); combatCtx.lineTo(cbOffX+gw*cbCell, cbOffY+y*cbCell); combatCtx.stroke(); }
 
   // Obstacles
-  const isSpace = st.type === 'space';
   (st.obstacles || []).forEach(([ox, oy]) => {
     const x = cbOffX+ox*cbCell, y = cbOffY+oy*cbCell;
     combatCtx.fillStyle = isSpace ? '#3a2f28' : '#3a352a';
