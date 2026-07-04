@@ -1180,7 +1180,15 @@ function renderLoadout() {
     </div>
     ${isGM ? `
     <div class="resource-ctl-panel">
-      ${resourceCtlRow('shield', '🛡️', 'Shields', 'Damage hits shields first; overflow spills into the hull.')}
+      <div class="resource-ctl-row">
+        <span class="resource-ctl-icon">💥</span>
+        <span class="resource-ctl-label">Ship Damage</span>
+        <input type="number" class="resource-ctl-amt" id="ship-combined-amt" placeholder="0">
+        <button class="icon-btn dmg" title="Deal damage — hits shields first, overflow spills into hull" onclick="damageShipCombined()">${ICON_DMG}</button>
+        <button class="icon-btn" title="Fully restore shields &amp; hull" onclick="resetShipHealth()">${ICON_RESET}</button>
+        <span class="resource-ctl-hint">Shields absorb first; leftover spills into hull.</span>
+      </div>
+      ${resourceCtlRow('shield', '🛡️', 'Shields')}
       ${resourceCtlRow('hull',   '🚢', 'Hull')}
       ${resourceCtlRow('pp',     '⚡', 'PP', null, `<button class="icon-btn" title="Reset to full" onclick="resetPP()">${ICON_RESET}</button>`)}
       ${resourceCtlRow('fuel',   '⛽', 'Fuel', null, `<button class="icon-btn" title="Burn ${shipData?.fuel_daily_rate ?? 10} fuel for 1 day" onclick="useDailyFuel()">${ICON_DAY}</button>
@@ -1207,7 +1215,9 @@ function resourceCtlRow(bar, icon, label, hint, extra) {
   </div>`;
 }
 
-// GM: damage/heal the party ship's shields, hull, PP pool, or fuel. Shield damage overflows into hull.
+// GM: damage/heal the party ship's shields, hull, PP pool, or fuel — each bar in isolation,
+// with no spillover between them. Use damageShipCombined() below for a single attack that
+// should hit shields first and overflow into hull.
 async function adjustShipBar(bar, sign) {
   if (!isGM || !shipData) return;
   const inputId = { shield:'ship-shield-amt', hull:'ship-hull-amt', pp:'ship-pp-amt', fuel:'ship-fuel-amt' }[bar];
@@ -1220,8 +1230,7 @@ async function adjustShipBar(bar, sign) {
   const ppMax = shipData.pp_max ?? 6, fuelMax = shipData.fuel_max ?? 0;
 
   if (bar === 'shield') {
-    if (sign > 0) shield = Math.min(shieldMax, shield + amt);
-    else { const leftover = amt - shield; shield = Math.max(0, shield - amt); if (leftover > 0) hull = Math.max(0, hull - leftover); }
+    shield = sign > 0 ? Math.min(shieldMax, shield + amt) : Math.max(0, shield - amt);
   } else if (bar === 'hull') {
     hull = sign > 0 ? Math.min(hullMax, hull + amt) : Math.max(0, hull - amt);
   } else if (bar === 'pp') {
@@ -1234,6 +1243,30 @@ async function adjustShipBar(bar, sign) {
   }).eq('campaign_id', campaignId);
   if (error) return alert('Failed to update ship: ' + error.message);
   document.getElementById(inputId).value = '';
+  await loadShip();
+}
+
+// GM: deal a single amount of damage to the ship — shields absorb it first, and whatever's
+// left over after shields hit 0 spills straight into hull, in one click (no manual subtraction).
+async function damageShipCombined() {
+  if (!isGM || !shipData) return;
+  const amt = Math.abs(parseInt(document.getElementById('ship-combined-amt').value) || 0);
+  if (!amt) return;
+
+  let shield = shipData.shield_current ?? 0, hull = shipData.hp_current ?? 0;
+  const leftover = Math.max(0, amt - shield);
+  shield = Math.max(0, shield - amt);
+  if (leftover > 0) hull = Math.max(0, hull - leftover);
+
+  const { error } = await db.from('campaign_ships').update({ shield_current: shield, hp_current: hull }).eq('campaign_id', campaignId);
+  if (error) return alert('Failed to damage ship: ' + error.message);
+  document.getElementById('ship-combined-amt').value = '';
+  await loadShip();
+}
+
+async function resetShipHealth() {
+  if (!isGM || !shipData) return;
+  await db.from('campaign_ships').update({ shield_current: shipData.shield_max ?? 0, hp_current: shipData.hp_max ?? 0 }).eq('campaign_id', campaignId);
   await loadShip();
 }
 
