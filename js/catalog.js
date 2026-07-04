@@ -69,6 +69,8 @@ const MINERAL_FAMILIES = [
   { name:'Sunshard',  row:5, color:'yellow', base:13 },
 ];
 const MINERAL_TIERS = ['Ore', 'Cluster', 'Vein Cut', 'Refined'];
+// Dig footprint on the mining grid scales with tier — bigger finds take more digging.
+const MINERAL_DIG_SIZE = [{x:1,y:1}, {x:2,y:2}, {x:2,y:3}, {x:3,y:3}];
 const MINERALS = [];
 MINERAL_FAMILIES.forEach(fam => {
   MINERAL_TIERS.forEach((tier, ti) => {
@@ -79,9 +81,87 @@ MINERAL_FAMILIES.forEach(fam => {
       icon: mineralIcon(ti, fam.row),
       desc: `A ${tier.toLowerCase()} sample of ${fam.name.toLowerCase()}, a ${fam.color}-hued mineral prized by KEC prospectors.`,
       weight: 0.4 + ti * 0.3, value: fam.base * (ti + 1),
+      digSize: MINERAL_DIG_SIZE[ti],
     });
   });
 });
+
+// ── LEGENDARY GEMS ───────────────────────────────────────────────
+// The "jackpot" pool — only ever appear in a rare asteroid preset's rare-chance roll,
+// never in a normal loot table. Reuses unused columns (4-7) of the mineral spritesheet.
+const LEGENDARY_GEMS = [
+  { key:'gem_void_opal', name:'Void Opal', category:'mineral', subcategory:'legendary',
+    icon: mineralIcon(4, 1), digSize:{x:2,y:2},
+    desc:'An iridescent stone that seems to swallow light rather than reflect it. Collectors pay absurd sums.',
+    weight:0.6, value:900 },
+  { key:'gem_starcore', name:'Starcore Fragment', category:'mineral', subcategory:'legendary',
+    icon: mineralIcon(4, 5), digSize:{x:2,y:2},
+    desc:'A shard of compressed stellar matter, still faintly warm. Nobody fully understands how these form.',
+    weight:0.5, value:1600 },
+  { key:'gem_kaelen_heartstone', name:"Kaelen's Heartstone", category:'mineral', subcategory:'legendary',
+    icon: mineralIcon(4, 4), digSize:{x:2,y:2},
+    desc:'Named for the Obsidian Fringe outcasts who first traded them. Deep crimson, unnervingly warm to the touch.',
+    weight:0.5, value:2200 },
+];
+
+// ── MINING TOOLS ───────────────────────────────────────────────
+// Real mechanical tools for the asteroid mining minigame — modifier applies to the d20
+// dig roll, size is the AoE footprint (NxN) each strike clears, maxCharges is how many
+// strikes the tool has per expedition (refills to full at the start of each one).
+const MINING_TOOLS = [
+  { key:'tool_hand_pickaxe', name:'Hand Pickaxe', category:'tool', subcategory:'mining_tool',
+    icon: TOOL_ICON(1), miningModifier:0, miningSize:1, miningMaxCharges:30, miningBestAgainst:'soft',
+    desc:'Basic manual excavation tool. Slow and unglamorous, but every crew starts with one and it never truly runs dry.',
+    weight:1.5, value:20 },
+  { key:'tool_precision_pick', name:'Precision Pick', category:'tool', subcategory:'mining_tool',
+    icon: TOOL_ICON(1), miningModifier:5, miningSize:1, miningMaxCharges:20, miningBestAgainst:'hard',
+    desc:'Concentrated plasma-tipped digging point. Excellent single-tile penetration against dense basalt.',
+    weight:2.0, value:320 },
+  { key:'tool_impact_hammer', name:'Impact Hammer', category:'tool', subcategory:'mining_tool',
+    icon: TOOL_ICON(15), miningModifier:0, miningSize:3, miningMaxCharges:10, miningBestAgainst:'medium',
+    desc:'Wide hydraulic shockwave head. Clears average clay and chondrite crust in bulk.',
+    weight:4.5, value:460 },
+  { key:'tool_seismic_charge', name:'Seismic Charge', category:'tool', subcategory:'mining_tool',
+    icon: TOOL_ICON(25), miningModifier:-2, miningSize:5, miningMaxCharges:5, miningBestAgainst:'soft',
+    desc:'Massive blast payload. Tears through soft porous rock fast, but is clumsy against anything hard.',
+    weight:6.0, value:600 },
+];
+
+// ── ASTEROID PRESETS ─────────────────────────────────────────────
+// The GM's master list — pick 2-4 of these to offer a character each expedition.
+// Harder/rarer presets skew toward better mineral tiers and carry a real (if small)
+// chance per vein of rolling into the legendary gem pool — that's the "gambling" hook.
+const ASTEROID_PRESETS = [
+  { key:'debris_field', name:'Common Debris Field', hardness:'soft', dr:0, rareChance:0,
+    desc:'Porous carbon shale drifting in a well-travelled lane. Safe, modest, reliable.',
+    lootPool: ['min_grey_0','min_grey_0','min_purple_0','min_grey_1'] },
+  { key:'chondrite_belt', name:'Chondrite Belt', hardness:'medium', dr:2, rareChance:0.03,
+    desc:'Tough clay-crusted rubble. A common mid-lane pick with a small shot at something special.',
+    lootPool: ['min_grey_1','min_purple_1','min_blue_0','min_green_1','min_grey_2'] },
+  { key:'great_ring_tailings', name:'Great Ring Tailings', hardness:'medium', dr:3, rareChance:0.05,
+    desc:'KEC-worked overflow from the Great Ring. Ferrite-heavy, occasionally overlooked by the corporate sweeps.',
+    lootPool: ['min_grey_2','min_grey_2','min_grey_1','min_purple_1','min_green_2'] },
+  { key:'basalt_ridge', name:'Basalt Ridge', hardness:'hard', dr:5, rareChance:0.08,
+    desc:'Dense obsidian basalt. Slow going without the right tool, but the yield tiers up accordingly.',
+    lootPool: ['min_blue_2','min_green_2','min_red_2','min_purple_2','min_grey_3'] },
+  { key:'crystalline_cluster', name:'Crystalline Cluster', hardness:'hard', dr:4, rareChance:0.12,
+    desc:'A striking vein of high-purity crystal growth. Real prospectors\' favourite — for good reason.',
+    lootPool: ['min_purple_2','min_blue_3','min_yellow_2','min_purple_3','min_yellow_3'] },
+  { key:'void_black_anomaly', name:'Void-Black Anomaly', hardness:'hard', dr:7, rareChance:0.20,
+    desc:'Something about this one reads wrong on every scanner. The best hauls in known space come from anomalies like this — so does the worst luck.',
+    lootPool: ['min_red_3','min_yellow_3','min_blue_3','min_purple_3','min_green_3'] },
+];
+
+// Roll one loot item for a single "vein" on the mining grid: rareChance shot at the
+// legendary pool first, otherwise a uniform pick from the preset's own loot pool.
+function rollAsteroidLoot(presetKey) {
+  const preset = ASTEROID_PRESETS.find(p => p.key === presetKey) || ASTEROID_PRESETS[0];
+  if (preset.rareChance && Math.random() < preset.rareChance) {
+    return LEGENDARY_GEMS[Math.floor(Math.random() * LEGENDARY_GEMS.length)];
+  }
+  const pool = preset.lootPool.map(k => catalogFind(k)).filter(Boolean);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 // ── RATIONS ────────────────────────────────────────────────────
 const RATIONS = [
@@ -122,23 +202,27 @@ const GEAR = GEAR_NAMES.map((name, i) => ({
   weight: 0.5 + (i % 5) * 0.4, value: 40 + i * 15,
 }));
 
-// ── MINING TOOLS (gear subcategory) ─────────────────────────────
-const MINING_TOOL_NAMES = [
-  'Prospector\'s Pickaxe','Laser Drill','Ore Sample Case','Seismic Charge','Vein Scanner',
-  'Reinforced Crate','Mining Beacon','Rock Saw','Pressure Sealant','Cargo Sled',
+// ── MINING GEAR FLAVOR (gear subcategory — utility items, not dig tools) ────────
+const MINING_GEAR_NAMES = [
+  'Ore Sample Case','Vein Scanner','Reinforced Crate','Mining Beacon',
+  'Pressure Sealant','Cargo Sled','Drone Tether','Magnetic Clamp',
+  'Spectral Loupe','Vacuum Sealant Kit',
 ];
-const MINING_TOOLS = MINING_TOOL_NAMES.map((name, i) => ({
-  key: 'tool_' + name.toLowerCase().replace(/[^a-z0-9]+/g,'_'),
+const MINING_GEAR_FLAVOR = MINING_GEAR_NAMES.map((name, i) => ({
+  key: 'gear_' + name.toLowerCase().replace(/[^a-z0-9]+/g,'_'),
   name, category:'gear', subcategory:'mining',
-  icon: TOOL_ICON((i % 29) + 1),
+  icon: TOOL_ICON((i % 29) + 2),
   desc: `Mining-rated equipment — a ${name.toLowerCase()} for cracking open the rock.`,
   weight: 1.5 + (i % 4) * 0.6, value: 60 + i * 20,
 }));
 
-const ITEM_CATALOG = [...WEAPONS, ...ARMOR_ITEMS, ...MINERALS, ...RATIONS, ...GEAR, ...MINING_TOOLS];
+// Legendary gems are deliberately NOT included here — they should never show up in the
+// normal Browse Catalog list, only ever be won from a rare mining roll (see
+// rollAsteroidLoot below). catalogFind() still resolves them by key for that purpose.
+const ITEM_CATALOG = [...WEAPONS, ...ARMOR_ITEMS, ...MINERALS, ...RATIONS, ...GEAR, ...MINING_GEAR_FLAVOR, ...MINING_TOOLS];
 
 function catalogByCategory(cat) { return ITEM_CATALOG.filter(i => i.category === cat); }
-function catalogFind(key) { return ITEM_CATALOG.find(i => i.key === key); }
+function catalogFind(key) { return ITEM_CATALOG.find(i => i.key === key) || LEGENDARY_GEMS.find(i => i.key === key); }
 
 // Renders either a plain <img> icon or a CSS-sliced spritesheet cell.
 function catalogIconHtml(icon, size) {
