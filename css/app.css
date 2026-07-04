@@ -809,6 +809,9 @@
   border-radius: 10px;
   padding: 6px;
   aspect-ratio: 1;
+  position: relative;
+  overflow: hidden; /* pebbles overflow each tile for an organic look but must not
+                        escape the board itself and cover buttons/text below it */
 }
 .mining-tile {
   position: relative;
