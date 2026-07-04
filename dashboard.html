@@ -321,6 +321,7 @@
 
 <script src="js/config.js"></script>
 <script src="js/auth.js?v=2"></script>
+<script src="js/catalog.js"></script>
 <script>
 let currentUser = null;
 let currentProfile = null;
@@ -785,7 +786,7 @@ document.getElementById('create-char-btn').addEventListener('click', async () =>
     name: weapon.name(selectedSpecies), item_type: 'weapon', quantity: 1,
     weight: weapon.weight, value: weapon.value, description: weapon.desc,
     damage_dice: weapon.dmg, accuracy_mod: weapon.acc, range_m: weapon.range,
-    is_equipped: true,
+    icon_path: weapon.icon, is_equipped: true,
   });
 
   closeModal('modal-new-char');
@@ -801,11 +802,11 @@ const SPECIES_WEAPON_ADJ = {
 };
 function flavorWeaponName(species, base) { return (SPECIES_WEAPON_ADJ[species] || (n=>n))(base); }
 const STARTING_WEAPON = {
-  captain:    { name: s => flavorWeaponName(s, 'Service Sidearm'),   dmg:'1d10', acc: 1, range: 25, weight:1.2, value:150, desc:'Standard-issue GAC sidearm — reliable, unremarkable, gets the job done.' },
-  pilot:      { name: s => flavorWeaponName(s, 'Pulse Pistol'),      dmg:'1d8',  acc: 2, range: 20, weight:0.8, value:180, desc:'Light, fast-cycling pistol favoured for close-quarters cockpit defence.' },
-  gunsmith:   { name: s => flavorWeaponName(s, 'Mag-Slug Carbine'),  dmg:'2d6',  acc: 1, range: 40, weight:2.4, value:320, desc:'A hard-hitting mag-accelerator carbine, built for sustained ship-to-ship boarding actions.' },
-  technician: { name: s => flavorWeaponName(s, 'Arc Welder Pistol'), dmg:'1d10', acc: 0, range: 15, weight:1.6, value:160, desc:'Repurposed industrial arc welder — improvised, but it hits like one.' },
-  default:    { name: s => flavorWeaponName(s, 'Battered Sidearm'),  dmg:'1d8',  acc: 0, range: 20, weight:1.0, value:100, desc:'A worn but functional sidearm — nothing special, but it fires.' },
+  captain:    { name: s => flavorWeaponName(s, 'Service Sidearm'),   dmg:'1d10', acc: 1, range: 25, weight:1.2, value:150, desc:'Standard-issue GAC sidearm — reliable, unremarkable, gets the job done.', icon:'assets/sci-fi items/weapons/gun_icons_1/Icon29_01.png' },
+  pilot:      { name: s => flavorWeaponName(s, 'Pulse Pistol'),      dmg:'1d8',  acc: 2, range: 20, weight:0.8, value:180, desc:'Light, fast-cycling pistol favoured for close-quarters cockpit defence.', icon:'assets/sci-fi items/weapons/gun_icons_1/Icon29_04.png' },
+  gunsmith:   { name: s => flavorWeaponName(s, 'Mag-Slug Carbine'),  dmg:'2d6',  acc: 1, range: 40, weight:2.4, value:320, desc:'A hard-hitting mag-accelerator carbine, built for sustained ship-to-ship boarding actions.', icon:'assets/sci-fi items/weapons/gun_icons_1/Icon29_08.png' },
+  technician: { name: s => flavorWeaponName(s, 'Arc Welder Pistol'), dmg:'1d10', acc: 0, range: 15, weight:1.6, value:160, desc:'Repurposed industrial arc welder — improvised, but it hits like one.', icon:'assets/sci-fi items/weapons/gun_icons_1/Icon29_12.png' },
+  default:    { name: s => flavorWeaponName(s, 'Battered Sidearm'),  dmg:'1d8',  acc: 0, range: 20, weight:1.0, value:100, desc:'A worn but functional sidearm — nothing special, but it fires.', icon:'assets/sci-fi items/weapons/gun_icons_1/Icon29_02.png' },
 };
 
 // ── Create Campaign ─────────────────────────────────────────────

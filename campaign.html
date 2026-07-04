@@ -369,13 +369,22 @@
         <div id="ship-hint" style="display:none; padding:6px 18px; font-size:11px; color:var(--text-faint); background:var(--surface); border-top:1px solid var(--border);">Click a wing or thruster slot to equip a component. Drag crew tokens to reposition them. Scroll to zoom, drag empty space to pan, double-click to reset.</div>
         <div class="ship-stat-bar">
           <div class="ship-stat">
-            <div class="ship-stat-label">Hull</div>
+            <div class="ship-stat-label">Ship HP</div>
             <div class="ship-stat-val" id="stat-hp">—</div>
             <div class="ship-stat-sub" id="stat-hp-max"></div>
           </div>
           <div class="ship-stat">
-            <div class="ship-stat-label">Armor</div>
-            <div class="ship-stat-val" id="stat-armor">—</div>
+            <div class="ship-stat-label">Shield HP</div>
+            <div class="ship-stat-val" id="stat-shield">—</div>
+            <div class="ship-stat-sub" id="stat-shield-max"></div>
+          </div>
+          <div class="ship-stat">
+            <div class="ship-stat-label">PP</div>
+            <div class="ship-stat-val" id="stat-pp">—</div>
+          </div>
+          <div class="ship-stat">
+            <div class="ship-stat-label">Total AD</div>
+            <div class="ship-stat-val" id="stat-ad">—</div>
           </div>
           <div class="ship-stat">
             <div class="ship-stat-label">Speed</div>
@@ -385,28 +394,6 @@
             <div class="ship-stat-label">Fuel</div>
             <div class="ship-stat-val" id="stat-fuel">—</div>
             <div class="ship-stat-sub" id="stat-fuel-max"></div>
-          </div>
-          <div class="ship-stat">
-            <div class="ship-stat-label">Shield</div>
-            <div class="ship-stat-val" id="stat-shield">—</div>
-            <div class="ship-stat-sub" id="stat-shield-max"></div>
-          </div>
-          <div class="ship-stat">
-            <div class="ship-stat-label">Total AD</div>
-            <div class="ship-stat-val" id="stat-ad">—</div>
-          </div>
-          <div class="ship-stat">
-            <div class="ship-stat-label">PP Available</div>
-            <div class="ship-stat-val" id="stat-pp">—</div>
-            <div class="ship-stat-sub" id="stat-pp-max"></div>
-          </div>
-          <div class="ship-stat">
-            <div class="ship-stat-label">Crew</div>
-            <div class="ship-stat-val" id="stat-crew">—</div>
-          </div>
-          <div class="ship-stat">
-            <div class="ship-stat-label">Round</div>
-            <div class="ship-stat-val" id="stat-round">—</div>
           </div>
         </div>
         <div class="ship-loadout-panel" id="ship-loadout-panel" style="display:none;"></div>
@@ -469,7 +456,10 @@
     <section class="camp-section" id="cargo">
       <div class="camp-section-hdr">
         <span class="camp-section-title">Cargo Hold</span>
-        <button class="btn-secondary" onclick="openAddCargo()" style="font-size:11px; padding:5px 12px;">+ Item</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-secondary" onclick="openCargoCatalog()" style="font-size:11px; padding:5px 12px;">📦 Browse Catalog</button>
+          <button class="btn-ghost" onclick="openAddCargo()" style="font-size:11px; padding:5px 12px;">+ Custom Item</button>
+        </div>
       </div>
       <div class="cargo-columns">
         <div class="cargo-panel">
@@ -750,6 +740,27 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="modal-cargo-catalog">
+  <div class="modal" style="max-width:640px; max-height:85vh; overflow-y:auto;">
+    <div class="modal-header"><span class="modal-title">Item Catalog — Add to Cargo Hold</span><button class="modal-close" onclick="closeModal('modal-cargo-catalog')">✕</button></div>
+    <div class="modal-body">
+      <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+        <input class="form-input" id="cargo-catalog-search" placeholder="Search items…" style="flex:1; min-width:160px;" oninput="renderCargoCatalogList()">
+        <select class="form-select" id="cargo-catalog-filter" style="width:140px;" onchange="renderCargoCatalogList()">
+          <option value="">All Categories</option>
+          <option value="weapon">Weapons</option>
+          <option value="mineral">Minerals</option>
+          <option value="ration">Rations</option>
+          <option value="gear">Gear</option>
+        </select>
+      </div>
+      <div id="cargo-catalog-list" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; max-height:420px; overflow-y:auto;"></div>
+      <div class="form-error" id="cargo-catalog-error"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-ghost" onclick="closeModal('modal-cargo-catalog')">Close</button></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-view-character">
   <div class="modal" style="max-width:640px; max-height:85vh; overflow-y:auto;">
     <div class="modal-header"><span class="modal-title" id="vc-title">Character Sheet</span><button class="modal-close" onclick="closeModal('modal-view-character')">✕</button></div>
@@ -781,6 +792,7 @@
 
 <script src="js/config.js"></script>
 <script src="js/auth.js?v=2"></script>
+<script src="js/catalog.js"></script>
 <script>
 // Appearance system — must stay in sync with dashboard.html/character.html.
 const SPECIES_VARIANTS = {
@@ -864,7 +876,6 @@ function preloadImages() {
   document.getElementById('topbar-name').textContent  = c.name;
   document.getElementById('camp-title-side').textContent = c.name;
   document.getElementById('invite-disp').textContent  = c.invite_code;
-  document.getElementById('stat-round').textContent   = c.round_num || 0;
   document.getElementById('round-lbl').textContent    = 'Round ' + (c.round_num || 0);
   document.getElementById('day-num').textContent      = c.day_num || 1;
   document.getElementById('day-controls').style.display = isGM ? 'flex' : 'none';
@@ -885,7 +896,7 @@ function preloadImages() {
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'campaigns',         filter:`id=eq.${campaignId}` },
       p => {
         campaign = p.new;
-        document.getElementById('stat-round').textContent = p.new.round_num || 0; document.getElementById('round-lbl').textContent = 'Round ' + (p.new.round_num || 0);
+        document.getElementById('round-lbl').textContent = 'Round ' + (p.new.round_num || 0);
         document.getElementById('day-num').textContent = p.new.day_num || 1;
         if (shipViewMode === 'map') redrawSpaceMap();
         if (shipViewMode === 'combat') { refreshCombatUI(); drawCombatMap(); }
@@ -944,10 +955,9 @@ async function loadShip() {
 
   if (shipData) {
     document.getElementById('ship-name').textContent  = shipData.ship_name || 'Unnamed Vessel';
-    document.getElementById('ship-class').textContent = shipType ? `${shipType.name} — ${shipType.size}` : '—';
+    document.getElementById('ship-class').textContent = shipType ? `${shipType.name} — ${shipType.size} · Armor ${shipData.armor ?? 0}` : '—';
     document.getElementById('stat-hp').textContent    = shipData.hp_current ?? '—';
     document.getElementById('stat-hp-max').textContent = shipData.hp_max ? '/ ' + shipData.hp_max : '';
-    document.getElementById('stat-armor').textContent = shipData.armor ?? '—';
     document.getElementById('stat-speed').textContent = shipData.speed ?? '—';
     document.getElementById('stat-fuel').textContent  = shipData.fuel_current ?? '—';
     const dailyRate = shipData.fuel_daily_rate || 10;
@@ -955,8 +965,7 @@ async function loadShip() {
     document.getElementById('stat-fuel-max').textContent = (shipData.fuel_max ? '/ ' + shipData.fuel_max : '') + ` · ${daysLeft}d left`;
     document.getElementById('stat-shield').textContent = shipData.shield_current ?? 0;
     document.getElementById('stat-shield-max').textContent = shipData.shield_max ? '/ ' + shipData.shield_max : '';
-    document.getElementById('stat-pp').textContent = `${shipData.pp_current ?? shipData.pp_max ?? 6}`;
-    document.getElementById('stat-pp-max').textContent = '/ ' + (shipData.pp_max ?? 6);
+    document.getElementById('stat-pp').textContent = `${shipData.pp_current ?? shipData.pp_max ?? 6}/${shipData.pp_max ?? 6}`;
     document.getElementById('stat-ad').textContent = shipData.ad_total ?? (shipType?.base_ad ?? 10);
 
     const hpPct = shipData.hp_max ? shipData.hp_current / shipData.hp_max : 1;
@@ -978,6 +987,17 @@ async function loadShip() {
 }
 
 // ── Reactor + Gun Hardpoints (no on-canvas sprite — a straight equipment list) ──
+// Real component art instead of blank text slots — keyed by the canonical component names
+// from schema-v14's seed data, with sane fallbacks for anything homebrewed later.
+const REACTOR_ICON = 'assets/interface/Interface Icons/1x/Battery - full 512 px.png';
+const WEAPON_ICONS = {
+  'Light Pulse Laser': 'assets/objects/hardpoints/laser_cannon/laser_cannon_turret.png',
+  'Mag-Accelerator Cannon': 'assets/objects/hardpoints/autocannon/autocannon2.png',
+  'Heavy Plasma Mortar': 'assets/objects/hardpoints/plasma_cannon/plasma_cannon.png',
+};
+const WEAPON_ICON_FALLBACK = 'assets/objects/hardpoints/dual_laser_cannon/dual_laser_cannon_turret.png';
+function loadoutIcon(path, size) { return `<img src="${path}" style="width:${size||22}px;height:${size||22}px;object-fit:contain;image-rendering:pixelated;flex-shrink:0;" alt="">`; }
+
 function renderLoadout() {
   const panel = document.getElementById('ship-loadout-panel');
   if (!shipData || !shipType) { panel.style.display = 'none'; return; }
@@ -987,11 +1007,14 @@ function renderLoadout() {
   const guns = shipComponents.guns || [];
   const gunSlotsHtml = Array.from({ length: gunSlots }, (_, i) => {
     const g = guns[i];
-    return `<div class="loadout-slot" ${isGM ? `onclick="openEquipGun(${i})"` : ''}>
-      <div class="loadout-slot-label">Hardpoint ${i + 1}</div>
-      ${g
-        ? `<div class="loadout-slot-name">${esc(g.name)}</div><div class="loadout-slot-meta">${g.pp_cost} PP · ${esc(g.damage_dice)} dmg · ${g.fight_mod>=0?'+':''}${g.fight_mod} FIGHT</div>`
-        : `<div class="loadout-slot-empty">${isGM ? '+ Equip Weapon' : 'Empty'}</div>`}
+    return `<div class="loadout-slot" style="display:flex; gap:8px; align-items:flex-start;" ${isGM ? `onclick="openEquipGun(${i})"` : ''}>
+      ${g ? loadoutIcon(WEAPON_ICONS[g.name] || WEAPON_ICON_FALLBACK, 26) : ''}
+      <div>
+        <div class="loadout-slot-label">Hardpoint ${i + 1}</div>
+        ${g
+          ? `<div class="loadout-slot-name">${esc(g.name)}</div><div class="loadout-slot-meta">${g.pp_cost} PP · ${esc(g.damage_dice)} dmg · ${g.fight_mod>=0?'+':''}${g.fight_mod} FIGHT</div>`
+          : `<div class="loadout-slot-empty">${isGM ? '+ Equip Weapon' : 'Empty'}</div>`}
+      </div>
     </div>`;
   }).join('');
 
@@ -999,11 +1022,14 @@ function renderLoadout() {
   panel.innerHTML = `
     <div class="cargo-panel-title"><span>Ship Loadout</span></div>
     <div class="loadout-grid">
-      <div class="loadout-slot" ${isGM ? `onclick="openEquipSlot('reactor')"` : ''}>
-        <div class="loadout-slot-label">Reactor</div>
-        ${r
-          ? `<div class="loadout-slot-name">${esc(r.name)}</div><div class="loadout-slot-meta">${r.pp_cap_mod} PP cap · +${r.pp_regen_mod} PP/turn</div>`
-          : `<div class="loadout-slot-empty">${isGM ? '+ Equip Reactor' : 'Empty'}</div>`}
+      <div class="loadout-slot" style="display:flex; gap:8px; align-items:flex-start;" ${isGM ? `onclick="openEquipSlot('reactor')"` : ''}>
+        ${r ? loadoutIcon(REACTOR_ICON, 26) : ''}
+        <div>
+          <div class="loadout-slot-label">Reactor</div>
+          ${r
+            ? `<div class="loadout-slot-name">${esc(r.name)}</div><div class="loadout-slot-meta">${r.pp_cap_mod} PP cap · +${r.pp_regen_mod} PP/turn</div>`
+            : `<div class="loadout-slot-empty">${isGM ? '+ Equip Reactor' : 'Empty'}</div>`}
+        </div>
       </div>
       ${gunSlotsHtml}
     </div>
@@ -1392,6 +1418,57 @@ function drawShipMap() {
     }
   });
 
+  drawShipHUD(W, H);
+}
+
+// Sci-fi HUD overlay: angular glowing Hull/Shield/PP bars pinned to the bottom-left of
+// the viewport, independent of pan/zoom, so they're always visible at a glance.
+function drawShipHUD(W, H) {
+  if (!shipData) return;
+  const bars = [
+    { label:'HULL',   cur: shipData.hp_current ?? 0,     max: shipData.hp_max ?? 1,     color:'#ff5a5a', glow:'rgba(255,90,90,.55)' },
+    { label:'SHIELD', cur: shipData.shield_current ?? 0, max: shipData.shield_max ?? 0, color:'#4ad0ff', glow:'rgba(74,208,255,.55)' },
+    { label:'PP',     cur: shipData.pp_current ?? shipData.pp_max ?? 0, max: shipData.pp_max ?? 1, color:'#ffd23a', glow:'rgba(255,210,58,.55)' },
+  ];
+  const barW = Math.min(220, W * 0.32), barH = 16, gap = 8, pad = 14;
+  const startX = pad, startY = H - pad - bars.length * (barH + gap) + gap;
+
+  bars.forEach((b, i) => {
+    const y = startY + i * (barH + gap);
+    const pct = b.max > 0 ? Math.max(0, Math.min(1, b.cur / b.max)) : 0;
+    const skew = 6; // angular sci-fi slant
+
+    // Background trough
+    shipCtx.save();
+    shipCtx.beginPath();
+    shipCtx.moveTo(startX + skew, y);
+    shipCtx.lineTo(startX + barW, y);
+    shipCtx.lineTo(startX + barW - skew, y + barH);
+    shipCtx.lineTo(startX, y + barH);
+    shipCtx.closePath();
+    shipCtx.fillStyle = 'rgba(6,10,18,.75)';
+    shipCtx.fill();
+    shipCtx.strokeStyle = 'rgba(120,160,210,.35)';
+    shipCtx.lineWidth = 1;
+    shipCtx.stroke();
+
+    // Fill, clipped to the same angular shape
+    shipCtx.clip();
+    shipCtx.shadowColor = b.glow;
+    shipCtx.shadowBlur = 8;
+    shipCtx.fillStyle = b.color;
+    shipCtx.fillRect(startX, y, barW * pct, barH);
+    shipCtx.restore();
+
+    // Label + value
+    shipCtx.font = 'bold 10px system-ui, sans-serif';
+    shipCtx.fillStyle = 'rgba(230,240,255,.9)';
+    shipCtx.textAlign = 'left';
+    shipCtx.textBaseline = 'middle';
+    shipCtx.fillText(b.label, startX + 6, y + barH / 2);
+    shipCtx.textAlign = 'right';
+    shipCtx.fillText(`${Math.round(b.cur)}/${Math.round(b.max)}`, startX + barW - 6, y + barH / 2);
+  });
 }
 
 // Token drag support + ship-view pan/zoom
@@ -2546,7 +2623,6 @@ async function loadCrew() {
     .eq('campaign_id', campaignId);
   const grid = document.getElementById('crew-grid');
   document.getElementById('crew-count-lbl').textContent = data?.length || 0;
-  document.getElementById('stat-crew').textContent = data?.length || 0;
   if (!data?.length) { grid.innerHTML='<div style="color:var(--text-faint);font-size:13px;">No crew yet.</div>'; return; }
   grid.innerHTML = data.map(m => {
     const name = m.profiles?.display_name || m.profiles?.username || '?';
@@ -2661,6 +2737,7 @@ async function loadCargo() {
 
 function cargoItemRow(item, actionsHtml) {
   return `<div class="cargo-item">
+    ${item.icon_path ? `<div style="flex-shrink:0;">${renderStoredIcon(item.icon_path, 26)}</div>` : ''}
     <div class="cargo-item-main">
       <div class="cargo-item-name">${esc(item.name)} ${item.quantity > 1 ? `<span style="color:var(--text-faint);font-weight:400;">×${item.quantity}</span>` : ''}</div>
       <div class="cargo-item-meta">${cap(item.item_type)} · ${(item.weight||0)} kg · ${item.value||0}¢</div>
@@ -2710,6 +2787,8 @@ async function takeCargoItem(id) {
   const { error: insErr } = await db.from('character_inventory').insert({
     character_id: myCharacterId, name: item.name, item_type: item.item_type,
     quantity: item.quantity, weight: item.weight, value: item.value, description: item.description,
+    icon_path: item.icon_path, diet_tag: item.diet_tag,
+    damage_dice: item.damage_dice, accuracy_mod: item.accuracy_mod, range_m: item.range_m,
   });
   if (insErr) return alert('Failed to take item: ' + insErr.message);
   const { error: delErr } = await db.from('campaign_cargo').delete().eq('id', id);
@@ -2723,6 +2802,7 @@ async function sendToCargo(itemId) {
   const { error: insErr } = await db.from('campaign_cargo').insert({
     campaign_id: campaignId, name: item.name, item_type: item.item_type,
     quantity: item.quantity, weight: item.weight, value: item.value, description: item.description,
+    icon_path: item.icon_path, diet_tag: item.diet_tag,
     added_by: currentUser.id,
   });
   if (insErr) return alert('Failed to send item to hold: ' + insErr.message);
@@ -2763,6 +2843,57 @@ async function saveCargoItem() {
   });
   if (error) return showError('cargo-error', error.message);
   closeModal('modal-add-cargo');
+  await loadCargo();
+}
+
+// ── Item Catalog → Cargo Hold ─────────────────────────────────────
+function renderStoredIcon(iconPath, size) {
+  if (!iconPath) return '';
+  size = size || 22;
+  try {
+    const parsed = JSON.parse(iconPath);
+    if (parsed && parsed.sheet) return catalogIconHtml(parsed, size);
+  } catch (e) { /* plain path string */ }
+  return catalogIconHtml(iconPath, size);
+}
+
+function openCargoCatalog() {
+  document.getElementById('cargo-catalog-search').value = '';
+  document.getElementById('cargo-catalog-filter').value = '';
+  showError('cargo-catalog-error', '');
+  renderCargoCatalogList();
+  openModal('modal-cargo-catalog');
+}
+
+function renderCargoCatalogList() {
+  const q = document.getElementById('cargo-catalog-search').value.trim().toLowerCase();
+  const cat = document.getElementById('cargo-catalog-filter').value;
+  const items = ITEM_CATALOG.filter(i => (!cat || i.category === cat) && (!q || i.name.toLowerCase().includes(q)));
+  document.getElementById('cargo-catalog-list').innerHTML = items.map(i => `
+    <div class="hull-card" style="padding:8px; text-align:center;" onclick="addCargoCatalogItem('${i.key}')">
+      <div style="display:flex; justify-content:center; margin-bottom:6px;">${catalogIconHtml(i.icon, 36)}</div>
+      <div class="hull-card-name" style="font-size:11.5px;">${esc(i.name)}</div>
+      <div class="hull-card-desc" style="font-size:10px;">${i.category === 'weapon' ? `${esc(i.dmg)} dmg · ${i.range}m` : `${i.value}¢`}</div>
+    </div>`).join('') || '<div style="grid-column:1/-1;color:var(--text-faint);font-size:12px;text-align:center;padding:20px;">No items match.</div>';
+}
+
+async function addCargoCatalogItem(key) {
+  const item = catalogFind(key);
+  if (!item) return;
+  const payload = {
+    campaign_id: campaignId,
+    name: item.name,
+    item_type: item.category === 'weapon' ? 'weapon' : item.category === 'ration' ? 'ration' : item.category === 'mineral' ? 'mineral' : 'misc',
+    quantity: 1,
+    weight: item.weight || 0,
+    value: item.value || 0,
+    description: item.desc || '',
+    icon_path: typeof item.icon === 'string' ? item.icon : JSON.stringify(item.icon),
+    added_by: currentUser.id,
+  };
+  if (item.category === 'ration') payload.diet_tag = (item.dietTags || []).join(',');
+  const { error } = await db.from('campaign_cargo').insert(payload);
+  if (error) return showError('cargo-catalog-error', error.message);
   await loadCargo();
 }
 
@@ -2923,7 +3054,6 @@ async function nextTurn() {
     const newRound = (campaign.round_num || 0) + 1;
     await db.from('campaigns').update({ round_num: newRound }).eq('id', campaignId);
     campaign.round_num = newRound;
-    document.getElementById('stat-round').textContent = newRound;
     document.getElementById('round-lbl').textContent  = 'Round ' + newRound;
   }
   renderInitiative();
@@ -3058,9 +3188,9 @@ async function renderCheatSheet(c) {
   const mv = movementSquares(c.speed);
   let weaponHtml = '';
   if (c.character_id) {
-    const { data: w } = await db.from('character_inventory').select('name,damage_dice,accuracy_mod,range_m')
+    const { data: w } = await db.from('character_inventory').select('name,damage_dice,accuracy_mod,range_m,icon_path')
       .eq('character_id', c.character_id).eq('is_equipped', true).eq('item_type','weapon').limit(1).maybeSingle();
-    if (w) weaponHtml = `<div class="combat-cheat-chip">Weapon: <strong>${esc(w.name)}</strong>${w.damage_dice?` · ${esc(w.damage_dice)}`:''}${w.accuracy_mod?` · ${w.accuracy_mod>0?'+':''}${w.accuracy_mod} acc`:''}${w.range_m?` · ${w.range_m}m`:''}</div>`;
+    if (w) weaponHtml = `<div class="combat-cheat-chip" style="display:flex; align-items:center; gap:6px;">${w.icon_path?renderStoredIcon(w.icon_path,18):''}Weapon: <strong>${esc(w.name)}</strong>${w.damage_dice?` · ${esc(w.damage_dice)}`:''}${w.accuracy_mod?` · ${w.accuracy_mod>0?'+':''}${w.accuracy_mod} acc`:''}${w.range_m?` · ${w.range_m}m`:''}</div>`;
     else weaponHtml = `<div class="combat-cheat-chip" style="color:var(--text-faint);">No weapon equipped</div>`;
   }
   cheat.innerHTML = `
@@ -3730,7 +3860,7 @@ function renderComponentPicker(data, currentId, onPick) {
   window._equipPick = onPick; // bridge for inline onclick below
   const cards = (data || []).map(c => `
     <div class="hull-card ${c.id===currentId?'selected':''}" onclick="window._equipPick('${c.id}')">
-      <div class="hull-card-name">${esc(c.name)}</div>
+      <div class="hull-card-name" style="display:flex; align-items:center; gap:6px;">${c.type==='weapon'?loadoutIcon(WEAPON_ICONS[c.name]||WEAPON_ICON_FALLBACK,20):c.type==='reactor'?loadoutIcon(REACTOR_ICON,20):''}${esc(c.name)}</div>
       <div class="hull-card-desc">${esc(c.description)}</div>
       ${c.special ? `<div style="font-size:11px; color:#d4af37; font-style:italic; margin:4px 0;">${esc(c.special)}</div>` : ''}
       <div class="hull-card-stats">

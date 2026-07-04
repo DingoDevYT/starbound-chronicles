@@ -117,6 +117,8 @@
 .type-tool     { background:rgba(80,160,80,.2);  color:#80cc80; }
 .type-consumable { background:rgba(180,130,20,.2); color:#d4af37; }
 .type-misc     { background:var(--surface3); color:var(--text-faint); }
+.type-mineral  { background:rgba(140,80,200,.2); color:#c896ff; }
+.type-ration   { background:rgba(200,140,60,.2); color:#e0a860; }
 .inv-delete-btn { background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:14px; padding:2px 6px; border-radius:4px; transition:all .12s; }
 .inv-delete-btn:hover { color:#ff8888; background:rgba(180,40,40,.15); }
 
@@ -235,6 +237,12 @@ body.edit-mode .edit-hint  { display:block; }
       </div>
     </div>
 
+    <!-- Rations -->
+    <div class="xp-block" id="rations-block">
+      <div class="xp-label">Rations</div>
+      <div id="rations-body" style="font-size:12px; color:var(--text-faint);">—</div>
+    </div>
+
     <!-- Species wiki link -->
     <a id="species-wiki-link" href="species.html" style="display:block; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; text-decoration:none; color:var(--text-dim); font-size:12px; transition:all .12s;"
        onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
@@ -283,7 +291,10 @@ body.edit-mode .edit-hint  { display:block; }
           Total weight: <strong id="total-weight">0</strong> kg &nbsp;·&nbsp;
           Total value: <strong id="total-value">0</strong> ¢
         </span>
-        <button class="btn-secondary" onclick="openAddItem()" style="font-size:12px; padding:7px 14px;">+ Add Item</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-secondary" onclick="openCatalogBrowser()" style="font-size:12px; padding:7px 14px;">📦 Browse Catalog</button>
+          <button class="btn-ghost" onclick="openAddItem()" style="font-size:12px; padding:7px 14px;">+ Custom Item</button>
+        </div>
       </div>
       <div style="overflow-x:auto;">
         <table class="inv-table">
@@ -359,6 +370,8 @@ body.edit-mode .edit-hint  { display:block; }
             <option value="armor">🛡️ Armor</option>
             <option value="tool">🔧 Tool</option>
             <option value="consumable">💊 Consumable</option>
+            <option value="mineral">💎 Mineral</option>
+            <option value="ration">🍖 Ration</option>
             <option value="misc" selected>📦 Misc</option>
           </select>
         </div>
@@ -406,6 +419,28 @@ body.edit-mode .edit-hint  { display:block; }
   </div>
 </div>
 
+<!-- Modal: Browse Item Catalog -->
+<div class="modal-backdrop" id="modal-catalog">
+  <div class="modal" style="max-width:640px; max-height:85vh; overflow-y:auto;">
+    <div class="modal-header"><span class="modal-title">Item Catalog</span><button class="modal-close" onclick="closeModal('modal-catalog')">✕</button></div>
+    <div class="modal-body">
+      <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+        <input class="form-input" id="catalog-search" placeholder="Search items…" style="flex:1; min-width:160px;" oninput="renderCatalogList()">
+        <select class="form-select" id="catalog-filter" style="width:140px;" onchange="renderCatalogList()">
+          <option value="">All Categories</option>
+          <option value="weapon">Weapons</option>
+          <option value="mineral">Minerals</option>
+          <option value="ration">Rations</option>
+          <option value="gear">Gear</option>
+        </select>
+      </div>
+      <div id="catalog-list" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; max-height:420px; overflow-y:auto;"></div>
+      <div class="form-error" id="catalog-error"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-ghost" onclick="closeModal('modal-catalog')">Close</button></div>
+  </div>
+</div>
+
 <!-- Modal: Change Appearance -->
 <div class="modal-backdrop" id="modal-appearance">
   <div class="modal" style="max-width:440px;">
@@ -447,6 +482,7 @@ body.edit-mode .edit-hint  { display:block; }
 
 <script src="js/config.js"></script>
 <script src="js/auth.js?v=2"></script>
+<script src="js/catalog.js"></script>
 <script>
 const STAT_DEFS = [
   { key:'fly',   label:'FLY',   color:'#40a0c8', abbr:'FLY' },
@@ -901,6 +937,48 @@ async function loadInventory() {
   const { data } = await db.from('character_inventory').select('*').eq('character_id', charId).order('created_at');
   inventory = data || [];
   renderInventory();
+  renderRations();
+}
+
+// ── Rations ────────────────────────────────────────────────────
+// Species diet -> which ration diet_tag values are actually edible for them.
+const SPECIES_DIET_KEY = { human:'omnivore', kragol:'lithivore', skitterling:'hyper-omnivore', myxos:'dissolvent', arboran:'photosynthetic' };
+
+function compatibleRations() {
+  const diet = SPECIES_DIET_KEY[char.species || 'human'] || 'omnivore';
+  return inventory.filter(i => i.item_type === 'ration' && (i.diet_tag || '').split(',').includes(diet));
+}
+
+function renderRations() {
+  const body = document.getElementById('rations-body');
+  const spec = char.species || 'human';
+  if (spec === 'arboran') {
+    body.innerHTML = `<span style="color:#90e030;">☀️ Photosynthetic — no rations needed.</span>`;
+    return;
+  }
+  const compat = compatibleRations();
+  const totalQty = compat.reduce((s,i) => s + (i.quantity||0), 0);
+  if (!totalQty) {
+    body.innerHTML = `
+      <div style="color:#ff8888; font-weight:700; margin-bottom:6px;">⚠️ OUT OF FOOD</div>
+      <div style="font-size:11px;">No compatible rations in inventory — grab some from the Cargo Hold or catalog.</div>`;
+    return;
+  }
+  body.innerHTML = `
+    <div style="margin-bottom:8px;">${totalQty} compatible ration${totalQty===1?'':'s'} available.</div>
+    <button class="btn-secondary" style="font-size:11px; padding:6px 14px; width:100%;" onclick="useRation()">🍖 Use a Ration</button>`;
+}
+
+async function useRation() {
+  const compat = compatibleRations();
+  const item = compat.find(i => (i.quantity||0) > 0);
+  if (!item) return renderRations();
+  if (item.quantity > 1) {
+    await db.from('character_inventory').update({ quantity: item.quantity - 1 }).eq('id', item.id);
+  } else {
+    await db.from('character_inventory').delete().eq('id', item.id);
+  }
+  await loadInventory();
 }
 
 function renderInventory() {
@@ -922,7 +1000,7 @@ function renderInventory() {
     return `
     <tr>
       <td><div class="inv-equipped ${item.is_equipped ? 'active' : ''}" title="${isWeapon ? 'Equip weapon (only one at a time)' : 'Mark equipped'}" onclick="toggleEquip('${item.id}', ${!item.is_equipped}, ${isWeapon})"></div></td>
-      <td><strong style="color:var(--text)">${esc(item.name)}</strong>${item.description ? `<br><span style="font-size:11px; color:var(--text-faint)">${esc(item.description)}</span>` : ''}${weaponMeta}</td>
+      <td><div style="display:flex; align-items:center; gap:8px;">${item.icon_path ? renderStoredIcon(item.icon_path, 24) : ''}<div><strong style="color:var(--text)">${esc(item.name)}</strong>${item.description ? `<br><span style="font-size:11px; color:var(--text-faint)">${esc(item.description)}</span>` : ''}${weaponMeta}</div></div></td>
       <td><span class="inv-type-badge type-${item.item_type}">${cap(item.item_type)}</span></td>
       <td>${item.quantity}</td>
       <td>${(item.weight||0).toFixed(1)} kg</td>
@@ -964,6 +1042,7 @@ async function confirmSendToCargo() {
   const { error: insErr } = await db.from('campaign_cargo').insert({
     campaign_id: campaignId, name: item.name, item_type: item.item_type,
     quantity: item.quantity, weight: item.weight, value: item.value, description: item.description,
+    icon_path: item.icon_path, diet_tag: item.diet_tag,
     added_by: currentUser.id,
   });
   if (insErr) return showError('send-cargo-error', insErr.message);
@@ -993,6 +1072,69 @@ function toggleWeaponFields() {
 async function deleteItem(id) {
   if (!confirm('Remove this item?')) return;
   await db.from('character_inventory').delete().eq('id', id);
+  await loadInventory();
+}
+
+// ── Item Catalog ────────────────────────────────────────────────
+// icon_path in the DB is either a plain image path, or a JSON-encoded spritesheet
+// descriptor ({sheet,col,row,...}) for items sliced from a sheet like the minerals.
+function renderStoredIcon(iconPath, size) {
+  if (!iconPath) return '';
+  size = size || 22;
+  try {
+    const parsed = JSON.parse(iconPath);
+    if (parsed && parsed.sheet) return catalogIconHtml(parsed, size);
+  } catch (e) { /* plain path string, fall through */ }
+  return catalogIconHtml(iconPath, size);
+}
+
+function openCatalogBrowser() {
+  document.getElementById('catalog-search').value = '';
+  document.getElementById('catalog-filter').value = '';
+  showError('catalog-error', '');
+  renderCatalogList();
+  openModal('modal-catalog');
+}
+
+function renderCatalogList() {
+  const q = document.getElementById('catalog-search').value.trim().toLowerCase();
+  const cat = document.getElementById('catalog-filter').value;
+  const spec = char.species || 'human';
+  const dietKey = (SPECIES_REF[spec]?.diet || '').toLowerCase().replace(/[^a-z-]/g,'');
+
+  let items = ITEM_CATALOG.filter(i => (!cat || i.category === cat) && (!q || i.name.toLowerCase().includes(q)));
+  document.getElementById('catalog-list').innerHTML = items.map(i => {
+    const dietMismatch = i.category === 'ration' && i.dietTags && !i.dietTags.some(d => dietKey.includes(d.split('-')[0]));
+    return `
+    <div class="hull-card" style="padding:8px; text-align:center; ${dietMismatch?'opacity:.5;':''}" onclick="addCatalogItem('${i.key}')" title="${dietMismatch ? 'Not compatible with your species diet, but you can still carry it.' : ''}">
+      <div style="display:flex; justify-content:center; margin-bottom:6px;">${catalogIconHtml(i.icon, 36)}</div>
+      <div class="hull-card-name" style="font-size:11.5px;">${esc(i.name)}</div>
+      <div class="hull-card-desc" style="font-size:10px; -webkit-line-clamp:2;">${i.category === 'weapon' ? `${esc(i.dmg)} dmg · ${i.range}m` : i.category === 'ration' ? esc((i.dietTags||[]).join(', ')) : `${i.value}¢`}</div>
+    </div>`;
+  }).join('') || '<div style="grid-column:1/-1;color:var(--text-faint);font-size:12px;text-align:center;padding:20px;">No items match.</div>';
+}
+
+async function addCatalogItem(key) {
+  const item = catalogFind(key);
+  if (!item) return;
+  const payload = {
+    character_id: charId,
+    name: item.name,
+    item_type: item.category === 'weapon' ? 'weapon' : item.category === 'ration' ? 'ration' : item.category === 'mineral' ? 'mineral' : 'misc',
+    quantity: 1,
+    weight: item.weight || 0,
+    value: item.value || 0,
+    description: item.desc || '',
+    icon_path: typeof item.icon === 'string' ? item.icon : JSON.stringify(item.icon),
+  };
+  if (item.category === 'weapon') {
+    payload.damage_dice = item.dmg; payload.accuracy_mod = item.acc; payload.range_m = item.range;
+  }
+  if (item.category === 'ration') {
+    payload.diet_tag = (item.dietTags || []).join(',');
+  }
+  const { error } = await db.from('character_inventory').insert(payload);
+  if (error) return showError('catalog-error', error.message);
   await loadInventory();
 }
 
