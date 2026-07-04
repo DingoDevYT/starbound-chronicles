@@ -154,28 +154,19 @@
           </div>
         </div>
       </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-        <div class="form-group">
-          <label class="form-label">Class</label>
-          <select class="form-select" id="new-char-role">
-            <option value="">— Choose Class —</option>
-            <option value="captain">👨‍✈️ Captain</option>
-            <option value="pilot">🚀 Pilot</option>
-            <option value="gunsmith">🔫 Gunsmith</option>
-            <option value="technician">⚙️ Technician</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Rank</label>
-          <select class="form-select" id="new-char-rank">
-            <option value="Ensign">Ensign</option>
-            <option value="Lieutenant">Lieutenant</option>
-            <option value="Commander" selected>Commander</option>
-            <option value="Captain">Captain</option>
-            <option value="Admiral">Admiral</option>
-            <option value="Civilian">Civilian</option>
-          </select>
-        </div>
+      <div class="form-group">
+        <label class="form-label">Class</label>
+        <select class="form-select" id="new-char-role">
+          <option value="">— Choose Class —</option>
+          <option value="captain">👨‍✈️ Captain</option>
+          <option value="pilot">🚀 Pilot</option>
+          <option value="gunsmith">🔫 Gunsmith</option>
+          <option value="technician">⚙️ Technician</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Starting Loadout</label>
+        <div id="loadout-picker" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px;"></div>
       </div>
       <div class="form-group">
         <label class="form-label" style="display:flex;justify-content:space-between;align-items:center;">
@@ -551,7 +542,7 @@ async function loadCharacters() {
       </div>
       <div class="char-card-name">${esc(c.name)}</div>
       <div class="char-card-meta">
-        <span>${c.rank || ''} · ${SPECIES_LABELS[c.species] || c.species}</span>
+        <span>${SPECIES_LABELS[c.species] || c.species}</span>
         <span>${c.role ? (ROLE_ICONS[c.role] || '') + ' ' + cap(c.role) : 'No role set'}</span>
       </div>
       <div class="char-card-chips">
@@ -696,6 +687,53 @@ function selectVariant(v) {
 }
 renderAppearancePicker();
 
+// ── Starting loadout picker ───────────────────────────────────────
+// Every option includes a free Hand Pickaxe (so nobody starts locked out of mining) plus
+// a weapon and some credits; the GAC/KEC options trade a smaller credit stipend for real
+// faction-specific gear pulled straight from the item catalog.
+const STARTING_LOADOUTS = [
+  { key:'standard', label:'Standard Recruit', credits:200, armorKey:null,
+    desc:'A sidearm suited to your class, plus enough credits to gear up your own way.' },
+  { key:'gac', label:'GAC Enlistee', credits:60, weaponKey:'wpn_gac_standard_rifle', armorKey:'armor_gac_combat',
+    desc:'Galactic Allegiance Council-issue rifle and combat plate. Reliable and well-equipped, less pocket change.' },
+  { key:'kec', label:'KEC Prospector', credits:60, weaponKey:'wpn_kec_mining_shotgun', armorKey:'armor_kec_hauler',
+    desc:'Kragol Extraction Conglomerate mining shotgun and hauler rig. Built for the belt, not the parade ground.' },
+];
+let selectedLoadout = 'standard';
+
+// Same species-based HP formula as character.html's level-up system (duplicated per this
+// project's convention for small static reference data) — replaces the old flat
+// `8 + fightMod + 1` used here previously, which ignored species entirely.
+const SPECIES_BASE_HP = { human:20, kragol:25, skitterling:18, myxos:18, arboran:22 };
+function calcMaxHP(species, fightStat) {
+  const base = SPECIES_BASE_HP[species || 'human'] ?? 20;
+  return base + Math.floor(((fightStat ?? 10) - 10) / 2);
+}
+
+function renderLoadoutPicker() {
+  document.getElementById('loadout-picker').innerHTML = STARTING_LOADOUTS.map(l => {
+    const weapon = l.weaponKey ? catalogFind(l.weaponKey) : (STARTING_WEAPON[document.getElementById('new-char-role').value] || STARTING_WEAPON.default);
+    const armor = l.armorKey ? catalogFind(l.armorKey) : null;
+    return `<button type="button" class="loadout-opt ${l.key===selectedLoadout?'active':''}" data-loadout="${l.key}" onclick="selectLoadout('${l.key}')">
+      <div class="loadout-opt-title">${esc(l.label)}</div>
+      <div class="loadout-opt-desc">${esc(l.desc)}</div>
+      <div class="loadout-opt-stats">
+        <span>⛏ Hand Pickaxe</span>
+        <span>· ${weapon ? esc(typeof weapon.name === 'function' ? weapon.name(selectedSpecies) : weapon.name) : 'Weapon'}</span>
+        ${armor ? `<span>· ${esc(armor.name)}</span>` : ''}
+      </div>
+      <div class="loadout-opt-stats" style="margin-top:3px; color:#ffcc55;">¢ ${l.credits} starting credits</div>
+    </button>`;
+  }).join('');
+}
+function selectLoadout(key) {
+  selectedLoadout = key;
+  renderLoadoutPicker();
+}
+document.getElementById('new-char-role').addEventListener('change', renderLoadoutPicker);
+// Initial render happens after STARTING_WEAPON is declared further down this script
+// (renderLoadoutPicker reads it for the "Standard Recruit" weapon preview).
+
 // ── Change appearance (existing character) ───────────────────────
 let caCharId = null, caSpecies = null, caGender = 'M', caVariant = null;
 
@@ -746,7 +784,6 @@ async function saveChangeAppearance() {
 document.getElementById('create-char-btn').addEventListener('click', async () => {
   const name = document.getElementById('new-char-name').value.trim();
   const role = document.getElementById('new-char-role').value;
-  const rank = document.getElementById('new-char-rank').value;
   const btn  = document.getElementById('create-char-btn');
 
   showError('new-char-error', '');
@@ -765,18 +802,18 @@ document.getElementById('create-char-btn').addEventListener('click', async () =>
   const personality = getPlaceholder(selectedSpecies, r, 'personality');
   const bonds       = getPlaceholder(selectedSpecies, r, 'bonds');
   const flaws       = getPlaceholder(selectedSpecies, r, 'flaws');
-  const fightMod = Math.floor((stats.fight - 10) / 2);
-  const hp_max = 8 + fightMod + 1;
+  const hp_max = calcMaxHP(selectedSpecies, stats.fight);
   // Armor is flat damage reduction (not to-hit) — species base only at creation;
   // equipping armor gear on the sheet adds on top of this.
   const SPECIES_BASE_ARMOR = { human:0, kragol:2, skitterling:0, myxos:0, arboran:1 };
+  const loadout = STARTING_LOADOUTS.find(l => l.key === selectedLoadout) || STARTING_LOADOUTS[0];
 
   setLoading(btn, true);
   const { data: newChar, error } = await db.from('characters').insert({
     user_id: currentUser.id,
-    name, species: selectedSpecies, role: r, rank,
+    name, species: selectedSpecies, role: r,
     stats, background, personality, bonds, flaws,
-    hp_current: hp_max, hp_max, level: 1, xp: 0,
+    hp_current: hp_max, hp_max, level: 1, xp: 0, credits: loadout.credits,
     armor: SPECIES_BASE_ARMOR[selectedSpecies] ?? 0, speed: 30,
     appearance: { gender: selectedGender, variant: selectedVariant },
   }).select().single();
@@ -784,16 +821,46 @@ document.getElementById('create-char-btn').addEventListener('click', async () =>
 
   if (error) return showError('new-char-error', error.message);
 
-  // Give every new character a real starting weapon (class-led, species-flavoured) instead
-  // of an empty inventory — one equipped weapon is your entire offense in combat.
-  const weapon = STARTING_WEAPON[r] || STARTING_WEAPON.default;
-  await db.from('character_inventory').insert({
-    character_id: newChar.id,
-    name: weapon.name(selectedSpecies), item_type: 'weapon', quantity: 1,
-    weight: weapon.weight, value: weapon.value, description: weapon.desc,
-    damage_dice: weapon.dmg, accuracy_mod: weapon.acc, range_m: weapon.range,
-    icon_path: weapon.icon, is_equipped: true,
-  });
+  // Every character starts with a Hand Pickaxe (mining is available from day one) plus a
+  // weapon — either the class-led, species-flavoured default, or a faction-specific one
+  // for the GAC/KEC loadout options — and armor for those faction options.
+  const pickaxe = catalogFind('tool_hand_pickaxe');
+  const startingItems = [{
+    character_id: newChar.id, name: pickaxe.name, item_type: 'tool', quantity: 1,
+    weight: pickaxe.weight, value: pickaxe.value, description: pickaxe.desc,
+    icon_path: typeof pickaxe.icon === 'string' ? pickaxe.icon : JSON.stringify(pickaxe.icon),
+    mining_modifier: pickaxe.miningModifier, mining_size: pickaxe.miningSize,
+    mining_max_charges: pickaxe.miningMaxCharges, mining_best_against: pickaxe.miningBestAgainst,
+  }];
+
+  if (loadout.weaponKey) {
+    const w = catalogFind(loadout.weaponKey);
+    startingItems.push({
+      character_id: newChar.id, name: w.name, item_type: 'weapon', quantity: 1,
+      weight: w.weight, value: w.value, description: w.desc,
+      damage_dice: w.dmg, accuracy_mod: w.acc, range_m: w.range,
+      icon_path: typeof w.icon === 'string' ? w.icon : JSON.stringify(w.icon), is_equipped: true,
+    });
+  } else {
+    const weapon = STARTING_WEAPON[r] || STARTING_WEAPON.default;
+    startingItems.push({
+      character_id: newChar.id, name: weapon.name(selectedSpecies), item_type: 'weapon', quantity: 1,
+      weight: weapon.weight, value: weapon.value, description: weapon.desc,
+      damage_dice: weapon.dmg, accuracy_mod: weapon.acc, range_m: weapon.range,
+      icon_path: weapon.icon, is_equipped: true,
+    });
+  }
+
+  if (loadout.armorKey) {
+    const a = catalogFind(loadout.armorKey);
+    startingItems.push({
+      character_id: newChar.id, name: a.name, item_type: 'armor', quantity: 1,
+      weight: a.weight, value: a.value, description: a.desc, armor_dr: a.dr,
+      icon_path: typeof a.icon === 'string' ? a.icon : JSON.stringify(a.icon), is_equipped: true,
+    });
+  }
+
+  await db.from('character_inventory').insert(startingItems);
 
   closeModal('modal-new-char');
   document.getElementById('new-char-name').value = '';
@@ -814,6 +881,7 @@ const STARTING_WEAPON = {
   technician: { name: s => flavorWeaponName(s, 'Arc Welder Pistol'), dmg:'1d10', acc: 0, range: 15, weight:1.6, value:160, desc:'Repurposed industrial arc welder — improvised, but it hits like one.', icon:'assets/sci-fi items/weapons/gun_icons_1/Icon29_12.png' },
   default:    { name: s => flavorWeaponName(s, 'Battered Sidearm'),  dmg:'1d8',  acc: 0, range: 20, weight:1.0, value:100, desc:'A worn but functional sidearm — nothing special, but it fires.', icon:'assets/sci-fi items/weapons/gun_icons_1/Icon29_02.png' },
 };
+renderLoadoutPicker();
 
 // ── Create Campaign ─────────────────────────────────────────────
 document.getElementById('create-camp-btn').addEventListener('click', async () => {

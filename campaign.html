@@ -2853,11 +2853,29 @@ function openStartMining() {
         </label>`).join('')
     : '<div style="color:var(--text-faint);font-size:12px;">No crew have characters assigned yet.</div>';
   document.getElementById('mining-asteroid-picker').innerHTML = ASTEROID_PRESETS.map(a => `
-    <div class="hull-card" data-key="${a.key}" onclick="toggleAsteroidPick('${a.key}')" style="padding:8px; text-align:center; cursor:pointer;">
-      <div class="hull-card-name" style="font-size:11.5px;">${esc(a.name)}</div>
-      <div class="hull-card-desc" style="font-size:10.5px;">${cap(a.hardness)} · DR ${a.dr}${a.rareChance ? ` · ${Math.round(a.rareChance*100)}% rare` : ''}</div>
+    <div class="hull-card" data-key="${a.key}" onclick="toggleAsteroidPick('${a.key}')" style="padding:8px; text-align:left; cursor:pointer;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+        <img src="${a.icon}" style="width:32px; height:32px; object-fit:contain; flex-shrink:0;" alt="">
+        <div class="hull-card-name" style="font-size:11.5px;">${esc(a.name)}</div>
+      </div>
+      <div class="hull-card-desc" style="font-size:10.5px; margin-bottom:5px;">${cap(a.hardness)} · DR ${a.dr}</div>
+      ${asteroidLootTableHtml(a.key)}
     </div>`).join('');
   openModal('modal-start-mining');
+}
+
+// Small icon+value+odds row list showing exactly what a preset could roll per vein,
+// instead of a single opaque "X% rare" number — used in both the GM's offer picker and
+// the player's own asteroid-select screen.
+function asteroidLootTableHtml(presetKey) {
+  const rows = asteroidLootTable(presetKey);
+  return `<div style="display:flex; flex-direction:column; gap:2px;">${rows.map(r => `
+    <div style="display:flex; align-items:center; gap:5px; font-size:9.5px; color:var(--text-faint);">
+      ${catalogIconHtml(r.item.icon, 16)}
+      <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; ${r.item.category==='mineral'&&r.item.subcategory==='legendary'?'color:#ffcc55;':''}">${esc(r.item.name)}</span>
+      <span>${r.item.value}¢</span>
+      <span style="color:var(--text-dim); min-width:32px; text-align:right;">${(r.chance*100).toFixed(r.chance<0.02?1:0)}%</span>
+    </div>`).join('')}</div>`;
 }
 
 function toggleAsteroidPick(key) {
@@ -2988,9 +3006,15 @@ function beginMiningSession(sessionId) {
   const offered = (session.offered_asteroids || []).map(k => ASTEROID_PRESETS.find(a => a.key === k)).filter(Boolean);
   document.getElementById('mining-setup-asteroids').innerHTML = offered.map(a => `
     <div class="mining-pick-card" data-key="${a.key}" onclick="pickMiningAsteroid('${a.key}')">
-      <div style="font-weight:700; font-size:12px;">${esc(a.name)}</div>
-      <div style="font-size:10px; color:var(--text-faint); margin:3px 0;">${esc(a.desc)}</div>
-      <div style="font-size:10px; color:var(--text-dim);">${cap(a.hardness)} · DR ${a.dr}${a.rareChance ? ` · <span style="color:#ffaa00;">${Math.round(a.rareChance*100)}% rare shot</span>` : ''}</div>
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+        <img src="${a.icon}" style="width:36px; height:36px; object-fit:contain; flex-shrink:0;" alt="">
+        <div>
+          <div style="font-weight:700; font-size:12px;">${esc(a.name)}</div>
+          <div style="font-size:10px; color:var(--text-dim);">${cap(a.hardness)} · DR ${a.dr}</div>
+        </div>
+      </div>
+      <div style="font-size:10px; color:var(--text-faint); margin-bottom:5px;">${esc(a.desc)}</div>
+      ${asteroidLootTableHtml(a.key)}
     </div>`).join('') || '<div style="color:var(--text-faint);font-size:12px;">No asteroids were offered.</div>';
 
   miningGame.toolRows = myInventoryItems.filter(isMiningToolRow).map(resolveMiningTool);
@@ -3462,7 +3486,7 @@ async function openViewCharacter(characterId) {
       ${specImg ? `<img src="${specImg}" style="width:56px;height:56px;object-fit:contain;border-radius:8px;background:var(--surface2);">` : ''}
       <div>
         <div style="font-size:16px; font-weight:800; color:var(--text);">${esc(c.name)}</div>
-        <div style="font-size:12px; color:var(--text-faint);">${cap(c.species)} · ${esc(c.rank||'Ensign')} · Lv ${c.level||1}${cls?` · ${cls}`:''}</div>
+        <div style="font-size:12px; color:var(--text-faint);">${cap(c.species)} · Lv ${c.level||1}${cls?` · ${cls}`:''}</div>
       </div>
     </div>
     <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:14px;">

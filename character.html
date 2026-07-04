@@ -35,7 +35,6 @@
 .char-bio-sub  { font-size:12px; color:var(--text-faint); text-align:center; margin-top:2px; }
 .char-badges   { display:flex; flex-wrap:wrap; gap:5px; justify-content:center; }
 .char-badge    { background:var(--surface3); border:1px solid var(--border); color:var(--text-dim); font-size:11px; padding:3px 8px; border-radius:20px; }
-.char-badge.rank { border-color:#d4af37; color:#d4af37; background:rgba(212,175,55,.1); }
 
 .hp-block {
   background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px;
@@ -666,7 +665,7 @@ function populateSidebar() {
   const role  = char.role   || '';
   document.title = `${char.name} — Starbound Chronicles`;
   document.getElementById('bio-name').textContent   = char.name;
-  document.getElementById('bio-sub').textContent    = `${cap(spec)} · ${char.rank || 'Ensign'}`;
+  document.getElementById('bio-sub').textContent    = cap(spec);
   const imgSrc = speciesImagePath(spec, char.appearance?.gender, char.appearance?.variant);
   const iconEl = document.getElementById('portrait-icon');
   if (imgSrc) {
@@ -680,7 +679,6 @@ function populateSidebar() {
 
   const badges = document.getElementById('char-badges');
   badges.innerHTML = [
-    `<span class="char-badge rank">${esc(char.rank||'Ensign')}</span>`,
     role ? `<span class="char-badge">${ROLE_ICONS[role]||''} ${cap(role)}</span>` : '',
     `<span class="char-badge">Lv ${char.level||1}</span>`,
   ].join('');

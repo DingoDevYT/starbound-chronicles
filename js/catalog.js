@@ -71,6 +71,11 @@ const MINERAL_FAMILIES = [
 const MINERAL_TIERS = ['Ore', 'Cluster', 'Vein Cut', 'Refined'];
 // Dig footprint on the mining grid scales with tier — bigger finds take more digging.
 const MINERAL_DIG_SIZE = [{x:1,y:1}, {x:2,y:2}, {x:2,y:3}, {x:3,y:3}];
+// Value multiplier per tier, sized to roughly track dig-footprint area (1/4/6/9 tiles)
+// instead of a flat linear (ti+1) scale — the old formula actually paid WORSE
+// credits-per-tile-dug on bigger tiers (e.g. Refined was 0.45x Ore's rate), penalizing
+// exactly the finds that cost the most time/charges to fully uncover.
+const MINERAL_TIER_MULT = [1, 4, 6, 10];
 const MINERALS = [];
 MINERAL_FAMILIES.forEach(fam => {
   MINERAL_TIERS.forEach((tier, ti) => {
@@ -80,7 +85,7 @@ MINERAL_FAMILIES.forEach(fam => {
       category: 'mineral', subcategory: fam.color,
       icon: mineralIcon(ti, fam.row),
       desc: `A ${tier.toLowerCase()} sample of ${fam.name.toLowerCase()}, a ${fam.color}-hued mineral prized by KEC prospectors.`,
-      weight: 0.4 + ti * 0.3, value: fam.base * (ti + 1),
+      weight: 0.4 + ti * 0.3, value: fam.base * MINERAL_TIER_MULT[ti],
       digSize: MINERAL_DIG_SIZE[ti],
     });
   });
@@ -93,15 +98,15 @@ const LEGENDARY_GEMS = [
   { key:'gem_void_opal', name:'Void Opal', category:'mineral', subcategory:'legendary',
     icon: mineralIcon(4, 1), digSize:{x:2,y:2},
     desc:'An iridescent stone that seems to swallow light rather than reflect it. Collectors pay absurd sums.',
-    weight:0.6, value:900 },
+    weight:0.6, value:250 },
   { key:'gem_starcore', name:'Starcore Fragment', category:'mineral', subcategory:'legendary',
     icon: mineralIcon(4, 5), digSize:{x:2,y:2},
     desc:'A shard of compressed stellar matter, still faintly warm. Nobody fully understands how these form.',
-    weight:0.5, value:1600 },
+    weight:0.5, value:400 },
   { key:'gem_kaelen_heartstone', name:"Kaelen's Heartstone", category:'mineral', subcategory:'legendary',
     icon: mineralIcon(4, 4), digSize:{x:2,y:2},
     desc:'Named for the Obsidian Fringe outcasts who first traded them. Deep crimson, unnervingly warm to the touch.',
-    weight:0.5, value:2200 },
+    weight:0.5, value:600 },
 ];
 
 // ── MINING TOOLS ───────────────────────────────────────────────
@@ -131,23 +136,36 @@ const MINING_TOOLS = [
 // The GM's master list — pick 2-4 of these to offer a character each expedition.
 // Harder/rarer presets skew toward better mineral tiers and carry a real (if small)
 // chance per vein of rolling into the legendary gem pool — that's the "gambling" hook.
+//
+// Expected credit value (5 veins, full clear, blended with rareChance) climbs roughly
+// 148 -> 226 -> 275 -> 378 -> 597 -> 704 across these six, a ~4.8x spread from safest to
+// riskiest. A mining trip costs a full in-game day, so even the safest preset needs to be
+// worth doing on its own, and the hardest shouldn't be a single-trip jackpot that trivializes
+// everything else — tuned by simulating rollAsteroidLoot() against each pool before shipping.
+const ASTEROID_ICON = i => `assets/objects/asteroids/Aestroid and space junk (${i}).png`;
 const ASTEROID_PRESETS = [
   { key:'debris_field', name:'Common Debris Field', hardness:'soft', dr:0, rareChance:0,
+    icon: ASTEROID_ICON(1),
     desc:'Porous carbon shale drifting in a well-travelled lane. Safe, modest, reliable.',
-    lootPool: ['min_grey_0','min_grey_0','min_purple_0','min_grey_1'] },
-  { key:'chondrite_belt', name:'Chondrite Belt', hardness:'medium', dr:2, rareChance:0.03,
+    lootPool: ['min_grey_1','min_purple_1','min_blue_1','min_green_1','min_purple_1'] },
+  { key:'chondrite_belt', name:'Chondrite Belt', hardness:'medium', dr:2, rareChance:0.02,
+    icon: ASTEROID_ICON(3),
     desc:'Tough clay-crusted rubble. A common mid-lane pick with a small shot at something special.',
-    lootPool: ['min_grey_1','min_purple_1','min_blue_0','min_green_1','min_grey_2'] },
-  { key:'great_ring_tailings', name:'Great Ring Tailings', hardness:'medium', dr:3, rareChance:0.05,
+    lootPool: ['min_grey_2','min_purple_1','min_blue_1','min_green_2','min_purple_2'] },
+  { key:'great_ring_tailings', name:'Great Ring Tailings', hardness:'medium', dr:3, rareChance:0.04,
+    icon: ASTEROID_ICON(5),
     desc:'KEC-worked overflow from the Great Ring. Ferrite-heavy, occasionally overlooked by the corporate sweeps.',
-    lootPool: ['min_grey_2','min_grey_2','min_grey_1','min_purple_1','min_green_2'] },
-  { key:'basalt_ridge', name:'Basalt Ridge', hardness:'hard', dr:5, rareChance:0.08,
+    lootPool: ['min_grey_2','min_grey_3','min_grey_3','min_purple_2','min_green_2'] },
+  { key:'basalt_ridge', name:'Basalt Ridge', hardness:'hard', dr:5, rareChance:0.07,
+    icon: ASTEROID_ICON(7),
     desc:'Dense obsidian basalt. Slow going without the right tool, but the yield tiers up accordingly.',
     lootPool: ['min_blue_2','min_green_2','min_red_2','min_purple_2','min_grey_3'] },
-  { key:'crystalline_cluster', name:'Crystalline Cluster', hardness:'hard', dr:4, rareChance:0.12,
+  { key:'crystalline_cluster', name:'Crystalline Cluster', hardness:'hard', dr:4, rareChance:0.10,
+    icon: ASTEROID_ICON(9),
     desc:'A striking vein of high-purity crystal growth. Real prospectors\' favourite — for good reason.',
     lootPool: ['min_purple_2','min_blue_3','min_yellow_2','min_purple_3','min_yellow_3'] },
-  { key:'void_black_anomaly', name:'Void-Black Anomaly', hardness:'hard', dr:7, rareChance:0.20,
+  { key:'void_black_anomaly', name:'Void-Black Anomaly', hardness:'hard', dr:7, rareChance:0.14,
+    icon: ASTEROID_ICON(11),
     desc:'Something about this one reads wrong on every scanner. The best hauls in known space come from anomalies like this — so does the worst luck.',
     lootPool: ['min_red_3','min_yellow_3','min_blue_3','min_purple_3','min_green_3'] },
 ];
@@ -161,6 +179,27 @@ function rollAsteroidLoot(presetKey) {
   }
   const pool = preset.lootPool.map(k => catalogFind(k)).filter(Boolean);
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// Exact per-vein odds table for an asteroid preset — used to show players/GMs what could
+// actually turn up (icon + value + %) instead of a single opaque "rare chance" number.
+// Duplicate keys in a lootPool (used to weight common finds) are collapsed into one row.
+function asteroidLootTable(presetKey) {
+  const preset = ASTEROID_PRESETS.find(p => p.key === presetKey);
+  if (!preset) return [];
+  const counts = new Map();
+  preset.lootPool.forEach(k => counts.set(k, (counts.get(k) || 0) + 1));
+  const normalShare = 1 - (preset.rareChance || 0);
+  const rows = [];
+  counts.forEach((count, key) => {
+    const item = catalogFind(key);
+    if (item) rows.push({ item, chance: normalShare * (count / preset.lootPool.length) });
+  });
+  if (preset.rareChance) {
+    const each = preset.rareChance / LEGENDARY_GEMS.length;
+    LEGENDARY_GEMS.forEach(g => rows.push({ item: g, chance: each }));
+  }
+  return rows.sort((a, b) => b.chance - a.chance);
 }
 
 // ── RATIONS ────────────────────────────────────────────────────
