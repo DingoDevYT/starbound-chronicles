@@ -844,7 +844,15 @@
             <div class="mining-charge-bar"><div class="mining-charge-bar-fill" id="mining-charge-fill" style="width:100%;"></div></div>
           </div>
         </div>
-        <div class="mining-grid-wrap" id="mining-grid-el"></div>
+        <div style="display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap;">
+          <div class="mining-grid-wrap" id="mining-grid-el" style="flex:1 1 380px; max-width:460px;"></div>
+          <div style="flex:0 0 170px; min-width:150px;">
+            <div style="font-size:10.5px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px;">⛏ Collected</div>
+            <div id="mining-collected-list" style="display:flex; flex-direction:column; gap:6px; max-height:420px; overflow-y:auto; padding-right:2px;">
+              <div style="color:var(--text-faint);font-size:11px;">Nothing found yet.</div>
+            </div>
+          </div>
+        </div>
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap;">
           <div style="font-size:10.5px; color:var(--text-faint);" id="mining-status-line">Scan first to reveal likely vein locations, then start digging.</div>
           <button class="btn-secondary" id="mining-scan-btn" onclick="scanMiningHotspots()" style="font-size:11px; padding:5px 12px; white-space:nowrap;">📡 Scan for Hotspots</button>
@@ -3019,6 +3027,7 @@ async function startMiningDig() {
   document.getElementById('mining-status-line').textContent = 'Scan first to reveal likely vein locations, then start digging.';
   updateMiningChargeDisplay();
   renderMiningGrid();
+  renderMiningCollectedList();
   await loadMiningSessions();
 }
 
@@ -3070,7 +3079,7 @@ function buildMiningGrid() {
         if (!valid) break;
       }
       if (valid) {
-        const vein = { item: lootItem, coords, uncovered: false };
+        const vein = { item: lootItem, coords, uncovered: false, originX: ox, originY: oy, sizeX: size.x, sizeY: size.y };
         coords.forEach(([cx, cy]) => { tiles[cy][cx].vein = vein; });
         veins.push(vein);
         placed = true;
@@ -3095,11 +3104,18 @@ function renderMiningGrid() {
       tile.id = `mining-tile-${x}-${y}`;
       tile.onclick = () => strikeMiningTile(x, y);
 
-      // z0: hidden loot art (revealed as pebbles peel away)
+      // z0: hidden loot art (revealed as pebbles peel away). Rendered once, at full size,
+      // on the vein's origin tile — it overflows into the tiles to its right/below (never
+      // left/up, since origin is always the top-left corner) and sits beneath their pebble
+      // covers, which come later in DOM order and so paint on top until those tiles are dug.
       const lootBg = document.createElement('div');
       lootBg.className = 'mining-loot-bg';
       lootBg.id = `mining-loot-${x}-${y}`;
-      if (t.vein) lootBg.innerHTML = catalogIconHtml(t.vein.item.icon, 44);
+      if (t.vein && t.vein.originX === x && t.vein.originY === y) {
+        lootBg.style.width = (t.vein.sizeX * 100) + '%';
+        lootBg.style.height = (t.vein.sizeY * 100) + '%';
+        lootBg.innerHTML = miningVeinArtHtml(t.vein.item.icon);
+      }
       tile.appendChild(lootBg);
 
       // z20+: organic rock pebble cover
@@ -3112,6 +3128,18 @@ function renderMiningGrid() {
       el.appendChild(tile);
     }
   }
+}
+
+// Renders one icon that fills its container responsively (unlike catalogIconHtml, which is
+// fixed-pixel) — needed so a vein's art can scale to span a variable number of grid tiles.
+function miningVeinArtHtml(icon) {
+  if (typeof icon === 'string') {
+    return `<img src="${icon}" style="width:72%;height:72%;object-fit:contain;image-rendering:pixelated;" alt="">`;
+  }
+  const ratioX = icon.sheetW / icon.cellW, ratioY = icon.sheetH / icon.cellH;
+  return `<div style="position:relative; width:72%; height:72%; overflow:hidden;">
+    <div style="position:absolute; width:${ratioX*100}%; height:${ratioY*100}%; left:${-icon.col*100}%; top:${-icon.row*100}%; background-image:url('${icon.sheet}'); background-size:100% 100%; image-rendering:pixelated;"></div>
+  </div>`;
 }
 
 function generateMiningPebbles(container, x, y) {
@@ -3280,9 +3308,35 @@ async function checkMiningVeinUncover() {
     }
   }
   if (newlyFound.length) {
+    renderMiningCollectedList(new Set(newlyFound.map(i => i.name)));
     const lootSoFar = miningGame.foundLoot.map(i => ({ name: i.name, value: i.value, icon_path: typeof i.icon === 'string' ? i.icon : JSON.stringify(i.icon) }));
     await db.from('mining_sessions').update({ loot_found: lootSoFar }).eq('id', miningGame.session.id);
   }
+}
+
+// Live side-panel list of everything found so far this expedition, aggregated by name
+// with a brief highlight flash on whatever was *just* uncovered — makes it obvious a
+// strike actually paid off, rather than the only feedback being a floating damage number.
+function renderMiningCollectedList(justFoundNames) {
+  const el = document.getElementById('mining-collected-list');
+  if (!el) return;
+  if (!miningGame.foundLoot.length) {
+    el.innerHTML = '<div style="color:var(--text-faint);font-size:11px;">Nothing found yet.</div>';
+    return;
+  }
+  const byName = new Map();
+  miningGame.foundLoot.forEach(item => {
+    const e = byName.get(item.name);
+    if (e) e.qty++; else byName.set(item.name, { item, qty: 1 });
+  });
+  el.innerHTML = [...byName.values()].map(({ item, qty }) => `
+    <div class="mining-collected-row${justFoundNames && justFoundNames.has(item.name) ? ' just-found' : ''}">
+      ${catalogIconHtml(item.icon, 26)}
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:11.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(item.name)}</div>
+        <div style="font-size:10px; color:#ffcc55;">${(item.value||0).toLocaleString()}¢${qty > 1 ? ` ×${qty}` : ''}</div>
+      </div>
+    </div>`).join('');
 }
 
 async function checkMiningTermination() {

@@ -833,7 +833,7 @@
   border: 2px solid #40c8ff;
   border-radius: 50%;
   pointer-events: none;
-  z-index: 12;
+  z-index: 32; /* above the pebble cover (20-30) so the ping is visible through the rubble */
   animation: mining-hotspot-ping 2s ease-out infinite;
 }
 @keyframes mining-hotspot-ping {
@@ -844,7 +844,8 @@
 /* Hidden loot art under the rubble (partially visible as pebbles peel) */
 .mining-loot-bg {
   position: absolute;
-  inset: 0;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
   z-index: 0;
   display: flex;
   align-items: center;
@@ -941,6 +942,20 @@
   25% { transform: translate(-2px, 2px); }
   50% { transform: translate(2px, -2px); }
   75% { transform: translate(-2px, -2px); }
+}
+.mining-collected-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.mining-collected-row.just-found { animation: mining-collected-flash 1.4s ease; }
+@keyframes mining-collected-flash {
+  0%   { background: rgba(64,200,255,0.35); border-color: #40c8ff; }
+  100% { background: var(--surface2); border-color: var(--border); }
 }
 .mining-charge-bar {
   height: 8px;
