@@ -311,7 +311,8 @@ body.edit-mode .edit-hint  { display:block; }
           <button class="btn-ghost" onclick="openAddItem()" style="font-size:12px; padding:7px 14px;">+ Custom Item</button>
         </div>
       </div>
-      <div style="overflow-x:auto;">
+      <input class="form-input" id="inv-search" placeholder="Search inventory…" oninput="renderInventory()" style="margin-bottom:10px; padding:8px 12px; font-size:13px;">
+      <div style="overflow-x:auto; max-height:460px; overflow-y:auto;">
         <table class="inv-table">
           <thead>
             <tr>
@@ -1019,11 +1020,32 @@ function populateNotes() {
 // ── Inventory ─────────────────────────────────────────────────
 async function loadInventory() {
   const { data } = await db.from('character_inventory').select('*').eq('character_id', charId).order('created_at');
-  inventory = data || [];
+  inventory = await mergeDuplicateInventoryRows(data || []);
   renderInventory();
   renderRations();
   renderLoadoutSummary();
   await recomputeArmor();
+}
+
+// Heal any pre-existing duplicate rows (same name + item_type) by stacking them into one.
+async function mergeDuplicateInventoryRows(rows) {
+  const groups = new Map();
+  for (const r of rows) {
+    const k = (r.name || '') + ' ' + (r.item_type || '');
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r);
+  }
+  const merged = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) { merged.push(group[0]); continue; }
+    const keeper = group[0];
+    const totalQty = group.reduce((s, r) => s + (r.quantity || 1), 0);
+    await db.from('character_inventory').update({ quantity: totalQty }).eq('id', keeper.id);
+    await db.from('character_inventory').delete().in('id', group.slice(1).map(r => r.id));
+    keeper.quantity = totalQty;
+    merged.push(keeper);
+  }
+  return merged;
 }
 
 function goToInventoryTab() {
@@ -1113,7 +1135,13 @@ function renderInventory() {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-faint); padding:24px;">No items yet.</td></tr>';
     return;
   }
-  tbody.innerHTML = inventory.map(item => {
+  const q = (document.getElementById('inv-search')?.value || '').trim().toLowerCase();
+  const rows = q ? inventory.filter(i => (i.name||'').toLowerCase().includes(q)) : inventory;
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-faint); padding:24px;">No items match your search.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(item => {
     const isWeapon = item.item_type === 'weapon';
     const isArmor  = item.item_type === 'armor';
     const isEquippable = isWeapon || isArmor;

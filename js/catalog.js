@@ -202,24 +202,15 @@ const GEAR = GEAR_NAMES.map((name, i) => ({
   weight: 0.5 + (i % 5) * 0.4, value: 40 + i * 15,
 }));
 
-// ── MINING GEAR FLAVOR (gear subcategory — utility items, not dig tools) ────────
-const MINING_GEAR_NAMES = [
-  'Ore Sample Case','Vein Scanner','Reinforced Crate','Mining Beacon',
-  'Pressure Sealant','Cargo Sled','Drone Tether','Magnetic Clamp',
-  'Spectral Loupe','Vacuum Sealant Kit',
-];
-const MINING_GEAR_FLAVOR = MINING_GEAR_NAMES.map((name, i) => ({
-  key: 'gear_' + name.toLowerCase().replace(/[^a-z0-9]+/g,'_'),
-  name, category:'gear', subcategory:'mining',
-  icon: TOOL_ICON((i % 29) + 2),
-  desc: `Mining-rated equipment — a ${name.toLowerCase()} for cracking open the rock.`,
-  weight: 1.5 + (i % 4) * 0.6, value: 60 + i * 20,
-}));
-
 // Legendary gems are deliberately NOT included here — they should never show up in the
 // normal Browse Catalog list, only ever be won from a rare mining roll (see
 // rollAsteroidLoot below). catalogFind() still resolves them by key for that purpose.
-const ITEM_CATALOG = [...WEAPONS, ...ARMOR_ITEMS, ...MINERALS, ...RATIONS, ...GEAR, ...MINING_GEAR_FLAVOR, ...MINING_TOOLS];
+//
+// MINING_GEAR_FLAVOR is also intentionally excluded: those cosmetic "Vein Scanner" /
+// "Ore Sample Case" props did nothing mechanically and were confusingly indistinguishable
+// from the real dig tools in MINING_TOOLS now that the scanner is a built-in expedition
+// mechanic. Only the real, functional mining tools belong in the catalog.
+const ITEM_CATALOG = [...WEAPONS, ...ARMOR_ITEMS, ...MINERALS, ...RATIONS, ...GEAR, ...MINING_TOOLS];
 
 function catalogByCategory(cat) { return ITEM_CATALOG.filter(i => i.category === cat); }
 function catalogFind(key) { return ITEM_CATALOG.find(i => i.key === key) || LEGENDARY_GEMS.find(i => i.key === key); }

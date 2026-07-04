@@ -830,13 +830,89 @@
   border: 2px solid #40c8ff;
   border-radius: 50%;
   pointer-events: none;
+  z-index: 12;
   animation: mining-hotspot-ping 2s ease-out infinite;
 }
 @keyframes mining-hotspot-ping {
   0%   { transform: scale(0.5); opacity: 1; }
   100% { transform: scale(1.4); opacity: 0; }
 }
-.mining-tile .mining-loot-icon { width: 62%; height: 62%; opacity: 0.95; }
+
+/* Hidden loot art under the rubble (partially visible as pebbles peel) */
+.mining-loot-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.mining-loot-bg.uncovered { animation: mining-loot-pulse 1.6s ease-in-out infinite; }
+@keyframes mining-loot-pulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(64,200,255,0.4)); }
+  50%      { transform: scale(1.08); filter: drop-shadow(0 0 6px rgba(64,200,255,0.9)); }
+}
+
+/* Organic rubble cover made of overlapping stone pebbles */
+.mining-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.mining-pebble {
+  position: absolute;
+  border-radius: 50%;
+  transition: opacity 0.25s ease-out, transform 0.25s ease-out, filter 0.2s ease;
+  will-change: transform, opacity;
+}
+
+/* Debris particles kicked out when a pebble shatters */
+.mining-particle {
+  position: absolute;
+  top: 50%; left: 50%;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 35;
+  animation: mining-explode 0.5s cubic-bezier(0.1,0.8,0.3,1) forwards;
+}
+@keyframes mining-explode {
+  0%   { transform: translate(0,0) scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0) rotate(var(--rot)); opacity: 0; }
+}
+
+/* Spinning d20 that lands on the struck tile */
+.mining-d20 {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  width: 60%; height: 60%;
+  min-width: 26px; min-height: 26px;
+  z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  border: 2px solid #40c8ff;
+  background: linear-gradient(135deg, #123a5a, #05070d);
+  box-shadow: 0 0 12px rgba(64,200,255,0.7);
+  color: #fff; font-weight: 800; font-size: 12px;
+  pointer-events: none;
+}
+.mining-d20.spinning { animation: mining-d20-spin 0.55s linear infinite; }
+@keyframes mining-d20-spin {
+  from { transform: translate(-50%,-50%) rotate(0deg); }
+  to   { transform: translate(-50%,-50%) rotate(360deg); }
+}
+
+.mining-grid-wrap.mining-shake { animation: mining-screen-shake 0.25s ease-in-out; }
+@keyframes mining-screen-shake {
+  0%, 100% { transform: translate(0,0); }
+  25% { transform: translate(-3px, 3px); }
+  50% { transform: translate(3px, -3px); }
+  75% { transform: translate(-3px, -3px); }
+}
+
 .mining-float-txt {
   position: absolute;
   top: 50%; left: 50%;
@@ -849,7 +925,7 @@
   border-radius: 4px;
   padding: 1px 5px;
   pointer-events: none;
-  z-index: 20;
+  z-index: 45;
   animation: mining-float-up 0.9s ease forwards;
 }
 @keyframes mining-float-up {

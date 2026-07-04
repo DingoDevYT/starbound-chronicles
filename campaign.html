@@ -194,6 +194,8 @@
 .cargo-panel { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:14px; }
 .cargo-panel-title { font-size:12px; font-weight:700; color:#d0e4ff; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
 .cargo-list { display:flex; flex-direction:column; gap:6px; }
+.inv-search { margin-bottom:8px; padding:7px 11px; font-size:12px; }
+.inv-scroll { max-height:340px; overflow-y:auto; padding-right:4px; }
 .cargo-item { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:9px 12px; display:flex; align-items:center; gap:10px; }
 .cargo-item-main { flex:1; min-width:0; }
 .cargo-item-name { font-size:12.5px; font-weight:600; color:var(--text); }
@@ -480,9 +482,12 @@
     <section class="camp-section" id="mining">
       <div class="camp-section-hdr">
         <span class="camp-section-title">Mining Operations</span>
-        <button class="btn-secondary" id="start-mining-btn" onclick="openStartMining()" style="font-size:11px; padding:5px 12px; display:none;">⛏ Send Mining Expedition</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-ghost" id="clear-mining-btn" onclick="clearMiningHistory()" style="font-size:11px; padding:5px 12px; display:none;">Clear Finished</button>
+          <button class="btn-secondary" id="start-mining-btn" onclick="openStartMining()" style="font-size:11px; padding:5px 12px; display:none;">⛏ Send Mining Expedition</button>
+        </div>
       </div>
-      <div class="mining-session-list" id="mining-session-list" style="display:flex; flex-direction:column; gap:8px;"><div style="color:var(--text-faint);font-size:13px;">No mining expeditions yet.</div></div>
+      <div class="mining-session-list" id="mining-session-list" style="display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto; padding-right:4px;"><div style="color:var(--text-faint);font-size:13px;">No mining expeditions yet.</div></div>
     </section>
 
     <!-- CARGO HOLD -->
@@ -497,11 +502,13 @@
       <div class="cargo-columns">
         <div class="cargo-panel">
           <div class="cargo-panel-title"><span>Shared Hold</span><span style="font-weight:400; color:var(--text-faint);" id="cargo-count-lbl">—</span></div>
-          <div class="cargo-list" id="cargo-list"><div style="color:var(--text-faint);font-size:12px;">Loading…</div></div>
+          <input class="form-input inv-search" id="cargo-search" placeholder="Search hold…" oninput="renderCargo()">
+          <div class="cargo-list inv-scroll" id="cargo-list"><div style="color:var(--text-faint);font-size:12px;">Loading…</div></div>
         </div>
         <div class="cargo-panel">
           <div class="cargo-panel-title"><span>My Inventory</span><span style="font-weight:400; color:var(--text-faint);" id="my-inv-char-lbl">—</span></div>
-          <div class="cargo-list" id="my-inventory-list"><div style="color:var(--text-faint);font-size:12px;">No character assigned.</div></div>
+          <input class="form-input inv-search" id="my-inv-search" placeholder="Search inventory…" oninput="renderMyInventory()">
+          <div class="cargo-list inv-scroll" id="my-inventory-list"><div style="color:var(--text-faint);font-size:12px;">No character assigned.</div></div>
         </div>
       </div>
     </section>
@@ -779,8 +786,8 @@
     <div class="modal-header"><span class="modal-title">Send Mining Expedition</span><button class="modal-close" onclick="closeModal('modal-start-mining')">✕</button></div>
     <div class="modal-body">
       <div class="form-group">
-        <label class="form-label">Crew Member</label>
-        <select class="form-select" id="mining-char-select"></select>
+        <label class="form-label">Crew Members (pick one or more)</label>
+        <div id="mining-char-picker" style="display:flex; flex-direction:column; gap:6px; max-height:180px; overflow-y:auto;"></div>
       </div>
       <div class="form-group">
         <label class="form-label">Offer Asteroids (pick 2-4)</label>
@@ -789,6 +796,19 @@
       <div class="form-error" id="mining-start-error"></div>
     </div>
     <div class="modal-footer"><button class="btn-ghost" onclick="closeModal('modal-start-mining')">Cancel</button><button class="btn-primary" onclick="sendMiningExpedition()" style="width:auto;padding:10px 24px;">Send Expedition</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-mining-invite">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header"><span class="modal-title">⛏ Mining Expedition Available</span><button class="modal-close" onclick="closeModal('modal-mining-invite')">✕</button></div>
+    <div class="modal-body">
+      <div id="mining-invite-body" style="font-size:13px; color:var(--text-dim); line-height:1.6;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="denyMiningInvite()" style="color:#ff8888;">Decline</button>
+      <button class="btn-primary" onclick="acceptMiningInvite()" style="width:auto;padding:10px 24px;">Accept &amp; Mine</button>
+    </div>
   </div>
 </div>
 
@@ -991,6 +1011,7 @@ function preloadImages() {
   document.getElementById('day-num').textContent      = c.day_num || 1;
   document.getElementById('day-controls').style.display = isGM ? 'flex' : 'none';
   document.getElementById('start-mining-btn').style.display = isGM ? 'inline-block' : 'none';
+  document.getElementById('clear-mining-btn').style.display = isGM ? 'inline-block' : 'none';
 
   try {
     await Promise.all([loadShip(), loadCrew(), loadCargo(), loadInitiative(), loadQuests(), loadNPCs(), loadLog(), loadDiceHistory(), loadMiningSessions()]);
@@ -2781,11 +2802,15 @@ function openStartMining() {
   if (!isGM) return;
   selectedMiningAsteroids = [];
   showError('mining-start-error', '');
-  const sel = document.getElementById('mining-char-select');
+  const picker = document.getElementById('mining-char-picker');
   const withChar = crewData.filter(m => m.characters);
-  sel.innerHTML = withChar.length
-    ? withChar.map(m => `<option value="${m.characters.id}">${esc(m.characters.name)} (${esc(m.profiles?.display_name || m.profiles?.username || '?')})</option>`).join('')
-    : '<option value="">No characters assigned yet</option>';
+  picker.innerHTML = withChar.length
+    ? withChar.map(m => `
+        <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; cursor:pointer;">
+          <input type="checkbox" class="mining-char-cb" value="${m.characters.id}">
+          ${esc(m.characters.name)} <span style="color:var(--text-faint);">(${esc(m.profiles?.display_name || m.profiles?.username || '?')})</span>
+        </label>`).join('')
+    : '<div style="color:var(--text-faint);font-size:12px;">No crew have characters assigned yet.</div>';
   document.getElementById('mining-asteroid-picker').innerHTML = ASTEROID_PRESETS.map(a => `
     <div class="hull-card" data-key="${a.key}" onclick="toggleAsteroidPick('${a.key}')" style="padding:8px; text-align:center; cursor:pointer;">
       <div class="hull-card-name" style="font-size:11.5px;">${esc(a.name)}</div>
@@ -2804,15 +2829,25 @@ function toggleAsteroidPick(key) {
 }
 
 async function sendMiningExpedition() {
-  const charId = document.getElementById('mining-char-select').value;
-  if (!charId) return showError('mining-start-error', 'Pick a crew member with a character assigned.');
+  const charIds = [...document.querySelectorAll('.mining-char-cb:checked')].map(cb => cb.value);
+  if (!charIds.length) return showError('mining-start-error', 'Pick at least one crew member.');
   if (selectedMiningAsteroids.length < 2) return showError('mining-start-error', 'Offer at least 2 asteroids.');
-  const { error } = await db.from('mining_sessions').insert({
-    campaign_id: campaignId, character_id: charId, status: 'pending',
+  const rows = charIds.map(cid => ({
+    campaign_id: campaignId, character_id: cid, status: 'pending',
     offered_asteroids: selectedMiningAsteroids, created_by: currentUser.id,
-  });
+  }));
+  const { error } = await db.from('mining_sessions').insert(rows);
   if (error) return showError('mining-start-error', error.message);
   closeModal('modal-start-mining');
+  await loadMiningSessions();
+}
+
+async function clearMiningHistory() {
+  if (!isGM) return;
+  const finished = miningSessions.filter(s => s.status === 'completed' || s.status === 'aborted');
+  if (!finished.length) return alert('No finished expeditions to clear.');
+  if (!confirm(`Clear ${finished.length} finished expedition${finished.length===1?'':'s'} from the list?`)) return;
+  await db.from('mining_sessions').delete().in('id', finished.map(s => s.id));
   await loadMiningSessions();
 }
 
@@ -2823,9 +2858,40 @@ async function loadMiningSessions() {
     .select('*,characters(name)')
     .eq('campaign_id', campaignId)
     .order('created_at', { ascending: false })
-    .limit(20);
+    .limit(40);
   miningSessions = data || [];
   renderMiningSessions();
+  checkMiningInvites();
+}
+
+// ── Player-facing "you've been invited to mine" popup ─────────────
+let miningInvitePromptedIds = new Set();
+function checkMiningInvites() {
+  if (!myCharacterId) return;
+  if (document.getElementById('modal-mining-game').classList.contains('open')) return;
+  if (document.getElementById('modal-mining-invite').classList.contains('open')) return;
+  const pending = miningSessions.find(s => s.character_id === myCharacterId && s.status === 'pending' && !miningInvitePromptedIds.has(s.id));
+  if (!pending) return;
+  miningInvitePromptedIds.add(pending.id);
+  const offeredNames = (pending.offered_asteroids || []).map(k => ASTEROID_PRESETS.find(a => a.key === k)?.name || k);
+  document.getElementById('mining-invite-body').innerHTML = `
+    <p style="margin:0 0 10px;">The GM has sent your character out on a mining expedition. Pick an asteroid, grab a tool, and start digging for ore.</p>
+    <div style="font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px;">Asteroids on offer</div>
+    <div style="display:flex; flex-wrap:wrap; gap:6px;">${offeredNames.map(n => `<span style="font-size:11px; padding:2px 8px; border-radius:4px; background:var(--surface2); border:1px solid var(--border);">${esc(n)}</span>`).join('')}</div>`;
+  document.getElementById('modal-mining-invite').dataset.sessionId = pending.id;
+  openModal('modal-mining-invite');
+}
+function acceptMiningInvite() {
+  const id = document.getElementById('modal-mining-invite').dataset.sessionId;
+  closeModal('modal-mining-invite');
+  beginMiningSession(id);
+}
+async function denyMiningInvite() {
+  const id = document.getElementById('modal-mining-invite').dataset.sessionId;
+  closeModal('modal-mining-invite');
+  if (!id) return;
+  await db.from('mining_sessions').update({ status: 'aborted' }).eq('id', id);
+  await loadMiningSessions();
 }
 
 function renderMiningSessions() {
@@ -2886,15 +2952,34 @@ function beginMiningSession(sessionId) {
       <div style="font-size:10px; color:var(--text-dim);">${cap(a.hardness)} · DR ${a.dr}${a.rareChance ? ` · <span style="color:#ffaa00;">${Math.round(a.rareChance*100)}% rare shot</span>` : ''}</div>
     </div>`).join('') || '<div style="color:var(--text-faint);font-size:12px;">No asteroids were offered.</div>';
 
-  const tools = myInventoryItems.filter(i => i.item_type === 'tool' && i.mining_modifier != null);
-  document.getElementById('mining-setup-tools').innerHTML = tools.length ? tools.map(t => `
+  miningGame.toolRows = myInventoryItems.filter(isMiningToolRow).map(resolveMiningTool);
+  document.getElementById('mining-setup-tools').innerHTML = miningGame.toolRows.length ? miningGame.toolRows.map(t => `
     <div class="mining-pick-card" data-id="${t.id}" onclick="pickMiningTool('${t.id}')">
       <div style="font-weight:700; font-size:12px;">${esc(t.name)}</div>
       <div style="font-size:10px; color:var(--text-faint); margin:3px 0;">${t.quantity > 1 ? `×${t.quantity} · ` : ''}Roll ${t.mining_modifier >= 0 ? '+' : ''}${t.mining_modifier} · ${t.mining_size}×${t.mining_size} blast</div>
       <div style="font-size:10px; color:var(--text-dim);">Charges: ${t.mining_max_charges} · Best vs ${t.mining_best_against}</div>
-    </div>`).join('') : '<div style="color:var(--text-faint);font-size:12px;">No mining tools in your inventory.</div>';
+    </div>`).join('') : '<div style="color:var(--text-faint);font-size:12px;">No mining tools in your inventory. Buy one from the item catalog (every character also starts with a Hand Pickaxe).</div>';
 
   openModal('modal-mining-game');
+}
+
+// A row is a usable mining tool if it carries mining stats, or if its name matches a
+// catalog mining tool (covers rows created before the mining_* columns existed, or
+// copied through take/send flows that may have dropped the stats).
+function isMiningToolRow(row) {
+  if (row.item_type !== 'tool') return false;
+  if (row.mining_modifier != null) return true;
+  return ITEM_CATALOG.some(i => i.subcategory === 'mining_tool' && i.name === row.name);
+}
+function resolveMiningTool(row) {
+  const cat = ITEM_CATALOG.find(i => i.subcategory === 'mining_tool' && i.name === row.name);
+  return {
+    id: row.id, name: row.name, quantity: row.quantity || 1,
+    mining_modifier:    row.mining_modifier    != null ? row.mining_modifier    : (cat ? cat.miningModifier   : 0),
+    mining_size:        row.mining_size        != null ? row.mining_size        : (cat ? cat.miningSize       : 1),
+    mining_max_charges: row.mining_max_charges != null ? row.mining_max_charges : (cat ? cat.miningMaxCharges : 30),
+    mining_best_against: row.mining_best_against || (cat ? cat.miningBestAgainst : 'soft'),
+  };
 }
 
 function pickMiningAsteroid(key) {
@@ -2902,7 +2987,7 @@ function pickMiningAsteroid(key) {
   document.querySelectorAll('#mining-setup-asteroids .mining-pick-card').forEach(el => el.classList.toggle('selected', el.dataset.key === key));
 }
 function pickMiningTool(id) {
-  miningGame.tool = myInventoryItems.find(i => i.id === id);
+  miningGame.tool = (miningGame.toolRows || []).find(i => i.id === id);
   document.querySelectorAll('#mining-setup-tools .mining-pick-card').forEach(el => el.classList.toggle('selected', el.dataset.id === id));
 }
 
@@ -2996,35 +3081,108 @@ function buildMiningGrid() {
   miningGame.veins = veins;
 }
 
+const MINING_PEBBLE_COUNT = 12;
+const MINING_ROCK_COLORS = ['#5e453b','#48352b','#7a5b4f','#3c2c25','#574136','#694a3d','#523a31','#40322a','#4d372c','#5c3a21','#6f4e37','#3b2f2f'];
+
 function renderMiningGrid() {
   const el = document.getElementById('mining-grid-el');
   el.innerHTML = '';
   for (let y = 0; y < MINING_GRID_SIZE; y++) {
     for (let x = 0; x < MINING_GRID_SIZE; x++) {
+      const t = miningGame.tiles[y][x];
       const tile = document.createElement('div');
       tile.className = 'mining-tile';
       tile.id = `mining-tile-${x}-${y}`;
       tile.onclick = () => strikeMiningTile(x, y);
+
+      // z0: hidden loot art (revealed as pebbles peel away)
+      const lootBg = document.createElement('div');
+      lootBg.className = 'mining-loot-bg';
+      lootBg.id = `mining-loot-${x}-${y}`;
+      if (t.vein) lootBg.innerHTML = catalogIconHtml(t.vein.item.icon, 44);
+      tile.appendChild(lootBg);
+
+      // z20+: organic rock pebble cover
+      const cover = document.createElement('div');
+      cover.className = 'mining-cover';
+      cover.id = `mining-cover-${x}-${y}`;
+      generateMiningPebbles(cover, x, y);
+      tile.appendChild(cover);
+
       el.appendChild(tile);
-      paintMiningTile(x, y);
     }
   }
 }
 
+function generateMiningPebbles(container, x, y) {
+  for (let i = 0; i < MINING_PEBBLE_COUNT; i++) {
+    const p = document.createElement('div');
+    p.className = 'mining-pebble';
+    p.id = `mining-pebble-${x}-${y}-${i}`;
+    const size = Math.floor(Math.random() * 40) + 95;    // 95%–135% (overflows tile organically)
+    const left = Math.floor(Math.random() * 80) - 40;
+    const top  = Math.floor(Math.random() * 80) - 40;
+    const col  = MINING_ROCK_COLORS[Math.floor(Math.random() * MINING_ROCK_COLORS.length)];
+    p.style.width = size + '%';
+    p.style.height = size + '%';
+    p.style.left = left + '%';
+    p.style.top = top + '%';
+    p.style.backgroundColor = col;
+    p.dataset.color = col;
+    p.style.zIndex = Math.floor(Math.random() * 10) + 21;
+    p.style.transform = `rotate(${Math.floor(Math.random()*360)}deg)`;
+    container.appendChild(p);
+  }
+}
+
+// Peel the rubble cover on a tile to match its current HP, exploding freshly-cleared pebbles.
 function paintMiningTile(x, y) {
   const t = miningGame.tiles[y][x];
-  const el = document.getElementById(`mining-tile-${x}-${y}`);
-  if (!el) return;
-  const fraction = t.hp / t.maxHp;
+  const tileEl = document.getElementById(`mining-tile-${x}-${y}`);
+  const cover = document.getElementById(`mining-cover-${x}-${y}`);
+  if (!tileEl || !cover) return;
+
+  const fraction = Math.max(0, t.hp / t.maxHp);
+  const visibleCount = Math.ceil(fraction * MINING_PEBBLE_COUNT);
+
+  for (let i = 0; i < MINING_PEBBLE_COUNT; i++) {
+    const p = document.getElementById(`mining-pebble-${x}-${y}-${i}`);
+    if (!p) continue;
+    if (i >= visibleCount) {
+      if (p.style.opacity !== '0') {
+        p.style.opacity = '0';
+        p.style.transform = `scale(0) translate(${(Math.random()-0.5)*120}px, ${(Math.random()-0.5)*120}px) rotate(${Math.random()*360}deg)`;
+        spawnMiningParticles(tileEl, p.dataset.color);
+      }
+    } else {
+      p.style.filter = `brightness(${0.35 + fraction * 0.65})`;
+    }
+  }
+
   if (t.hp <= 0) {
-    el.classList.add('cleared');
-    el.classList.remove('hotspot');
-    const shown = t.vein && t.vein.uncovered ? catalogIconHtml(t.vein.item.icon, 26) : '';
-    el.innerHTML = shown;
-    el.style.background = '#05070d';
-  } else {
-    const brightness = 0.25 + fraction * 0.55;
-    el.style.background = `rgb(${Math.round(90*brightness)}, ${Math.round(65*brightness)}, ${Math.round(50*brightness)})`;
+    tileEl.classList.add('cleared');
+    tileEl.classList.remove('hotspot');
+    cover.style.opacity = '0';
+    cover.style.transform = 'scale(0)';
+    if (t.vein && t.vein.uncovered) {
+      const lootBg = document.getElementById(`mining-loot-${x}-${y}`);
+      if (lootBg) lootBg.classList.add('uncovered');
+    }
+  }
+}
+
+function spawnMiningParticles(tileEl, color) {
+  for (let i = 0; i < 8; i++) {
+    const part = document.createElement('div');
+    part.className = 'mining-particle';
+    part.style.setProperty('--dx', ((Math.random()-0.5)*70) + 'px');
+    part.style.setProperty('--dy', ((Math.random()-0.5)*70) + 'px');
+    part.style.setProperty('--rot', (Math.random()*360) + 'deg');
+    const s = (Math.random()*5 + 3) + 'px';
+    part.style.width = s; part.style.height = s;
+    part.style.background = color || '#5e453b';
+    tileEl.appendChild(part);
+    setTimeout(() => part.remove(), 500);
   }
 }
 
@@ -3054,15 +3212,31 @@ async function strikeMiningTile(x, y) {
   miningGame.charges--;
   updateMiningChargeDisplay();
 
+  // Spinning on-tile d20 that lands on the rolled value before damage resolves.
   const roll = Math.floor(Math.random() * 20) + 1;
+  const tileEl = document.getElementById(`mining-tile-${x}-${y}`);
+  const d20 = document.createElement('div');
+  d20.className = 'mining-d20 spinning';
+  d20.textContent = 'd20';
+  tileEl.appendChild(d20);
+  await miningSleep(550);
+  d20.classList.remove('spinning');
+  d20.textContent = roll;
+  await miningSleep(420);
+  d20.remove();
+
   const tool = miningGame.tool;
   const ast = miningGame.asteroid;
 
+  const shaker = document.getElementById('mining-grid-el');
+  shaker.classList.add('mining-shake');
+  setTimeout(() => shaker.classList.remove('mining-shake'), 250);
+
   if (roll === 1) {
-    document.getElementById('mining-tile-'+x+'-'+y).classList.add('jammed');
+    tileEl.classList.add('jammed');
     spawnMiningFloatText(x, y, 'JAMMED!', '#ff6666');
     document.getElementById('mining-status-line').textContent = `Nat 1 — drill jammed. 0 damage.`;
-    setTimeout(() => document.getElementById('mining-tile-'+x+'-'+y)?.classList.remove('jammed'), 300);
+    setTimeout(() => tileEl.classList.remove('jammed'), 300);
   } else if (roll === 20) {
     spawnMiningFloatText(x, y, 'CRIT!', '#ffcc00');
     document.getElementById('mining-status-line').textContent = `Nat 20 — full ${tool.mining_size}×${tool.mining_size} blast obliterated!`;
@@ -3078,6 +3252,8 @@ async function strikeMiningTile(x, y) {
   miningGame.locked = false;
   await checkMiningTermination();
 }
+
+function miningSleep(ms) { return new Promise(res => setTimeout(res, ms)); }
 
 function applyMiningBlast(cx, cy, size, instantClear, damage) {
   const offset = Math.floor(size / 2);
@@ -3142,14 +3318,22 @@ async function finishMiningExpedition(victory) {
     }).join('') + `<div style="display:flex; justify-content:space-between; font-weight:800; font-size:12.5px; padding-top:4px; border-top:1px solid var(--border);"><span>Total</span><span>${total.toLocaleString()}¢</span></div>`;
   }
 
-  // Write loot into the player's personal inventory.
+  // Write loot into the player's personal inventory. Aggregate identical finds first so
+  // e.g. two Ferrite Ore land as one row of quantity 2 rather than two separate rows —
+  // stackOrInsertMyInventoryItem reads myInventoryItems, which isn't reloaded mid-loop.
+  const lootByName = new Map();
   for (const item of miningGame.foundLoot) {
+    const e = lootByName.get(item.name);
+    if (e) e.qty++;
+    else lootByName.set(item.name, { item, qty: 1 });
+  }
+  for (const { item, qty } of lootByName.values()) {
     await stackOrInsertMyInventoryItem({
       character_id: myCharacterId, name: item.name,
       item_type: item.category === 'mineral' ? 'mineral' : 'misc',
       weight: item.weight || 0, value: item.value || 0, description: item.desc || '',
       icon_path: typeof item.icon === 'string' ? item.icon : JSON.stringify(item.icon),
-    }, 1);
+    }, qty);
   }
   await db.from('mining_sessions').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', miningGame.session.id);
   await Promise.all([loadMiningSessions(), loadMyInventory()]);
@@ -3248,10 +3432,34 @@ let cargoItems = [], myInventoryItems = [], myInventoryCharId = null;
 
 async function loadCargo() {
   const { data } = await db.from('campaign_cargo').select('*').eq('campaign_id', campaignId).order('created_at');
-  cargoItems = data || [];
+  cargoItems = await mergeDuplicateInventoryRows('campaign_cargo', data || []);
   document.getElementById('cargo-count-lbl').textContent = cargoItems.length ? `${cargoItems.length} item${cargoItems.length===1?'':'s'}` : '—';
   renderCargo();
   await loadMyInventory();
+}
+
+// Collapse any pre-existing duplicate rows (same name + item_type) into a single
+// quantity-stacked row. Historically some flows inserted duplicates before stacking
+// existed; this heals them in place the next time the list loads.
+async function mergeDuplicateInventoryRows(table, rows) {
+  const groups = new Map();
+  for (const r of rows) {
+    const k = (r.name || '') + ' ' + (r.item_type || '');
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r);
+  }
+  const merged = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) { merged.push(group[0]); continue; }
+    const keeper = group[0];
+    const totalQty = group.reduce((s, r) => s + (r.quantity || 1), 0);
+    const extraIds = group.slice(1).map(r => r.id);
+    await db.from(table).update({ quantity: totalQty }).eq('id', keeper.id);
+    await db.from(table).delete().in('id', extraIds);
+    keeper.quantity = totalQty;
+    merged.push(keeper);
+  }
+  return merged;
 }
 
 function cargoItemRow(item, actionsHtml) {
@@ -3269,7 +3477,10 @@ function cargoItemRow(item, actionsHtml) {
 function renderCargo() {
   const list = document.getElementById('cargo-list');
   if (!cargoItems.length) { list.innerHTML = '<div style="color:var(--text-faint);font-size:12px;">Cargo hold is empty.</div>'; return; }
-  list.innerHTML = cargoItems.map(item => cargoItemRow(item, `
+  const q = (document.getElementById('cargo-search')?.value || '').trim().toLowerCase();
+  const items = q ? cargoItems.filter(i => (i.name||'').toLowerCase().includes(q)) : cargoItems;
+  if (!items.length) { list.innerHTML = '<div style="color:var(--text-faint);font-size:12px;">No items match your search.</div>'; return; }
+  list.innerHTML = items.map(item => cargoItemRow(item, `
     ${myInventoryCharId ? `<button class="cargo-btn" onclick="takeCargoItem('${item.id}')">Take</button>` : ''}
     <button class="cargo-btn danger" onclick="deleteCargoItem('${item.id}')">🗑</button>
   `)).join('');
@@ -3278,25 +3489,37 @@ function renderCargo() {
 async function loadMyInventory() {
   myInventoryCharId = myCharacterId;
   const lbl = document.getElementById('my-inv-char-lbl');
-  const list = document.getElementById('my-inventory-list');
   if (!myCharacterId) {
     lbl.textContent = '—';
-    list.innerHTML = '<div style="color:var(--text-faint);font-size:12px;">Assign yourself a character ("My Character") to manage a personal inventory.</div>';
+    myInventoryItems = [];
+    renderMyInventory();
     renderCargo();
     return;
   }
   const { data: c } = await db.from('characters').select('name').eq('id', myCharacterId).single();
   lbl.textContent = c?.name || '';
   const { data } = await db.from('character_inventory').select('*').eq('character_id', myCharacterId).order('created_at');
-  myInventoryItems = data || [];
+  myInventoryItems = await mergeDuplicateInventoryRows('character_inventory', data || []);
+  renderMyInventory();
+  renderCargo();
+}
+
+function renderMyInventory() {
+  const list = document.getElementById('my-inventory-list');
+  if (!myCharacterId) {
+    list.innerHTML = '<div style="color:var(--text-faint);font-size:12px;">Assign yourself a character ("My Character") to manage a personal inventory.</div>';
+    return;
+  }
   if (!myInventoryItems.length) {
     list.innerHTML = '<div style="color:var(--text-faint);font-size:12px;">No items — send some to your inventory from the Cargo Hold, or take some from it below.</div>';
-  } else {
-    list.innerHTML = myInventoryItems.map(item => cargoItemRow(item, `
-      <button class="cargo-btn" onclick="sendToCargo('${item.id}')">Send to Hold</button>
-    `)).join('');
+    return;
   }
-  renderCargo();
+  const q = (document.getElementById('my-inv-search')?.value || '').trim().toLowerCase();
+  const items = q ? myInventoryItems.filter(i => (i.name||'').toLowerCase().includes(q)) : myInventoryItems;
+  if (!items.length) { list.innerHTML = '<div style="color:var(--text-faint);font-size:12px;">No items match your search.</div>'; return; }
+  list.innerHTML = items.map(item => cargoItemRow(item, `
+    <button class="cargo-btn" onclick="sendToCargo('${item.id}')">Send to Hold</button>
+  `)).join('');
 }
 
 // Stack onto a matching row (same name + type) instead of creating a duplicate line.
@@ -3322,6 +3545,7 @@ async function takeCargoItem(id) {
     weight: item.weight, value: item.value, description: item.description,
     icon_path: item.icon_path, diet_tag: item.diet_tag,
     damage_dice: item.damage_dice, accuracy_mod: item.accuracy_mod, range_m: item.range_m, armor_dr: item.armor_dr,
+    mining_modifier: item.mining_modifier, mining_size: item.mining_size, mining_max_charges: item.mining_max_charges, mining_best_against: item.mining_best_against,
   }, item.quantity);
   if (insErr) return alert('Failed to take item: ' + insErr.message);
   const { error: delErr } = await db.from('campaign_cargo').delete().eq('id', id);
@@ -3337,6 +3561,7 @@ async function sendToCargo(itemId) {
     weight: item.weight, value: item.value, description: item.description,
     icon_path: item.icon_path, diet_tag: item.diet_tag, armor_dr: item.armor_dr,
     damage_dice: item.damage_dice, accuracy_mod: item.accuracy_mod, range_m: item.range_m,
+    mining_modifier: item.mining_modifier, mining_size: item.mining_size, mining_max_charges: item.mining_max_charges, mining_best_against: item.mining_best_against,
     added_by: currentUser.id,
   }, item.quantity);
   if (insErr) return alert('Failed to send item to hold: ' + insErr.message);
