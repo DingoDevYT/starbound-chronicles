@@ -453,6 +453,9 @@
         <div class="map-toolbar" style="flex-wrap:wrap;">
           <div id="combat-status" style="font-size:12px; color:var(--text-dim); flex:1; min-width:160px;">No active battle.</div>
           <button class="btn-ghost" id="combat-ruler-btn" onclick="toggleRuler()" style="padding:4px 10px; font-size:11px;" title="Measure distance & AD">📏 Ruler</button>
+          <button class="btn-ghost" onclick="cbZoomStep(1.2)" style="padding:4px 10px;">+</button>
+          <button class="btn-ghost" onclick="cbZoomStep(1/1.2)" style="padding:4px 10px;">−</button>
+          <button class="btn-ghost" onclick="recenterCombatView()" style="padding:4px 10px; font-size:11px;" title="Reset zoom/pan and frame every combatant">🎯 Recenter</button>
           <button class="btn-secondary" id="combat-turn-btn" onclick="nextTurn()" style="padding:4px 12px; font-size:11px; display:none;">Next Turn ▸</button>
           <button class="btn-secondary" id="combat-start-btn" onclick="openStartCombat()" style="padding:4px 12px; font-size:11px; display:none;">Start Combat</button>
           <button class="btn-ghost" id="combat-end-btn" onclick="endCombat()" style="padding:4px 12px; font-size:11px; display:none; color:#ff8888;">End Combat</button>
@@ -649,6 +652,13 @@
     <div class="modal-header"><span class="modal-title">Add Combatant</span><button class="modal-close" onclick="closeModal('modal-add-init')">✕</button></div>
     <div class="modal-body">
       <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="init-name-inp" placeholder="e.g. Zara Voss or Pirate Captain"></div>
+      <div class="form-group">
+        <label class="form-label">Link to Character</label>
+        <select class="form-select" id="init-char-inp">
+          <option value="">— Not linked (NPC) —</option>
+        </select>
+        <p style="font-size:10.5px; color:var(--text-faint); margin:4px 0 0;">Linking lets that player move this token and drives its Base AD/Armor from their sheet. Unlinked combatants are GM-controlled only.</p>
+      </div>
       <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;">
         <div class="form-group"><label class="form-label">Initiative</label><input class="form-input" id="init-val-inp" type="number" placeholder="Roll d20+mod"></div>
         <div class="form-group"><label class="form-label">HP</label><input class="form-input" id="init-hp-inp" type="number" placeholder="Max HP"></div>
@@ -658,6 +668,10 @@
             <option value="true">NPC</option>
           </select>
         </div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group"><label class="form-label">Base AD</label><input class="form-input" id="init-ad-inp" type="number" placeholder="e.g. 8"></div>
+        <div class="form-group"><label class="form-label">Armor</label><input class="form-input" id="init-armor-inp" type="number" placeholder="Flat damage cut"></div>
       </div>
       <div class="form-error" id="init-error"></div>
     </div>
@@ -995,6 +1009,7 @@ function preloadImages() {
   const { data: c } = await db.from('campaigns').select('*').eq('id', campaignId).single();
   if (!c) return location.href = 'dashboard.html';
   campaign = c; isGM = c.owner_id === currentUser.id;
+  if (c.combat_state?.activeTurn != null) activeTurn = c.combat_state.activeTurn;
 
   let { data: myMembership } = await db.from('campaign_members')
     .select('character_id').eq('campaign_id', campaignId).eq('user_id', currentUser.id).maybeSingle();
@@ -1039,6 +1054,10 @@ function preloadImages() {
         campaign = p.new;
         document.getElementById('round-lbl').textContent = 'Round ' + (p.new.round_num || 0);
         document.getElementById('day-num').textContent = p.new.day_num || 1;
+        // activeTurn lives inside combat_state so this same broadcast (which every
+        // client already receives) is what makes turn order visible to everyone,
+        // not just the GM whose browser originally advanced it.
+        if (p.new.combat_state?.activeTurn != null) activeTurn = p.new.combat_state.activeTurn;
         if (shipViewMode === 'map') redrawSpaceMap();
         if (shipViewMode === 'combat') { refreshCombatUI(); drawCombatMap(); }
         renderETAWidget();
@@ -3871,6 +3890,17 @@ async function toggleReveal(id, revealed) {
   await db.from('initiative_tracker').update({ revealed }).eq('id', id);
 }
 
+// Populates the "Link to Character" dropdown from the crew roster — this is the fix for
+// combatants that can never be moved by their own player: any combatant added without a
+// character_id (the old manual-add flow always did this) can never match a player's
+// myCharacterId, permanently locking them out of dragging what's meant to be their token.
+function populateCombatantCharPicker(selectedId) {
+  const sel = document.getElementById('init-char-inp');
+  const withChar = crewData.filter(m => m.characters);
+  sel.innerHTML = '<option value="">— Not linked (NPC) —</option>' +
+    withChar.map(m => `<option value="${m.characters.id}" ${m.characters.id === selectedId ? 'selected' : ''}>${esc(m.characters.name)}</option>`).join('');
+}
+
 function openAddCombatant() {
   editingCombatantId = null;
   document.getElementById('modal-add-init').querySelector('.modal-title').textContent = 'Add Combatant';
@@ -3879,6 +3909,9 @@ function openAddCombatant() {
   document.getElementById('init-val-inp').value  = '';
   document.getElementById('init-hp-inp').value   = '';
   document.getElementById('init-npc-inp').value  = 'false';
+  document.getElementById('init-ad-inp').value = '';
+  document.getElementById('init-armor-inp').value = '';
+  populateCombatantCharPicker(null);
   showError('init-error','');
   openModal('modal-add-init');
 }
@@ -3892,6 +3925,9 @@ function openEditCombatant(id) {
   document.getElementById('init-val-inp').value  = c.initiative;
   document.getElementById('init-hp-inp').value   = c.hp_max ?? c.hp_current ?? '';
   document.getElementById('init-npc-inp').value  = c.is_npc ? 'true' : 'false';
+  document.getElementById('init-ad-inp').value = c.character_id ? '' : (c.base_ad ?? '');
+  document.getElementById('init-armor-inp').value = c.character_id ? '' : (c.armor ?? '');
+  populateCombatantCharPicker(c.character_id || null);
   showError('init-error','');
   openModal('modal-add-init');
 }
@@ -3899,14 +3935,36 @@ function openEditCombatant(id) {
 async function saveCombatant() {
   const name = document.getElementById('init-name-inp').value.trim();
   const init = parseInt(document.getElementById('init-val-inp').value) || 0;
-  const hp   = parseInt(document.getElementById('init-hp-inp').value)  || null;
+  const hpInput = parseInt(document.getElementById('init-hp-inp').value) || null;
   const isNPC = document.getElementById('init-npc-inp').value === 'true';
+  const charId = document.getElementById('init-char-inp').value || null;
   showError('init-error','');
   if (!name) return showError('init-error','Enter a name.');
-  if (editingCombatantId) {
-    await db.from('initiative_tracker').update({ combatant:name, initiative:init, hp_max:hp, is_npc:isNPC }).eq('id', editingCombatantId);
+
+  const payload = { combatant:name, initiative:init, is_npc:isNPC, character_id:charId, hp_max:hpInput };
+
+  if (charId) {
+    // Linked to a real character — derive combat stats from their sheet, same as "Add All Crew".
+    const { data: ch } = await db.from('characters').select('species,speed,stats,hp_current,hp_max').eq('id', charId).single();
+    if (ch) {
+      payload.base_ad   = SPECIES_BASE_AD[ch.species] ?? 8;
+      payload.fight_mod = Math.floor(((ch.stats?.fight ?? 10) - 10) / 2);
+      payload.speed     = ch.speed ?? 30;
+      payload.hp_max    = hpInput ?? ch.hp_max ?? null;
+      if (!editingCombatantId) payload.hp_current = ch.hp_current ?? payload.hp_max;
+    }
   } else {
-    await db.from('initiative_tracker').insert({ campaign_id:campaignId, combatant:name, initiative:init, hp_current:hp, hp_max:hp, is_npc:isNPC });
+    const adVal = document.getElementById('init-ad-inp').value;
+    const armorVal = document.getElementById('init-armor-inp').value;
+    if (adVal !== '') payload.base_ad = parseInt(adVal) || 0;
+    if (armorVal !== '') payload.armor = parseInt(armorVal) || 0;
+    if (!editingCombatantId) payload.hp_current = hpInput;
+  }
+
+  if (editingCombatantId) {
+    await db.from('initiative_tracker').update(payload).eq('id', editingCombatantId);
+  } else {
+    await db.from('initiative_tracker').insert({ campaign_id:campaignId, ...payload });
   }
   closeModal('modal-add-init');
 }
@@ -3928,13 +3986,23 @@ async function removeCombatant(id) {
 
 async function nextTurn() {
   activeTurn++;
+  const updates = { round_num: campaign.round_num };
   if (activeTurn >= combatants.length) {
     activeTurn = 0;
-    const newRound = (campaign.round_num || 0) + 1;
-    await db.from('campaigns').update({ round_num: newRound }).eq('id', campaignId);
-    campaign.round_num = newRound;
-    document.getElementById('round-lbl').textContent  = 'Round ' + newRound;
+    updates.round_num = (campaign.round_num || 0) + 1;
   }
+  // Persist activeTurn into combat_state so the existing campaigns-UPDATE realtime
+  // handler (which every client already listens to) broadcasts whose turn it is —
+  // previously this only lived in a local variable, so nobody but the GM ever saw
+  // the turn change.
+  const st = combatState();
+  if (st.active) {
+    updates.combat_state = { ...st, activeTurn };
+    campaign.combat_state = updates.combat_state;
+  }
+  campaign.round_num = updates.round_num;
+  document.getElementById('round-lbl').textContent = 'Round ' + updates.round_num;
+  await db.from('campaigns').update(updates).eq('id', campaignId);
   renderInitiative();
   if (combatState().active) { refreshCombatUI(); drawCombatMap(); }
 }
@@ -4096,7 +4164,7 @@ async function startCombat() {
   const obstacles = selectedCombatType === 'space' ? preset.obstacles : generateObstacles(preset.w, preset.h, preset.density);
   const state = {
     active: true, type: selectedCombatType, map: selectedCombatMap,
-    w: preset.w, h: preset.h, obstacles, biome: preset.biome || null,
+    w: preset.w, h: preset.h, obstacles, biome: preset.biome || null, activeTurn: 0,
   };
   // Cluster every current combatant near the centre so the GM can drag them out.
   const cx = Math.floor(preset.w / 2), cy = Math.floor(preset.h / 2);
@@ -4114,7 +4182,8 @@ async function startCombat() {
   campaign.combat_state = state;
   closeModal('modal-start-combat');
   await loadInitiative();
-  refreshCombatUI(); drawCombatMap();
+  refreshCombatUI();
+  recenterCombatView(); // frames the camera on the freshly-clustered tokens and draws
 }
 
 async function endCombat() {
@@ -4178,9 +4247,16 @@ async function renderCheatSheet(c) {
 // ── Combat canvas ────────────────────────────────────────────────
 const combatCanvas = document.getElementById('combat-canvas');
 const combatCtx = combatCanvas.getContext('2d');
-let cbScale = 1, cbOffX = 0, cbOffY = 0, cbCell = 1;
+let cbOffX = 0, cbOffY = 0, cbCell = 1;
 let cbDragToken = null, cbDragOff = {x:0,y:0}, cbJustDragged = false;
 let rulerActive = false, rulerStart = null, rulerEnd = null;
+
+// Boundless camera — the grid itself has no edges; these describe what part of it is
+// currently on screen. Purely local per-viewer state (never written to the DB), same
+// convention as the Ship tab's own pan/zoom (shipUserZoom/shipUserPanX/Y).
+const CB_BASE_CELL = 44;
+let cbCamX = 0, cbCamY = 0, cbUserZoom = 1, cbUserPanPxX = 0, cbUserPanPxY = 0;
+let cbPanning = false, cbPanStartX = 0, cbPanStartY = 0, cbPanStartPanX = 0, cbPanStartPanY = 0;
 
 function combatPoint(e) {
   const rect = combatCanvas.getBoundingClientRect();
@@ -4209,22 +4285,29 @@ function drawCombatMap() {
     return;
   }
 
+  // gw/gh describe the size of the original obstacle scatter footprint at combat start —
+  // no longer used to clamp or size anything, since the grid itself is boundless. The
+  // camera (cbCamX/Y, in world-cell units) plus zoom/pan determine what's on screen.
   const gw = st.w, gh = st.h;
-  const pad = 16;
-  cbCell = Math.min((W - pad*2) / gw, (H - pad*2) / gh);
-  cbOffX = (W - gw * cbCell) / 2;
-  cbOffY = (H - gh * cbCell) / 2;
   const isSpace = st.type === 'space';
+  cbCell = CB_BASE_CELL * cbUserZoom;
+  cbOffX = W/2 - cbCamX*cbCell + cbUserPanPxX;
+  cbOffY = H/2 - cbCamY*cbCell + cbUserPanPxY;
+
+  // Visible world-cell range, for drawing ground/grid across whatever's on screen
+  // instead of a fixed w*h rect.
+  const visX0 = Math.floor((0 - cbOffX) / cbCell) - 1, visX1 = Math.ceil((W - cbOffX) / cbCell) + 1;
+  const visY0 = Math.floor((0 - cbOffY) / cbCell) - 1, visY1 = Math.ceil((H - cbOffY) / cbCell) + 1;
 
   // Flat biome-tinted ground for on-foot maps, with a subtle per-cell alternating shade
   // for texture (see BIOME_GROUND above for why this replaced the old tiled-sheet fill).
   if (!isSpace) {
     const ground = BIOME_GROUND[st.biome] || BIOME_GROUND.grass;
     combatCtx.fillStyle = ground.base;
-    combatCtx.fillRect(cbOffX, cbOffY, gw*cbCell, gh*cbCell);
+    combatCtx.fillRect(0, 0, W, H);
     combatCtx.fillStyle = ground.alt;
-    for (let gy = 0; gy < gh; gy++) {
-      for (let gx = 0; gx < gw; gx++) {
+    for (let gy = visY0; gy <= visY1; gy++) {
+      for (let gx = visX0; gx <= visX1; gx++) {
         if (cellHash(gx, gy) > 0.5) combatCtx.fillRect(cbOffX+gx*cbCell, cbOffY+gy*cbCell, cbCell, cbCell);
       }
     }
@@ -4233,8 +4316,8 @@ function drawCombatMap() {
   // Grid
   combatCtx.strokeStyle = 'rgba(90,120,160,.14)';
   combatCtx.lineWidth = 1;
-  for (let x = 0; x <= gw; x++) { combatCtx.beginPath(); combatCtx.moveTo(cbOffX+x*cbCell, cbOffY); combatCtx.lineTo(cbOffX+x*cbCell, cbOffY+gh*cbCell); combatCtx.stroke(); }
-  for (let y = 0; y <= gh; y++) { combatCtx.beginPath(); combatCtx.moveTo(cbOffX, cbOffY+y*cbCell); combatCtx.lineTo(cbOffX+gw*cbCell, cbOffY+y*cbCell); combatCtx.stroke(); }
+  for (let x = visX0; x <= visX1; x++) { combatCtx.beginPath(); combatCtx.moveTo(cbOffX+x*cbCell, 0); combatCtx.lineTo(cbOffX+x*cbCell, H); combatCtx.stroke(); }
+  for (let y = visY0; y <= visY1; y++) { combatCtx.beginPath(); combatCtx.moveTo(0, cbOffY+y*cbCell); combatCtx.lineTo(W, cbOffY+y*cbCell); combatCtx.stroke(); }
 
   // Obstacles — space maps keep the flat asteroid-chunk circle; on-foot maps draw real
   // tree/bush/rock art from the tileset (biome-dependent), picked deterministically per
@@ -4277,7 +4360,6 @@ function drawCombatMap() {
     for (let dy = -reach; dy <= reach; dy++) for (let dx = -reach; dx <= reach; dx++) {
       if (Math.abs(dx)+Math.abs(dy) > reach) continue;                 // simple diamond range
       const gx = active.grid_x+dx, gy = active.grid_y+dy;
-      if (gx<0||gy<0||gx>=gw||gy>=gh) continue;
       if ((st.obstacles||[]).some(o => o[0]===gx && o[1]===gy)) continue;
       combatCtx.fillRect(cbOffX+gx*cbCell+1, cbOffY+gy*cbCell+1, cbCell-2, cbCell-2);
     }
@@ -4359,6 +4441,11 @@ combatCanvas.addEventListener('mousedown', e => {
     const cxp = cbOffX + c.grid_x*cbCell + cbCell/2, cyp = cbOffY + c.grid_y*cbCell + cbCell/2;
     if (Math.hypot(x-cxp, y-cyp) < cbCell*0.45) { cbDragToken = c; cbDragOff = { x:x-cxp, y:y-cyp }; combatCanvas.style.cursor='grabbing'; return; }
   }
+  // No token grabbed and not measuring — pan the boundless camera instead.
+  cbPanning = true;
+  cbPanStartX = e.clientX; cbPanStartY = e.clientY;
+  cbPanStartPanX = cbUserPanPxX; cbPanStartPanY = cbUserPanPxY;
+  combatCanvas.style.cursor = 'grabbing';
 });
 combatCanvas.addEventListener('mousemove', e => {
   if (!combatState().active) return;
@@ -4370,6 +4457,12 @@ combatCanvas.addEventListener('mousemove', e => {
     const r = cbCell*0.42;
     combatCtx.strokeStyle = '#7aaeff'; combatCtx.lineWidth = 2; combatCtx.setLineDash([4,3]);
     combatCtx.beginPath(); combatCtx.arc(x-cbDragOff.x, y-cbDragOff.y, r, 0, Math.PI*2); combatCtx.stroke(); combatCtx.setLineDash([]);
+    return;
+  }
+  if (cbPanning) {
+    cbUserPanPxX = cbPanStartPanX + (e.clientX - cbPanStartX);
+    cbUserPanPxY = cbPanStartPanY + (e.clientY - cbPanStartY);
+    drawCombatMap();
   }
 });
 combatCanvas.addEventListener('mouseup', async e => {
@@ -4378,7 +4471,7 @@ combatCanvas.addEventListener('mouseup', async e => {
     const cx = Math.round((x - cbDragOff.x - cbCell/2 - cbOffX) / cbCell);
     const cy = Math.round((y - cbDragOff.y - cbCell/2 - cbOffY) / cbCell);
     const st = combatState();
-    const blocked = (st.obstacles||[]).some(o => o[0]===cx && o[1]===cy) || cx<0||cy<0||cx>=st.w||cy>=st.h;
+    const blocked = (st.obstacles||[]).some(o => o[0]===cx && o[1]===cy);
     const tok = cbDragToken; cbDragToken = null; combatCanvas.style.cursor = rulerActive?'crosshair':'default';
     if (!blocked) {
       tok.grid_x = cx; tok.grid_y = cy;
@@ -4386,9 +4479,42 @@ combatCanvas.addEventListener('mouseup', async e => {
     }
     drawCombatMap();
     setTimeout(() => cbJustDragged = false, 30);
+    return;
   }
+  if (cbPanning) { cbPanning = false; combatCanvas.style.cursor = rulerActive ? 'crosshair' : 'default'; }
 });
-combatCanvas.addEventListener('mouseleave', () => { if (cbDragToken) { cbDragToken = null; drawCombatMap(); } });
+combatCanvas.addEventListener('mouseleave', () => {
+  if (cbDragToken) { cbDragToken = null; drawCombatMap(); }
+  cbPanning = false;
+});
+combatCanvas.addEventListener('wheel', e => {
+  if (!combatState().active) return;
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.15 : 1/1.15;
+  cbUserZoom = Math.max(0.3, Math.min(4, cbUserZoom * factor));
+  drawCombatMap();
+}, { passive:false });
+
+function cbZoomStep(factor) {
+  if (!combatState().active) return;
+  cbUserZoom = Math.max(0.3, Math.min(4, cbUserZoom * factor));
+  drawCombatMap();
+}
+
+// Recenter the boundless camera on the average position of every combatant (falling back
+// to the map's original centre if nobody has a position yet), and reset zoom/pan.
+function recenterCombatView() {
+  const positioned = combatants.filter(c => c.grid_x != null && c.grid_y != null);
+  const st = combatState();
+  if (positioned.length) {
+    cbCamX = positioned.reduce((s,c) => s + c.grid_x, 0) / positioned.length;
+    cbCamY = positioned.reduce((s,c) => s + c.grid_y, 0) / positioned.length;
+  } else {
+    cbCamX = (st.w || 26) / 2; cbCamY = (st.h || 18) / 2;
+  }
+  cbUserZoom = 1; cbUserPanPxX = 0; cbUserPanPxY = 0;
+  drawCombatMap();
+}
 
 async function clearInit() {
   if (!confirm('Clear all combatants?')) return;
