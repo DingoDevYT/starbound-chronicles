@@ -983,6 +983,69 @@
   overflow: hidden;
   border: 1px solid var(--border);
 }
+/* ─── COMBAT ATTACK FX (on-map roll/hit/damage feedback) ────────── */
+.combat-fx-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 20; }
+
+.combat-fx-d20 {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 38px; height: 38px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  border: 2px solid #40c8ff;
+  background: linear-gradient(135deg, #123a5a, #05070d);
+  box-shadow: 0 0 14px rgba(64,200,255,.8);
+  color: #fff; font-weight: 800; font-size: 14px; font-family: system-ui, sans-serif;
+  z-index: 40;
+}
+.combat-fx-d20.spinning { animation: mining-d20-spin 0.5s linear infinite; }
+.combat-fx-d20.hit  { border-color: #4acc7a; box-shadow: 0 0 14px rgba(74,204,122,.8); }
+.combat-fx-d20.miss { border-color: #ff6666; box-shadow: 0 0 14px rgba(255,102,102,.7); }
+
+.combat-fx-chip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: rgba(6,10,20,.92);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11.5px; font-weight: 700; white-space: nowrap;
+  color: #e0ecff;
+  z-index: 41;
+  animation: combat-fx-chip-in 0.25s ease;
+}
+@keyframes combat-fx-chip-in {
+  from { opacity: 0; transform: translate(-50%, -40%) scale(.8); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.combat-fx-chip.hit  { border-color: #4acc7a; color: #8ef0ae; }
+.combat-fx-chip.miss { border-color: #ff6666; color: #ffb3b3; }
+
+.combat-fx-float {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 16px; font-weight: 800; white-space: nowrap;
+  text-shadow: 0 1px 4px rgba(0,0,0,.8);
+  z-index: 42;
+  animation: mining-float-up 1.1s ease forwards;
+}
+
+.combat-fx-icon {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 41;
+  animation: combat-fx-chip-in 0.2s ease;
+  filter: drop-shadow(0 0 5px rgba(0,0,0,.6));
+}
+
+.combat-fx-particle {
+  position: absolute; top: 50%; left: 50%;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 39;
+  animation: mining-explode 0.5s cubic-bezier(.1,.8,.3,1) forwards;
+}
+
 .mining-charge-bar-fill {
   height: 100%;
   background: linear-gradient(90deg, #3a78d4, #40c8a0);

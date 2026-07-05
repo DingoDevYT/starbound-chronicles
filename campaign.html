@@ -460,7 +460,10 @@
           <button class="btn-secondary" id="combat-start-btn" onclick="openStartCombat()" style="padding:4px 12px; font-size:11px; display:none;">Start Combat</button>
           <button class="btn-ghost" id="combat-end-btn" onclick="endCombat()" style="padding:4px 12px; font-size:11px; display:none; color:#ff8888;">End Combat</button>
         </div>
-        <canvas id="combat-canvas" height="520"></canvas>
+        <div style="position:relative;">
+          <canvas id="combat-canvas" height="520"></canvas>
+          <div id="combat-fx-layer" class="combat-fx-layer"></div>
+        </div>
         <div id="combat-cheatsheet" class="combat-cheatsheet" style="display:none;"></div>
       </div>
 
@@ -4060,10 +4063,13 @@ function rect(x0,y0,x1,y1){ const o=[]; for(let y=y0;y<=y1;y++)for(let x=x0;x<=x
 // every time combat starts — density is a rough fraction of the grid, biome picks the hue/
 // saturation/brightness filter applied over the shared grass tileset (see drawCombatMap).
 const COMBAT_MAPS = {
+  // density here seeds the EXTENDED zone beyond the hand-placed w x h core (see
+  // generateExtendedObstacles) — the boundless camera can pan/fly well past the original
+  // authored layout, and empty dead space out there felt wrong for an asteroid field.
   space: {
-    open:     { label:'Open Space', w:34, h:20, obstacles:[] },
-    asteroid: { label:'Asteroid Field', w:34, h:20, obstacles:[[6,4],[7,4],[6,5],[14,10],[15,10],[15,11],[22,6],[23,6],[9,14],[10,14],[26,15],[27,15],[27,14],[19,3],[3,12]] },
-    debris:   { label:'Debris Corridor', w:34, h:20, obstacles:[...rect(10,0,11,7),...rect(22,12,23,19),[16,9],[17,10],[16,11]] },
+    open:     { label:'Open Space', w:34, h:20, obstacles:[], density:0 },
+    asteroid: { label:'Asteroid Field', w:34, h:20, obstacles:[[6,4],[7,4],[6,5],[14,10],[15,10],[15,11],[22,6],[23,6],[9,14],[10,14],[26,15],[27,15],[27,14],[19,3],[3,12]], density:0.05 },
+    debris:   { label:'Debris Corridor', w:34, h:20, obstacles:[...rect(10,0,11,7),...rect(22,12,23,19),[16,9],[17,10],[16,11]], density:0.03 },
   },
   outside: {
     open:   { label:'Open Plain',   w:26, h:18, biome:'grass',  density:0 },
@@ -4158,6 +4164,34 @@ function generateObstacles(w, h, density) {
   return obstacles;
 }
 
+// The camera is boundless, but obstacles used to only ever exist inside the original w x h
+// battlefield — panning or flying beyond it (very easy now) hit totally empty dead space,
+// including on "Asteroid Field"/"Debris Corridor" space maps where that reads as broken.
+// Scatters more hazards across a ring extending 50% further out on every side, at the same
+// density, skipping the original box entirely (on-foot keeps its own centre-clear scatter
+// there; space keeps its authored core exactly as hand-placed).
+function generateExtendedObstacles(w, h, density, existingObstacles) {
+  if (!density) return [];
+  const ext = 0.5;
+  const x0 = Math.floor(-w * ext), x1 = Math.ceil(w + w * ext);
+  const y0 = Math.floor(-h * ext), y1 = Math.ceil(h + h * ext);
+  const count = Math.round((x1 - x0) * (y1 - y0) * density);
+  const seen = new Set((existingObstacles || []).map(o => o[0] + ',' + o[1]));
+  const obstacles = [];
+  let tries = 0;
+  while (obstacles.length < count && tries < count * 20) {
+    tries++;
+    const x = x0 + Math.floor(Math.random() * (x1 - x0));
+    const y = y0 + Math.floor(Math.random() * (y1 - y0));
+    if (x >= 0 && x < w && y >= 0 && y < h) continue; // stays outside the original footprint
+    const key = x + ',' + y;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    obstacles.push([x, y]);
+  }
+  return obstacles;
+}
+
 function combatState() { return campaign?.combat_state || { active:false }; }
 
 let selectedCombatType = 'outside', selectedCombatMap = 'open';
@@ -4188,8 +4222,11 @@ async function startCombat() {
   if (!isGM) return;
   const preset = COMBAT_MAPS[selectedCombatType][selectedCombatMap];
   // Space maps use their fixed hand-placed layout; outside maps get a fresh random scatter
-  // every time, so the same "Rocky Canyon" pick never looks identical twice.
-  const obstacles = selectedCombatType === 'space' ? preset.obstacles : generateObstacles(preset.w, preset.h, preset.density);
+  // every time, so the same "Rocky Canyon" pick never looks identical twice. Either way,
+  // an extended ring of hazards gets added beyond the original footprint for the boundless
+  // camera (see generateExtendedObstacles).
+  const coreObstacles = selectedCombatType === 'space' ? preset.obstacles : generateObstacles(preset.w, preset.h, preset.density);
+  const obstacles = [...coreObstacles, ...generateExtendedObstacles(preset.w, preset.h, preset.density, coreObstacles)];
   const state = {
     active: true, type: selectedCombatType, map: selectedCombatMap,
     w: preset.w, h: preset.h, obstacles, biome: preset.biome || null, activeTurn: 0,
@@ -4335,14 +4372,24 @@ async function resolveAttack(attackerId) {
   const toHitTotal = roll + (attacker.fight_mod ?? 0) + (weapon.accuracy_mod ?? 0);
   const hit = toHitTotal >= totalAD;
 
-  let dmg = 0, summary;
+  let dmg = 0, dmgResult = 0, summary;
   if (hit) {
     const { result } = parseDice(weapon.damage_dice || '1d6');
+    dmgResult = result;
     dmg = Math.max(1, result - targetArmor);
     summary = `${attacker.combatant} attacks ${target.combatant}: d20(${roll}) + ${attacker.fight_mod??0} FIGHT + ${weapon.accuracy_mod??0} acc = ${toHitTotal} vs AD ${totalAD}${hasCover?' (cover)':''} — HIT, ${result} dmg − ${targetArmor} armor = ${dmg}`;
   } else {
     summary = `${attacker.combatant} attacks ${target.combatant}: d20(${roll}) + ${attacker.fight_mod??0} FIGHT + ${weapon.accuracy_mod??0} acc = ${toHitTotal} vs AD ${totalAD}${hasCover?' (cover)':''} — MISS`;
   }
+
+  // Play the on-map reveal before applying/logging results, so watchers see the roll land
+  // and the outcome unfold at the target's token rather than only a line in the dice log.
+  await playAttackFx({
+    targetX: target.grid_x, targetY: target.grid_y, roll, toHitTotal, totalAD, hit, hasCover,
+    weaponIcon: weapon.icon_path ? renderStoredIcon(weapon.icon_path, 28) : null,
+    dmgResult, armor: targetArmor, finalDmg: dmg,
+  });
+
   await db.from('dice_rolls').insert({ campaign_id: campaignId, user_id: currentUser.id, expression: summary, result: dmg, breakdown: [] });
 
   if (hit && dmg > 0) {
@@ -4412,6 +4459,79 @@ function combatPoint(e) {
 }
 function cellFromPoint(px, py) {
   return { cx: Math.floor((px - cbOffX) / cbCell), cy: Math.floor((py - cbOffY) / cbCell) };
+}
+
+// ── On-map attack FX ───────────────────────────────────────────────
+// Converts canvas-buffer pixel coords (the same space cbOffX/cbCell/tokens are drawn in)
+// to CSS pixel coords for positioning real DOM elements over the canvas — the buffer and
+// its displayed CSS size can differ (retina, responsive width), same scaling concern
+// combatPoint() already accounts for in the other direction.
+function combatBufToScreen(bufX, bufY) {
+  const rect = combatCanvas.getBoundingClientRect();
+  const sx = combatCanvas.width ? rect.width / combatCanvas.width : 1;
+  const sy = combatCanvas.height ? rect.height / combatCanvas.height : 1;
+  return { x: bufX * sx, y: bufY * sy };
+}
+function combatCellToScreen(gx, gy, yOffsetCells) {
+  return combatBufToScreen(cbOffX + gx*cbCell + cbCell/2, cbOffY + (gy + (yOffsetCells||0))*cbCell + cbCell/2);
+}
+function combatSleep(ms) { return new Promise(res => setTimeout(res, ms)); }
+function spawnFxEl(className, gx, gy, html, life, yOffsetCells) {
+  const layer = document.getElementById('combat-fx-layer');
+  if (!layer) return null;
+  const { x, y } = combatCellToScreen(gx, gy, yOffsetCells);
+  const el = document.createElement('div');
+  el.className = className;
+  el.style.left = x + 'px'; el.style.top = y + 'px';
+  if (html != null) el.innerHTML = html;
+  layer.appendChild(el);
+  if (life) setTimeout(() => el.remove(), life);
+  return el;
+}
+function spawnFxParticles(gx, gy, color, count) {
+  const { x, y } = combatCellToScreen(gx, gy);
+  const layer = document.getElementById('combat-fx-layer');
+  if (!layer) return;
+  for (let i = 0; i < (count || 10); i++) {
+    const p = document.createElement('div');
+    p.className = 'combat-fx-particle';
+    p.style.left = x + 'px'; p.style.top = y + 'px';
+    p.style.setProperty('--dx', ((Math.random()-0.5)*90) + 'px');
+    p.style.setProperty('--dy', ((Math.random()-0.5)*90) + 'px');
+    p.style.setProperty('--rot', (Math.random()*360) + 'deg');
+    const s = (Math.random()*5 + 3) + 'px';
+    p.style.width = s; p.style.height = s;
+    p.style.background = color || '#ff6666';
+    layer.appendChild(p);
+    setTimeout(() => p.remove(), 500);
+  }
+}
+
+// The full animated reveal for one attack: a spinning d20 that lands on the roll, the AD
+// comparison, then (on a hit) the weapon icon and damage roll with a floaty number and a
+// hit-spark burst — all anchored at the target's position so it's obvious who's being hit
+// and by what, instead of only a text line in the dice log. Successive chips are stacked
+// upward (yOffsetCells) so they don't all print directly on top of each other.
+async function playAttackFx({ targetX, targetY, roll, toHitTotal, totalAD, hit, hasCover, weaponIcon, dmgResult, armor, finalDmg }) {
+  const d20 = spawnFxEl('combat-fx-d20 spinning', targetX, targetY, 'd20');
+  await combatSleep(500);
+  if (d20) { d20.classList.remove('spinning'); d20.classList.add(hit ? 'hit' : 'miss'); d20.textContent = roll; }
+  await combatSleep(450);
+  if (d20) d20.remove();
+
+  spawnFxEl(`combat-fx-chip ${hit ? 'hit' : 'miss'}`, targetX, targetY,
+    `${toHitTotal} vs AD ${totalAD}${hasCover ? ' 🪨' : ''} — ${hit ? 'HIT' : 'MISS'}`, 1100, -0.9);
+  await combatSleep(250);
+
+  if (!hit) { await combatSleep(700); return; }
+
+  if (weaponIcon) spawnFxEl('combat-fx-icon', targetX, targetY, weaponIcon, 550, -0.5);
+  await combatSleep(350);
+  spawnFxParticles(targetX, targetY, '#ff6666', 12);
+  spawnFxEl('combat-fx-float', targetX, targetY, `-${finalDmg} HP`, 1000);
+  await combatSleep(150);
+  spawnFxEl('combat-fx-chip hit', targetX, targetY, `${dmgResult} dmg − ${armor} armor`, 1200, -1.4);
+  await combatSleep(600);
 }
 
 function drawCombatMap() {
