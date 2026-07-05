@@ -3977,13 +3977,70 @@ const COMBAT_MAPS = {
   },
 };
 
-// Biome -> canvas filter applied to the shared grass tileset pattern, so one texture covers
-// every on-foot terrain type instead of needing separate art per biome.
-const BIOME_FILTERS = {
-  grass:  'none',
-  rocky:  'saturate(0.25) brightness(0.75) hue-rotate(160deg)',
-  desert: 'saturate(0.85) brightness(1.25) hue-rotate(75deg)',
+// Biome -> flat ground colour pair (base + a subtle alternating tint for texture).
+// Previously this tiled the raw earth-like-planet/Grass.png sheet directly via
+// createPattern — but that PNG is a 1024x512 sheet of many distinct organic blob/edge
+// tiles for autotiling, not one seamless texture, so repeating the whole sheet at tile
+// scale produced a dense mosaic of mismatched fragments (the "tilemap doesn't work" bug).
+// A flat biome-tinted fill is simple and always correct; the tileset's actual tree/plant/
+// rock art is used properly below, as real scattered obstacle sprites instead.
+const BIOME_GROUND = {
+  grass:  { base:'#2e4d31', alt:'#345536' },
+  rocky:  { base:'#57534a', alt:'#5f5b52' },
+  desert: { base:'#c7a468', alt:'#cfae74' },
 };
+
+// Deterministic pseudo-random in [0,1) for a grid cell — used to pick a stable obstacle
+// sprite variant and ground tint per cell so they don't change on every redraw.
+function cellHash(x, y) { return Math.abs(Math.sin(x*127.1 + y*311.7) * 43758.5453) % 1; }
+
+// Real tileset art for on-foot obstacles, replacing the old flat brown circle. Rects were
+// measured directly off the sheets (Plants.png is a 5-row x 6-col tree grid + a bush/pine
+// block per row for colour variants; Props.png is loosely packed ruin/rock props).
+let plantsImg = null, propsImg = null;
+function getPlantsImage() {
+  if (!plantsImg) { plantsImg = new Image(); plantsImg.onload = () => { if (shipViewMode === 'combat') drawCombatMap(); }; plantsImg.src = 'assets/tilesets/earth-like-planet/Plants.png'; }
+  return plantsImg;
+}
+function getPropsImage() {
+  if (!propsImg) { propsImg = new Image(); propsImg.onload = () => { if (shipViewMode === 'combat') drawCombatMap(); }; propsImg.src = 'assets/tilesets/earth-like-planet/Props.png'; }
+  return propsImg;
+}
+const PLANT_ROW_H = 1024 / 5;
+const PLANT_ROWS = { green:0, autumn:1, darkgreen:2, red:3, olive:4 };
+const PLANT_RECTS = {
+  treeA:     { x:11,  y:14, w:108, h:189 },
+  treeB:     { x:552, y:40, w:118, h:125 },
+  bushBig:   { x:700, y:40, w:182, h:132 },
+  bushSmall: { x:886, y:36, w:54,  h:46  },
+};
+function plantRect(name, rowKey) {
+  const r = PLANT_RECTS[name];
+  return { x:r.x, y:r.y + (PLANT_ROWS[rowKey] ?? 0) * PLANT_ROW_H, w:r.w, h:r.h };
+}
+const PROPS_RECTS = {
+  rockA:     { x:2,   y:376, w:59, h:70 },
+  rockB:     { x:113, y:380, w:59, h:66 },
+  rockSmall: { x:59,  y:321, w:39, h:44 },
+};
+function obstacleVariants(biome) {
+  const plants = getPlantsImage(), props = getPropsImage();
+  if (biome === 'desert') return [
+    { img: props,  rect: PROPS_RECTS.rockSmall },
+    { img: props,  rect: PROPS_RECTS.rockA },
+    { img: plants, rect: plantRect('bushSmall', 'olive') },
+  ];
+  if (biome === 'rocky') return [
+    { img: props, rect: PROPS_RECTS.rockA },
+    { img: props, rect: PROPS_RECTS.rockB },
+    { img: props, rect: PROPS_RECTS.rockSmall },
+  ];
+  return [ // grass (open plain)
+    { img: plants, rect: plantRect('treeA', 'green') },
+    { img: plants, rect: plantRect('treeB', 'green') },
+    { img: plants, rect: plantRect('bushBig', 'green') },
+  ];
+}
 
 // Scatter `density` fraction of the grid as obstacles, avoiding a clear zone in the centre
 // so combatants always have somewhere open to start.
@@ -4135,16 +4192,6 @@ function cellFromPoint(px, py) {
   return { cx: Math.floor((px - cbOffX) / cbCell), cy: Math.floor((py - cbOffY) / cbCell) };
 }
 
-let grassTileImg = null;
-function getGrassTileImage() {
-  if (!grassTileImg) {
-    grassTileImg = new Image();
-    grassTileImg.onload = () => { if (shipViewMode === 'combat') drawCombatMap(); };
-    grassTileImg.src = 'assets/tilesets/earth-like-planet/Grass.png';
-  }
-  return grassTileImg;
-}
-
 function drawCombatMap() {
   const W = combatCanvas.offsetWidth || 800;
   combatCanvas.width = W;
@@ -4169,27 +4216,17 @@ function drawCombatMap() {
   cbOffY = (H - gh * cbCell) / 2;
   const isSpace = st.type === 'space';
 
-  // Textured ground for on-foot maps — one tileset image, recoloured per biome via a canvas
-  // filter (hue-rotate/saturate/brightness) instead of needing separate art per terrain type.
+  // Flat biome-tinted ground for on-foot maps, with a subtle per-cell alternating shade
+  // for texture (see BIOME_GROUND above for why this replaced the old tiled-sheet fill).
   if (!isSpace) {
-    const img = getGrassTileImage();
-    if (spriteReady(img)) {
-      combatCtx.save();
-      combatCtx.beginPath();
-      combatCtx.rect(cbOffX, cbOffY, gw*cbCell, gh*cbCell);
-      combatCtx.clip();
-      combatCtx.filter = BIOME_FILTERS[st.biome] || 'none';
-      const pattern = combatCtx.createPattern(img, 'repeat');
-      const tileScreenSize = cbCell * 2.2; // how big one tileset tile appears on screen
-      const scale = tileScreenSize / img.naturalWidth;
-      combatCtx.translate(cbOffX, cbOffY);
-      combatCtx.scale(scale, scale);
-      combatCtx.fillStyle = pattern;
-      combatCtx.fillRect(0, 0, gw*cbCell/scale, gh*cbCell/scale);
-      combatCtx.restore();
-    } else {
-      combatCtx.fillStyle = '#141c0e';
-      combatCtx.fillRect(cbOffX, cbOffY, gw*cbCell, gh*cbCell);
+    const ground = BIOME_GROUND[st.biome] || BIOME_GROUND.grass;
+    combatCtx.fillStyle = ground.base;
+    combatCtx.fillRect(cbOffX, cbOffY, gw*cbCell, gh*cbCell);
+    combatCtx.fillStyle = ground.alt;
+    for (let gy = 0; gy < gh; gy++) {
+      for (let gx = 0; gx < gw; gx++) {
+        if (cellHash(gx, gy) > 0.5) combatCtx.fillRect(cbOffX+gx*cbCell, cbOffY+gy*cbCell, cbCell, cbCell);
+      }
     }
   }
 
@@ -4199,15 +4236,37 @@ function drawCombatMap() {
   for (let x = 0; x <= gw; x++) { combatCtx.beginPath(); combatCtx.moveTo(cbOffX+x*cbCell, cbOffY); combatCtx.lineTo(cbOffX+x*cbCell, cbOffY+gh*cbCell); combatCtx.stroke(); }
   for (let y = 0; y <= gh; y++) { combatCtx.beginPath(); combatCtx.moveTo(cbOffX, cbOffY+y*cbCell); combatCtx.lineTo(cbOffX+gw*cbCell, cbOffY+y*cbCell); combatCtx.stroke(); }
 
-  // Obstacles
+  // Obstacles — space maps keep the flat asteroid-chunk circle; on-foot maps draw real
+  // tree/bush/rock art from the tileset (biome-dependent), picked deterministically per
+  // cell so the same obstacle doesn't change look on every redraw.
+  const onFootVariants = isSpace ? null : obstacleVariants(st.biome);
   (st.obstacles || []).forEach(([ox, oy]) => {
     const x = cbOffX+ox*cbCell, y = cbOffY+oy*cbCell;
-    combatCtx.fillStyle = isSpace ? '#3a2f28' : '#3a352a';
-    combatCtx.strokeStyle = isSpace ? '#5a4636' : '#5a5038';
-    combatCtx.lineWidth = 1;
-    combatCtx.beginPath();
-    combatCtx.arc(x+cbCell/2, y+cbCell/2, cbCell*0.44, 0, Math.PI*2);
-    combatCtx.fill(); combatCtx.stroke();
+    if (isSpace) {
+      combatCtx.fillStyle = '#3a2f28';
+      combatCtx.strokeStyle = '#5a4636';
+      combatCtx.lineWidth = 1;
+      combatCtx.beginPath();
+      combatCtx.arc(x+cbCell/2, y+cbCell/2, cbCell*0.44, 0, Math.PI*2);
+      combatCtx.fill(); combatCtx.stroke();
+      return;
+    }
+    const pick = onFootVariants[Math.floor(cellHash(ox, oy) * 999) % onFootVariants.length];
+    if (pick && spriteReady(pick.img)) {
+      const r = pick.rect;
+      const destH = cbCell * 1.25; // slight overflow so props read as "standing" on the tile
+      const destW = destH * (r.w / r.h);
+      const dx = x + cbCell/2 - destW/2;
+      const dy = y + cbCell - destH; // anchor the sprite's base to the bottom of the cell
+      combatCtx.drawImage(pick.img, r.x, r.y, r.w, r.h, dx, dy, destW, destH);
+    } else {
+      combatCtx.fillStyle = '#3a352a';
+      combatCtx.strokeStyle = '#5a5038';
+      combatCtx.lineWidth = 1;
+      combatCtx.beginPath();
+      combatCtx.arc(x+cbCell/2, y+cbCell/2, cbCell*0.44, 0, Math.PI*2);
+      combatCtx.fill(); combatCtx.stroke();
+    }
   });
 
   // Active-token reachable range ring
