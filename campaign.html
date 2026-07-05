@@ -767,6 +767,34 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="modal-switch-weapon">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header"><span class="modal-title">Switch Weapon</span><button class="modal-close" onclick="closeModal('modal-switch-weapon')">✕</button></div>
+    <div class="modal-body">
+      <div id="switch-weapon-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+      <p style="font-size:11px; color:var(--text-faint); margin:0;">Switching uses your whole Core action for this turn.</p>
+    </div>
+    <div class="modal-footer"><button class="btn-ghost" onclick="closeModal('modal-switch-weapon')">Cancel</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-turn-help">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header"><span class="modal-title">How a Turn Works</span><button class="modal-close" onclick="closeModal('modal-turn-help')">✕</button></div>
+    <div class="modal-body" style="font-size:12.5px; color:var(--text-dim); line-height:1.6;">
+      <p style="margin:0 0 8px;"><strong>Movement:</strong> drag your token up to your speed in squares (shown in the bar above). Obstacles block the path.</p>
+      <p style="margin:0 0 4px;"><strong>Core action</strong> — pick exactly one:</p>
+      <ul style="margin:0 0 10px 18px; padding:0;">
+        <li><strong>Attack</strong> — pick a target and click Attack. The app rolls to-hit (d20 + FIGHT + weapon accuracy) against the target's Total AD (their size + distance + cover), then rolls damage minus their armor automatically.</li>
+        <li><strong>Dash</strong> — extra movement instead of attacking.</li>
+        <li><strong>Switch weapon</strong> — re-equip a different owned weapon; uses your whole action.</li>
+      </ul>
+      <p style="margin:0;">No reactions or bonus actions — move, then do one thing. The GM's manual damage/heal buttons in the Initiative tracker are always available to adjudicate anything unusual.</p>
+    </div>
+    <div class="modal-footer"><button class="btn-primary" onclick="closeModal('modal-turn-help')" style="width:auto;padding:10px 24px;">Got it</button></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-add-cargo">
   <div class="modal" style="max-width:440px;">
     <div class="modal-header"><span class="modal-title">Add Item to Cargo Hold</span><button class="modal-close" onclick="closeModal('modal-add-cargo')">✕</button></div>
@@ -4222,26 +4250,144 @@ function refreshCombatUI() {
   renderCheatSheet(active);
 }
 
+// Per-turn "have they used their Core action / how much movement is left" tracker.
+// Client-side only (a soft guard, not server-enforced — see plan doc) and reset whenever
+// the active combatant's id actually changes, not on every incidental re-render.
+let turnActionState = { combatantId: null, coreActionUsed: false, remainingMove: 0 };
+let currentTurnWeapon = null;
+
 async function renderCheatSheet(c) {
   const cheat = document.getElementById('combat-cheatsheet');
   if (!c) { cheat.style.display = 'none'; return; }
   cheat.style.display = 'flex';
+
+  if (turnActionState.combatantId !== c.id) {
+    turnActionState = { combatantId: c.id, coreActionUsed: false, remainingMove: movementSquares(c.speed) };
+  }
+
   const mv = movementSquares(c.speed);
+  const canAct = isGM || (c.character_id && c.character_id === myCharacterId);
+
   let weaponHtml = '';
+  currentTurnWeapon = null;
   if (c.character_id) {
-    const { data: w } = await db.from('character_inventory').select('name,damage_dice,accuracy_mod,range_m,icon_path')
+    const { data: w } = await db.from('character_inventory').select('id,name,damage_dice,accuracy_mod,range_m,icon_path')
       .eq('character_id', c.character_id).eq('is_equipped', true).eq('item_type','weapon').limit(1).maybeSingle();
+    currentTurnWeapon = w || null;
     if (w) weaponHtml = `<div class="combat-cheat-chip" style="display:flex; align-items:center; gap:6px;">${w.icon_path?renderStoredIcon(w.icon_path,18):''}Weapon: <strong>${esc(w.name)}</strong>${w.damage_dice?` · ${esc(w.damage_dice)}`:''}${w.accuracy_mod?` · ${w.accuracy_mod>0?'+':''}${w.accuracy_mod} acc`:''}${w.range_m?` · ${w.range_m}m`:''}</div>`;
     else weaponHtml = `<div class="combat-cheat-chip" style="color:var(--text-faint);">No weapon equipped</div>`;
   }
+
+  const targets = combatants.filter(x => x.id !== c.id);
+  const targetOptions = targets.map(t => `<option value="${t.id}">${esc(t.combatant)}</option>`).join('');
+  const actionsHtml = canAct ? `
+    <div class="combat-cheat-chip" style="display:flex; align-items:center; gap:6px;">
+      <select class="form-select" id="combat-target-sel" style="font-size:11px; padding:4px 8px; width:auto;">${targetOptions || '<option value="">No targets</option>'}</select>
+      <button class="btn-secondary" style="font-size:11px; padding:5px 10px;" ${turnActionState.coreActionUsed || !targets.length || !currentTurnWeapon ? 'disabled' : ''} onclick="resolveAttack('${c.id}')">⚔ Attack</button>
+      <button class="btn-ghost" style="font-size:11px; padding:5px 10px;" ${turnActionState.coreActionUsed ? 'disabled' : ''} onclick="performDash('${c.id}')">🏃 Dash</button>
+      ${c.character_id ? `<button class="btn-ghost" style="font-size:11px; padding:5px 10px;" ${turnActionState.coreActionUsed ? 'disabled' : ''} onclick="openSwitchWeapon('${c.id}')">🔄 Switch</button>` : ''}
+    </div>` : '';
+
   cheat.innerHTML = `
     <div><div class="combat-cheat-tag">Active Turn</div><div class="combat-cheat-name">${esc(c.combatant)}</div></div>
-    <div class="combat-cheat-chip">Move: <strong>${mv} squares</strong> (${mv*COMBAT_SQUARE_M} m)</div>
+    <div class="combat-cheat-chip">Move: <strong>${turnActionState.remainingMove}/${mv} squares</strong> left</div>
     <div class="combat-cheat-chip">Base AD: <strong>${c.base_ad ?? 8}</strong></div>
     <div class="combat-cheat-chip">To-hit: d20 ${(c.fight_mod??0)>=0?'+':''}${c.fight_mod??0} FIGHT</div>
     ${weaponHtml}
-    <div class="combat-cheat-chip" style="border-color:var(--border2);">Core action: <strong>Attack</strong> · Dash (+${Math.floor(mv/2)}) · Switch weapon</div>
-    ${isGM ? `<button class="btn-secondary" style="font-size:11px; padding:5px 12px; margin-left:auto;" onclick="nextTurn()">End Turn ▸</button>` : ''}`;
+    ${actionsHtml}
+    <button class="btn-ghost" title="How does a turn work?" onclick="openTurnHelp()" style="font-size:12px; padding:5px 10px; border-radius:50%; margin-left:${isGM?'8px':'auto'};">ⓘ</button>
+    ${isGM ? `<button class="btn-secondary" style="font-size:11px; padding:5px 12px;" onclick="nextTurn()">End Turn ▸</button>` : ''}`;
+}
+
+function openTurnHelp() { openModal('modal-turn-help'); }
+
+// Auto-resolve an attack: distance + simple cover heuristic (an obstacle in the target's
+// neighbour cell toward the attacker) determine Total AD, then roll to-hit and damage —
+// see rules.html §4.1 for the underlying formulas this mirrors.
+async function resolveAttack(attackerId) {
+  const attacker = combatants.find(x => x.id === attackerId);
+  const targetSel = document.getElementById('combat-target-sel');
+  const target = combatants.find(x => x.id === targetSel?.value);
+  if (!attacker || !target) return;
+  if (turnActionState.coreActionUsed) return;
+  if (attacker.grid_x == null || target.grid_x == null) return alert('Both combatants need a position on the map first — drag them onto the grid.');
+  const weapon = currentTurnWeapon;
+  if (!weapon) return alert('No weapon equipped — use Switch to equip one first.');
+
+  turnActionState.coreActionUsed = true;
+
+  const dx = target.grid_x - attacker.grid_x, dy = target.grid_y - attacker.grid_y;
+  const meters = Math.round(Math.hypot(dx, dy)) * COMBAT_SQUARE_M;
+  // Cover cell is on the target's side facing the attacker — i.e. offset from the target
+  // BACK toward the attacker, the opposite direction from attacker-to-target (dx,dy).
+  const stepX = Math.sign(dx), stepY = Math.sign(dy);
+  const st = combatState();
+  const hasCover = (st.obstacles||[]).some(o => o[0] === target.grid_x-stepX && o[1] === target.grid_y-stepY);
+
+  let targetArmor = target.armor ?? 0, targetHpCurrent = target.hp_current ?? 0, targetHpMax = target.hp_max ?? 0;
+  if (target.character_id) {
+    const { data: tc } = await db.from('characters').select('armor,hp_current,hp_max').eq('id', target.character_id).single();
+    if (tc) { targetArmor = tc.armor ?? 0; targetHpCurrent = tc.hp_current ?? 0; targetHpMax = tc.hp_max ?? targetHpMax; }
+  }
+
+  const totalAD = (target.base_ad ?? 8) + distanceAD(meters) + (hasCover ? COVER_AD : 0);
+  const roll = Math.floor(Math.random()*20) + 1;
+  const toHitTotal = roll + (attacker.fight_mod ?? 0) + (weapon.accuracy_mod ?? 0);
+  const hit = toHitTotal >= totalAD;
+
+  let dmg = 0, summary;
+  if (hit) {
+    const { result } = parseDice(weapon.damage_dice || '1d6');
+    dmg = Math.max(1, result - targetArmor);
+    summary = `${attacker.combatant} attacks ${target.combatant}: d20(${roll}) + ${attacker.fight_mod??0} FIGHT + ${weapon.accuracy_mod??0} acc = ${toHitTotal} vs AD ${totalAD}${hasCover?' (cover)':''} — HIT, ${result} dmg − ${targetArmor} armor = ${dmg}`;
+  } else {
+    summary = `${attacker.combatant} attacks ${target.combatant}: d20(${roll}) + ${attacker.fight_mod??0} FIGHT + ${weapon.accuracy_mod??0} acc = ${toHitTotal} vs AD ${totalAD}${hasCover?' (cover)':''} — MISS`;
+  }
+  await db.from('dice_rolls').insert({ campaign_id: campaignId, user_id: currentUser.id, expression: summary, result: dmg, breakdown: [] });
+
+  if (hit && dmg > 0) {
+    const newHp = Math.max(0, targetHpCurrent - dmg);
+    await db.from('initiative_tracker').update({ hp_current: newHp }).eq('id', target.id);
+    if (target.character_id) await db.from('characters').update({ hp_current: newHp }).eq('id', target.character_id);
+    target.hp_current = newHp;
+  }
+
+  drawCombatMap();
+  renderCheatSheet(attacker);
+}
+
+async function performDash(combatantId) {
+  if (turnActionState.combatantId !== combatantId || turnActionState.coreActionUsed) return;
+  const c = combatants.find(x => x.id === combatantId);
+  if (!c) return;
+  turnActionState.coreActionUsed = true;
+  turnActionState.remainingMove += Math.floor(movementSquares(c.speed) / 2);
+  renderCheatSheet(c);
+}
+
+let switchWeaponCombatantId = null;
+async function openSwitchWeapon(combatantId) {
+  const c = combatants.find(x => x.id === combatantId);
+  if (!c || !c.character_id) return;
+  if (turnActionState.combatantId !== combatantId || turnActionState.coreActionUsed) return;
+  switchWeaponCombatantId = combatantId;
+  const { data: weapons } = await db.from('character_inventory').select('id,name,damage_dice,accuracy_mod,range_m,is_equipped')
+    .eq('character_id', c.character_id).eq('item_type','weapon').order('name');
+  document.getElementById('switch-weapon-list').innerHTML = (weapons||[]).length ? weapons.map(w => `
+    <button type="button" class="loadout-opt ${w.is_equipped?'active':''}" onclick="pickSwitchWeapon('${w.id}')">
+      <div class="loadout-opt-title">${esc(w.name)}${w.is_equipped?' (equipped)':''}</div>
+      <div class="loadout-opt-stats">${esc(w.damage_dice||'')} · ${(w.accuracy_mod||0)>=0?'+':''}${w.accuracy_mod||0} acc · ${w.range_m||0}m</div>
+    </button>`).join('') : '<div style="color:var(--text-faint);font-size:12px;">No other weapons owned.</div>';
+  openModal('modal-switch-weapon');
+}
+async function pickSwitchWeapon(itemId) {
+  const c = combatants.find(x => x.id === switchWeaponCombatantId);
+  if (!c) return;
+  await db.from('character_inventory').update({ is_equipped: false }).eq('character_id', c.character_id).eq('item_type','weapon');
+  await db.from('character_inventory').update({ is_equipped: true }).eq('id', itemId);
+  turnActionState.coreActionUsed = true;
+  closeModal('modal-switch-weapon');
+  renderCheatSheet(c);
 }
 
 // ── Combat canvas ────────────────────────────────────────────────
@@ -4471,11 +4617,27 @@ combatCanvas.addEventListener('mouseup', async e => {
     const cx = Math.round((x - cbDragOff.x - cbCell/2 - cbOffX) / cbCell);
     const cy = Math.round((y - cbDragOff.y - cbCell/2 - cbOffY) / cbCell);
     const st = combatState();
-    const blocked = (st.obstacles||[]).some(o => o[0]===cx && o[1]===cy);
-    const tok = cbDragToken; cbDragToken = null; combatCanvas.style.cursor = rulerActive?'crosshair':'default';
+    const tok = cbDragToken;
+    let blocked = (st.obstacles||[]).some(o => o[0]===cx && o[1]===cy);
+
+    // Movement-budget guard — only applies to the currently-active combatant's own token,
+    // so the GM can still freely reposition anyone else at any time (corrections, NPC
+    // placement) without being budgeted.
+    const isActiveToken = combatants.length > 0 && tok.id === combatants[activeTurn % combatants.length]?.id;
+    let moveCells = 0;
+    if (!blocked && isActiveToken && tok.grid_x != null) {
+      moveCells = Math.round(Math.hypot(cx - tok.grid_x, cy - tok.grid_y));
+      if (moveCells > turnActionState.remainingMove) {
+        blocked = true;
+        alert(`Not enough movement left (${turnActionState.remainingMove} square${turnActionState.remainingMove===1?'':'s'} remaining).`);
+      }
+    }
+
+    cbDragToken = null; combatCanvas.style.cursor = rulerActive?'crosshair':'default';
     if (!blocked) {
       tok.grid_x = cx; tok.grid_y = cy;
       await db.from('initiative_tracker').update({ grid_x: cx, grid_y: cy }).eq('id', tok.id);
+      if (isActiveToken) { turnActionState.remainingMove -= moveCells; renderCheatSheet(tok); }
     }
     drawCombatMap();
     setTimeout(() => cbJustDragged = false, 30);
