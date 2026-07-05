@@ -3705,7 +3705,7 @@ async function takeCargoItem(id) {
     character_id: myCharacterId, name: item.name, item_type: item.item_type,
     weight: item.weight, value: item.value, description: item.description,
     icon_path: item.icon_path, diet_tag: item.diet_tag,
-    damage_dice: item.damage_dice, accuracy_mod: item.accuracy_mod, range_m: item.range_m, armor_dr: item.armor_dr,
+    damage_dice: item.damage_dice, accuracy_mod: item.accuracy_mod, range_m: item.range_m, armor_dr: item.armor_dr, weapon_type: item.weapon_type,
     mining_modifier: item.mining_modifier, mining_size: item.mining_size, mining_max_charges: item.mining_max_charges, mining_best_against: item.mining_best_against,
   }, item.quantity);
   if (insErr) return alert('Failed to take item: ' + insErr.message);
@@ -3721,7 +3721,7 @@ async function sendToCargo(itemId) {
     campaign_id: campaignId, name: item.name, item_type: item.item_type,
     weight: item.weight, value: item.value, description: item.description,
     icon_path: item.icon_path, diet_tag: item.diet_tag, armor_dr: item.armor_dr,
-    damage_dice: item.damage_dice, accuracy_mod: item.accuracy_mod, range_m: item.range_m,
+    damage_dice: item.damage_dice, accuracy_mod: item.accuracy_mod, range_m: item.range_m, weapon_type: item.weapon_type,
     mining_modifier: item.mining_modifier, mining_size: item.mining_size, mining_max_charges: item.mining_max_charges, mining_best_against: item.mining_best_against,
     added_by: currentUser.id,
   }, item.quantity);
@@ -3812,7 +3812,7 @@ async function addCargoCatalogItem(key) {
     icon_path: typeof item.icon === 'string' ? item.icon : JSON.stringify(item.icon),
     added_by: currentUser.id,
   };
-  if (item.category === 'weapon') { payload.damage_dice = item.dmg; payload.accuracy_mod = item.acc; payload.range_m = item.range; }
+  if (item.category === 'weapon') { payload.damage_dice = item.dmg; payload.accuracy_mod = item.acc; payload.range_m = item.range; payload.weapon_type = item.subcategory; }
   if (item.category === 'armor') payload.armor_dr = item.dr;
   if (item.category === 'ration') payload.diet_tag = (item.dietTags || []).join(',');
   if (item.category === 'tool' && item.subcategory === 'mining_tool') {
@@ -4308,7 +4308,7 @@ async function renderCheatSheet(c) {
   let weaponHtml = '';
   currentTurnWeapon = null;
   if (c.character_id) {
-    const { data: w } = await db.from('character_inventory').select('id,name,damage_dice,accuracy_mod,range_m,icon_path')
+    const { data: w } = await db.from('character_inventory').select('id,name,damage_dice,accuracy_mod,range_m,icon_path,weapon_type')
       .eq('character_id', c.character_id).eq('is_equipped', true).eq('item_type','weapon').limit(1).maybeSingle();
     currentTurnWeapon = w || null;
     if (w) weaponHtml = `<div class="combat-cheat-chip" style="display:flex; align-items:center; gap:6px;">${w.icon_path?renderStoredIcon(w.icon_path,18):''}Weapon: <strong>${esc(w.name)}</strong>${w.damage_dice?` · ${esc(w.damage_dice)}`:''}${w.accuracy_mod?` · ${w.accuracy_mod>0?'+':''}${w.accuracy_mod} acc`:''}${w.range_m?` · ${w.range_m}m`:''}</div>`;
@@ -4385,7 +4385,9 @@ async function resolveAttack(attackerId) {
   // Play the on-map reveal before applying/logging results, so watchers see the roll land
   // and the outcome unfold at the target's token rather than only a line in the dice log.
   await playAttackFx({
-    targetX: target.grid_x, targetY: target.grid_y, roll, toHitTotal, totalAD, hit, hasCover,
+    attackerX: attacker.grid_x, attackerY: attacker.grid_y,
+    targetX: target.grid_x, targetY: target.grid_y, weaponType: weapon.weapon_type,
+    roll, toHitTotal, totalAD, hit, hasCover,
     weaponIcon: weapon.icon_path ? renderStoredIcon(weapon.icon_path, 28) : null,
     dmgResult, armor: targetArmor, finalDmg: dmg,
   });
@@ -4507,20 +4509,147 @@ function spawnFxParticles(gx, gy, color, count) {
   }
 }
 
+// Ruler-style line between two screen points, growing from 0 to full length (CSS
+// transition on width) so it reads as "measuring" the shot the same way the manual ruler
+// tool already draws distance — just automatic, for the attack that's actually firing.
+function spawnAttackLine(x1, y1, x2, y2) {
+  const layer = document.getElementById('combat-fx-layer');
+  if (!layer) return null;
+  const dist = Math.hypot(x2-x1, y2-y1);
+  const angle = Math.atan2(y2-y1, x2-x1) * 180/Math.PI;
+  const el = document.createElement('div');
+  el.className = 'combat-fx-line';
+  el.style.left = x1 + 'px'; el.style.top = y1 + 'px';
+  el.style.transform = `rotate(${angle}deg)`;
+  layer.appendChild(el);
+  requestAnimationFrame(() => { el.style.width = dist + 'px'; });
+  return el;
+}
+// Counts a chip's displayed number up from 0 to `to` over `duration`ms — the "increasing
+// AD" build-up as the shot's range/cover penalties add up, landing on the real total.
+function tickChipNumber(el, prefix, to, duration, suffix) {
+  const steps = Math.max(6, Math.min(to, 14));
+  let i = 0;
+  const iv = setInterval(() => {
+    i++;
+    const val = Math.round((to * i) / steps);
+    if (el) el.textContent = `${prefix}${val}${suffix||''}`;
+    if (i >= steps) clearInterval(iv);
+  }, duration / steps);
+}
+// A little bolt that travels along the line from attacker to target, timed with the
+// weapon's firing sound — colour varies by weapon type so lasers/slugs/blasts read
+// differently at a glance.
+const WEAPON_BOLT_COLOR = {
+  pistol:'#40c8ff', smg:'#ffd23a', carbine:'#ff8a3a', rifle:'#40ffb0',
+  shotgun:'#ff5a5a', sniper:'#c084ff', heavy:'#ff3a3a', melee:'#e0ecff',
+};
+function spawnLaserBolt(x1, y1, x2, y2, weaponType, duration) {
+  const layer = document.getElementById('combat-fx-layer');
+  if (!layer) return;
+  const angle = Math.atan2(y2-y1, x2-x1) * 180/Math.PI;
+  const color = WEAPON_BOLT_COLOR[weaponType] || '#40c8ff';
+  const el = document.createElement('div');
+  el.className = 'combat-fx-bolt';
+  el.style.left = x1 + 'px'; el.style.top = y1 + 'px';
+  el.style.transform = `rotate(${angle}deg)`;
+  el.style.background = color; el.style.color = color;
+  layer.appendChild(el);
+  requestAnimationFrame(() => { el.style.left = x2 + 'px'; el.style.top = y2 + 'px'; });
+  setTimeout(() => el.remove(), duration + 60);
+}
+
+// ── Weapon-type gunfire SFX — synthesized with Web Audio, no sound files needed (same
+// oscillator/gain-envelope approach as the mining minigame's SFXController) ────────
+let sfxCtx = null;
+function getSfxCtx() {
+  if (!sfxCtx) sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (sfxCtx.state === 'suspended') sfxCtx.resume();
+  return sfxCtx;
+}
+function sfxTone(freqStart, freqEnd, duration, type, gain) {
+  const ctx = getSfxCtx();
+  const osc = ctx.createOscillator(), g = ctx.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freqStart, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), ctx.currentTime + duration);
+  g.gain.setValueAtTime(gain ?? 0.12, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+  osc.connect(g); g.connect(ctx.destination);
+  osc.start(); osc.stop(ctx.currentTime + duration);
+}
+function sfxNoiseBurst(duration, gain, filterFreq) {
+  const ctx = getSfxCtx();
+  const bufferSize = Math.max(1, Math.floor(ctx.sampleRate * duration));
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  const src = ctx.createBufferSource(); src.buffer = buffer;
+  const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = filterFreq || 2000;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(gain ?? 0.15, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+  src.connect(filt); filt.connect(g); g.connect(ctx.destination);
+  src.start(); src.stop(ctx.currentTime + duration);
+}
+// One archetype per catalog weapon subcategory (js/catalog.js WEAPON_TIERS tags) so a
+// pistol, an SMG burst, and a heavy cannon all read as distinctly different weapons.
+function playWeaponSfx(weaponType) {
+  try {
+    switch (weaponType) {
+      case 'pistol':  sfxTone(950, 220, 0.09, 'sine', 0.14); break;
+      case 'smg':     for (let i = 0; i < 4; i++) setTimeout(() => sfxTone(1000 - i*40, 260, 0.06, 'sine', 0.11), i*55); break;
+      case 'carbine': sfxTone(750, 160, 0.14, 'sawtooth', 0.13); break;
+      case 'rifle':   sfxTone(1300, 280, 0.2, 'sine', 0.13); break;
+      case 'shotgun': sfxNoiseBurst(0.18, 0.22, 1400); sfxTone(180, 60, 0.15, 'square', 0.12); break;
+      case 'sniper':  sfxTone(500, 1400, 0.18, 'sine', 0.08); setTimeout(() => sfxTone(1600, 200, 0.25, 'sawtooth', 0.16), 180); break;
+      case 'heavy':   sfxTone(220, 45, 0.32, 'sawtooth', 0.18); sfxNoiseBurst(0.2, 0.1, 500); break;
+      case 'melee':   sfxNoiseBurst(0.12, 0.06, 3000); break; // a soft whoosh, no laser tone
+      default:        sfxTone(900, 250, 0.1, 'sine', 0.12); // generic pew for anything untagged
+    }
+  } catch (e) { /* Web Audio unsupported/blocked — fx are still visual-only, no need to surface this */ }
+}
+
 // The full animated reveal for one attack: a spinning d20 that lands on the roll, the AD
 // comparison, then (on a hit) the weapon icon and damage roll with a floaty number and a
 // hit-spark burst — all anchored at the target's position so it's obvious who's being hit
 // and by what, instead of only a text line in the dice log. Successive chips are stacked
 // upward (yOffsetCells) so they don't all print directly on top of each other.
-async function playAttackFx({ targetX, targetY, roll, toHitTotal, totalAD, hit, hasCover, weaponIcon, dmgResult, armor, finalDmg }) {
+async function playAttackFx({ attackerX, attackerY, targetX, targetY, weaponType, roll, toHitTotal, totalAD, hit, hasCover, weaponIcon, dmgResult, armor, finalDmg }) {
+  const a = combatCellToScreen(attackerX, attackerY);
+  const t = combatCellToScreen(targetX, targetY);
+
+  // 1. Measure the shot — a ruler-style line grows from attacker to target while a chip
+  // ticks up through the AD the shot has to beat (size + distance + cover), same idea as
+  // the manual ruler tool but automatic and landing on the real total.
+  const line = spawnAttackLine(a.x, a.y, t.x, t.y);
+  const adChip = spawnFxEl('combat-fx-chip', targetX, targetY, `AD 0`, 0, -0.9);
+  tickChipNumber(adChip, 'AD ', totalAD, 420);
+  await combatSleep(450);
+  if (adChip) adChip.textContent = `AD ${totalAD}${hasCover ? ' 🪨 cover' : ''} to beat`;
+
+  // 2. Fire — weapon-specific sound + a bolt travelling the line, then the line itself fades.
+  playWeaponSfx(weaponType);
+  spawnLaserBolt(a.x, a.y, t.x, t.y, weaponType, 220);
+  await combatSleep(260);
+  if (line) line.remove();
+
+  // 3. The roll — spins, lands on the actual number, and lingers a good while longer next
+  // to the AD-to-beat chip before flipping to hit/miss colour, so the "did it land" beat
+  // is legible instead of an instant flash.
   const d20 = spawnFxEl('combat-fx-d20 spinning', targetX, targetY, 'd20');
   await combatSleep(500);
-  if (d20) { d20.classList.remove('spinning'); d20.classList.add(hit ? 'hit' : 'miss'); d20.textContent = roll; }
-  await combatSleep(450);
+  if (d20) d20.textContent = roll;
+  await combatSleep(1450);
+  if (d20) d20.classList.remove('spinning');
+  if (adChip) adChip.className = `combat-fx-chip ${hit ? 'hit' : 'miss'}`;
+  if (d20) d20.classList.add(hit ? 'hit' : 'miss');
+  await combatSleep(300);
   if (d20) d20.remove();
+  if (adChip) adChip.remove();
 
   spawnFxEl(`combat-fx-chip ${hit ? 'hit' : 'miss'}`, targetX, targetY,
-    `${toHitTotal} vs AD ${totalAD}${hasCover ? ' 🪨' : ''} — ${hit ? 'HIT' : 'MISS'}`, 1100, -0.9);
+    `${toHitTotal} vs AD ${totalAD} — ${hit ? 'HIT' : 'MISS'}`, 1100, -0.9);
   await combatSleep(250);
 
   if (!hit) { await combatSleep(700); return; }

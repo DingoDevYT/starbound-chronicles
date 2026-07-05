@@ -1194,7 +1194,7 @@ async function confirmSendToCargo() {
     campaign_id: campaignId, name: item.name, item_type: item.item_type,
     quantity: item.quantity, weight: item.weight, value: item.value, description: item.description,
     icon_path: item.icon_path, diet_tag: item.diet_tag, armor_dr: item.armor_dr,
-    damage_dice: item.damage_dice, accuracy_mod: item.accuracy_mod, range_m: item.range_m,
+    damage_dice: item.damage_dice, accuracy_mod: item.accuracy_mod, range_m: item.range_m, weapon_type: item.weapon_type,
     added_by: currentUser.id,
   });
   if (insErr) return showError('send-cargo-error', insErr.message);
@@ -1310,7 +1310,7 @@ async function addCatalogItem(key) {
     icon_path: typeof item.icon === 'string' ? item.icon : JSON.stringify(item.icon),
   };
   if (item.category === 'weapon') {
-    payload.damage_dice = item.dmg; payload.accuracy_mod = item.acc; payload.range_m = item.range;
+    payload.damage_dice = item.dmg; payload.accuracy_mod = item.acc; payload.range_m = item.range; payload.weapon_type = item.subcategory;
   }
   if (item.category === 'armor') {
     payload.armor_dr = item.dr;
