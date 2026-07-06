@@ -1089,6 +1089,40 @@
   transition: left 0.2s linear, top 0.2s linear;
 }
 
+.combat-fx-explosion {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  z-index: 44;
+  pointer-events: none;
+  background: radial-gradient(circle, #fff 0%, var(--color, #ff6666) 45%, transparent 72%);
+  box-shadow: 0 0 24px 6px var(--color, #ff6666);
+  animation: combat-fx-explosion-burst 0.5s cubic-bezier(.1,.8,.3,1) forwards;
+}
+.combat-fx-explosion.big { width: 20px; height: 20px; box-shadow: 0 0 38px 10px var(--color, #ff6666); }
+@keyframes combat-fx-explosion-burst {
+  0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
+  40%  { transform: translate(-50%, -50%) scale(2.6); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(4.2); opacity: 0; }
+}
+
+.combat-fx-spark {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  z-index: 44;
+  pointer-events: none;
+  background: radial-gradient(circle, #fff 0%, #ffd23a 50%, transparent 75%);
+  box-shadow: 0 0 14px 3px rgba(255,210,58,.8);
+  animation: combat-fx-spark-burst 0.38s ease-out forwards;
+}
+@keyframes combat-fx-spark-burst {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+}
+
 .mining-charge-bar-fill {
   height: 100%;
   background: linear-gradient(90deg, #3a78d4, #40c8a0);

@@ -4624,56 +4624,86 @@ function spawnLaserBolt(x1, y1, x2, y2, weaponType, duration) {
   requestAnimationFrame(() => { el.style.left = x2 + 'px'; el.style.top = y2 + 'px'; });
   setTimeout(() => el.remove(), duration + 60);
 }
+// On a miss the bolt shouldn't travel all the way to the target and stop dead —
+// that reads as a hit no matter what the chip above it says. Instead it undershoots
+// and kicks off to one side, so the shot visibly goes wide.
+function missBoltEndpoint(a, t) {
+  const angle = Math.atan2(t.y - a.y, t.x - a.x);
+  const perp = angle + Math.PI / 2;
+  const side = Math.random() < 0.5 ? -1 : 1;
+  const offset = (24 + Math.random() * 22) * side;
+  const undershoot = 0.82 + Math.random() * 0.12;
+  return {
+    x: a.x + (t.x - a.x) * undershoot + Math.cos(perp) * offset,
+    y: a.y + (t.y - a.y) * undershoot + Math.sin(perp) * offset,
+  };
+}
+// A real impact — expanding shockwave ring + core flash, colour-matched to the
+// weapon, bigger for heavy weapons — so a hit reads as a hit and not just a line
+// that stopped moving.
+function spawnExplosionFx(gx, gy, weaponType) {
+  const { x, y } = combatCellToScreen(gx, gy);
+  const layer = document.getElementById('combat-fx-layer');
+  if (!layer) return;
+  const el = document.createElement('div');
+  el.className = 'combat-fx-explosion' + (weaponType === 'heavy' ? ' big' : '');
+  el.style.left = x + 'px'; el.style.top = y + 'px';
+  el.style.setProperty('--color', WEAPON_BOLT_COLOR[weaponType] || '#ff6666');
+  layer.appendChild(el);
+  setTimeout(() => el.remove(), 550);
+}
+// A short spark/ricochet burst at the point the shot actually went, instead of
+// nothing — a miss should still visibly happen somewhere, just not at the target.
+function spawnMissSparkFx(screenPt) {
+  const layer = document.getElementById('combat-fx-layer');
+  if (!layer) return;
+  const el = document.createElement('div');
+  el.className = 'combat-fx-spark';
+  el.style.left = screenPt.x + 'px'; el.style.top = screenPt.y + 'px';
+  layer.appendChild(el);
+  setTimeout(() => el.remove(), 380);
+}
 
-// ── Weapon-type gunfire SFX — synthesized with Web Audio, no sound files needed (same
-// oscillator/gain-envelope approach as the mining minigame's SFXController) ────────
-let sfxCtx = null;
-function getSfxCtx() {
-  if (!sfxCtx) sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (sfxCtx.state === 'suspended') sfxCtx.resume();
-  return sfxCtx;
-}
-function sfxTone(freqStart, freqEnd, duration, type, gain) {
-  const ctx = getSfxCtx();
-  const osc = ctx.createOscillator(), g = ctx.createGain();
-  osc.type = type || 'sine';
-  osc.frequency.setValueAtTime(freqStart, ctx.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), ctx.currentTime + duration);
-  g.gain.setValueAtTime(gain ?? 0.12, ctx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-  osc.connect(g); g.connect(ctx.destination);
-  osc.start(); osc.stop(ctx.currentTime + duration);
-}
-function sfxNoiseBurst(duration, gain, filterFreq) {
-  const ctx = getSfxCtx();
-  const bufferSize = Math.max(1, Math.floor(ctx.sampleRate * duration));
-  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-  const src = ctx.createBufferSource(); src.buffer = buffer;
-  const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = filterFreq || 2000;
-  const g = ctx.createGain();
-  g.gain.setValueAtTime(gain ?? 0.15, ctx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-  src.connect(filt); filt.connect(g); g.connect(ctx.destination);
-  src.start(); src.stop(ctx.currentTime + duration);
-}
-// One archetype per catalog weapon subcategory (js/catalog.js WEAPON_TIERS tags) so a
-// pistol, an SMG burst, and a heavy cannon all read as distinctly different weapons.
-function playWeaponSfx(weaponType) {
+// ── Weapon-type gunfire SFX — real recorded .wav files (assets/sfx/combat/), one
+// archetype per catalog weapon subcategory so a pistol, an SMG burst, and a heavy
+// cannon all read as distinctly different weapons. Cloned per-play so overlapping
+// shots (fast follow-up attacks) don't cut each other's playback off.
+const WEAPON_SFX_FILES = {
+  pistol: 'assets/sfx/combat/pistol_fire.wav',
+  smg: 'assets/sfx/combat/smg_fire.wav',
+  carbine: 'assets/sfx/combat/carbine_fire.wav',
+  rifle: 'assets/sfx/combat/rifle_fire.wav',
+  shotgun: 'assets/sfx/combat/shotgun_fire.wav',
+  sniper: 'assets/sfx/combat/sniper_fire.wav',
+  heavy: 'assets/sfx/combat/heavy_fire.wav',
+  melee: 'assets/sfx/combat/melee_fire.wav',
+};
+const IMPACT_SFX_FILES = {
+  hit: 'assets/sfx/combat/impact_hit.wav',
+  explosion: 'assets/sfx/combat/impact_explosion.wav',
+  miss: 'assets/sfx/combat/impact_miss.wav',
+  melee: 'assets/sfx/combat/impact_melee.wav',
+};
+const sfxAudioCache = {};
+function playSfxFile(path, volume) {
   try {
-    switch (weaponType) {
-      case 'pistol':  sfxTone(950, 220, 0.09, 'sine', 0.14); break;
-      case 'smg':     for (let i = 0; i < 4; i++) setTimeout(() => sfxTone(1000 - i*40, 260, 0.06, 'sine', 0.11), i*55); break;
-      case 'carbine': sfxTone(750, 160, 0.14, 'sawtooth', 0.13); break;
-      case 'rifle':   sfxTone(1300, 280, 0.2, 'sine', 0.13); break;
-      case 'shotgun': sfxNoiseBurst(0.18, 0.22, 1400); sfxTone(180, 60, 0.15, 'square', 0.12); break;
-      case 'sniper':  sfxTone(500, 1400, 0.18, 'sine', 0.08); setTimeout(() => sfxTone(1600, 200, 0.25, 'sawtooth', 0.16), 180); break;
-      case 'heavy':   sfxTone(220, 45, 0.32, 'sawtooth', 0.18); sfxNoiseBurst(0.2, 0.1, 500); break;
-      case 'melee':   sfxNoiseBurst(0.12, 0.06, 3000); break; // a soft whoosh, no laser tone
-      default:        sfxTone(900, 250, 0.1, 'sine', 0.12); // generic pew for anything untagged
-    }
-  } catch (e) { /* Web Audio unsupported/blocked — fx are still visual-only, no need to surface this */ }
+    if (!sfxAudioCache[path]) sfxAudioCache[path] = new Audio(path);
+    const el = sfxAudioCache[path].cloneNode(true);
+    el.volume = volume ?? 0.55;
+    el.play().catch(() => {}); // autoplay-policy rejections are fine — fx stay visual-only
+  } catch (e) { /* missing/unsupported audio — fx are still visual-only, no need to surface this */ }
+}
+function playWeaponSfx(weaponType) {
+  playSfxFile(WEAPON_SFX_FILES[weaponType] || WEAPON_SFX_FILES.pistol, 0.55);
+}
+// Distinct impact sound per outcome: a solid hit-marker click for a normal hit, a
+// bigger explosion rumble for heavy weapons, a clang/ricochet for a miss, and a
+// blade impact for melee — so hit and miss are unmistakably different by ear alone.
+function playImpactSfx(weaponType, hit) {
+  if (!hit) return playSfxFile(IMPACT_SFX_FILES.miss, 0.45);
+  if (weaponType === 'melee') return playSfxFile(IMPACT_SFX_FILES.melee, 0.6);
+  if (weaponType === 'heavy') return playSfxFile(IMPACT_SFX_FILES.explosion, 0.6);
+  playSfxFile(IMPACT_SFX_FILES.hit, 0.5);
 }
 
 // The full animated reveal for one attack: a spinning d20 that lands on the roll, the AD
@@ -4715,11 +4745,18 @@ async function playAttackFx({ attackerX, attackerY, targetX, targetY, weaponType
   await combatSleep(250);
 
   // 3. Fire — now that the outcome is known, the weapon-specific sound + bolt travel
-  // the line as the visible consequence of the roll, then the line itself fades.
+  // the line as the visible consequence of the roll. On a miss the bolt undershoots
+  // and kicks off to one side rather than stopping dead on the target, so it reads
+  // as a shot that actually went wide instead of a hit that just didn't count.
   playWeaponSfx(weaponType);
-  spawnLaserBolt(a.x, a.y, t.x, t.y, weaponType, 220);
+  const boltEnd = hit ? t : missBoltEndpoint(a, t);
+  spawnLaserBolt(a.x, a.y, boltEnd.x, boltEnd.y, weaponType, 220);
   await combatSleep(260);
   if (line) line.remove();
+
+  playImpactSfx(weaponType, hit);
+  if (hit) spawnExplosionFx(targetX, targetY, weaponType);
+  else spawnMissSparkFx(boltEnd);
 
   if (!hit) { await combatSleep(700); return; }
 
