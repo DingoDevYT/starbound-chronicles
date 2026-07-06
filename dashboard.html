@@ -153,6 +153,14 @@
             <div id="variant-picker" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
           </div>
         </div>
+        <div style="border-top:1px solid var(--border); margin-top:10px; padding-top:10px;">
+          <label class="form-label" style="font-size:10.5px;">Or Upload Your Own Art</label>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <input type="file" id="new-char-portrait-inp" accept="image/png,image/jpeg,image/webp,image/gif" style="font-size:11px; max-width:200px;">
+            <button type="button" class="btn-ghost" onclick="clearNewCharPortrait()" style="font-size:11px; padding:5px 10px;">Clear</button>
+          </div>
+          <p style="font-size:10.5px; color:var(--text-faint); margin:4px 0 0;">PNG/JPG/WebP/GIF, up to 5MB. Overrides the picker above — can also be added later from the character sheet.</p>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">Class</label>
@@ -364,6 +372,11 @@ function speciesImagePath(species, gender, variant) {
 // Default portrait per species (first available gender/variant) — used wherever a character's
 // specific appearance choice isn't available (NPCs, fallbacks, etc).
 const SPECIES_IMGS = Object.fromEntries(Object.keys(SPECIES_VARIANTS).map(s => [s, speciesImagePath(s)]));
+// A character's own uploaded art (custom_portrait_url) always wins over the built-in
+// species/gender/variant portrait — used wherever a character's image renders.
+function characterPortraitPath(species, appearance, customUrl) {
+  return customUrl || speciesImagePath(species, appearance?.gender, appearance?.variant);
+}
 const ROLE_ICONS = { captain:'👨‍✈️', pilot:'🚀', gunsmith:'🔫', technician:'⚙️' };
 
 const PLACEHOLDER = {
@@ -538,7 +551,7 @@ async function loadCharacters() {
   grid.innerHTML = chars.map(c => `
     <div class="char-card" style="--card-top:${speciesColor(c.species)};cursor:pointer;" onclick="window.location.href='character.html?id=${c.id}'">
       <div class="char-card-icon" style="padding:0;overflow:hidden;border-radius:10px;" title="Click to change appearance" onclick="event.stopPropagation(); openChangeAppearance('${c.id}','${c.species}',${JSON.stringify(c.appearance || {}).replace(/"/g,'&quot;')})">
-        <img src="${speciesImagePath(c.species, c.appearance?.gender, c.appearance?.variant)}" alt="${c.species}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">
+        <img src="${characterPortraitPath(c.species, c.appearance, c.custom_portrait_url)}" alt="${c.species}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">
       </div>
       <div class="char-card-name">${esc(c.name)}</div>
       <div class="char-card-meta">
@@ -656,6 +669,8 @@ document.getElementById('species-picker').addEventListener('click', e => {
   renderAppearancePicker();
   updatePointBuy();
 });
+
+function clearNewCharPortrait() { document.getElementById('new-char-portrait-inp').value = ''; }
 
 function renderAppearancePicker() {
   const variants = SPECIES_VARIANTS[selectedSpecies] || { M: [null] };
@@ -862,8 +877,22 @@ document.getElementById('create-char-btn').addEventListener('click', async () =>
 
   await db.from('character_inventory').insert(startingItems);
 
+  // Custom art, if the player uploaded any — needs the character's real id for its
+  // storage folder, so this only happens after the row above is created.
+  const portraitFile = document.getElementById('new-char-portrait-inp').files?.[0];
+  if (portraitFile) {
+    const ext = (portraitFile.name.split('.').pop() || 'png').toLowerCase();
+    const path = `${newChar.id}/portrait.${ext}`;
+    const { error: upErr } = await db.storage.from('portraits').upload(path, portraitFile, { upsert: true, cacheControl: '3600' });
+    if (!upErr) {
+      const { data: pub } = db.storage.from('portraits').getPublicUrl(path);
+      await db.from('characters').update({ custom_portrait_url: pub.publicUrl + '?v=' + Date.now() }).eq('id', newChar.id);
+    }
+  }
+
   closeModal('modal-new-char');
   document.getElementById('new-char-name').value = '';
+  document.getElementById('new-char-portrait-inp').value = '';
   await loadCharacters();
 });
 

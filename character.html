@@ -471,6 +471,16 @@ body.edit-mode .edit-hint  { display:block; }
           <div id="appearance-variants" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
         </div>
       </div>
+      <div style="border-top:1px solid var(--border); margin-top:14px; padding-top:14px;">
+        <label class="form-label">Or Upload Your Own Art</label>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <input type="file" id="portrait-upload-inp" accept="image/png,image/jpeg,image/webp,image/gif" style="font-size:11px; max-width:200px;">
+          <button class="btn-secondary" id="portrait-upload-btn" onclick="uploadCustomPortrait()" style="font-size:11px; padding:6px 12px;">Upload</button>
+        </div>
+        <p style="font-size:10.5px; color:var(--text-faint); margin:6px 0 0;">PNG/JPG/WebP/GIF, up to 5MB. Once set, this replaces the picker above everywhere your character appears — sheet, crew roster, tokens.</p>
+        <div class="form-error" id="portrait-upload-error"></div>
+        <button class="btn-ghost" id="portrait-remove-btn" onclick="removeCustomPortrait()" style="font-size:11px; padding:5px 10px; margin-top:8px; display:none; color:#ff8888;">Remove custom art (use picker above instead)</button>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn-ghost" onclick="closeModal('modal-appearance')">Cancel</button>
@@ -621,6 +631,11 @@ function speciesImagePath(species, gender, variant) {
   return `assets/NN_Species_${speciesName}${g || 'M'}${suffix}.png`;
 }
 const SPECIES_IMGS = Object.fromEntries(Object.keys(SPECIES_VARIANTS).map(s => [s, speciesImagePath(s)]));
+// A character's own uploaded art (custom_portrait_url) always wins over the built-in
+// species/gender/variant portrait — used wherever a character's image renders.
+function characterPortraitPath(species, appearance, customUrl) {
+  return customUrl || speciesImagePath(species, appearance?.gender, appearance?.variant);
+}
 
 const params = new URLSearchParams(location.search);
 const charId = params.get('id');
@@ -666,7 +681,7 @@ function populateSidebar() {
   document.title = `${char.name} — Starbound Chronicles`;
   document.getElementById('bio-name').textContent   = char.name;
   document.getElementById('bio-sub').textContent    = cap(spec);
-  const imgSrc = speciesImagePath(spec, char.appearance?.gender, char.appearance?.variant);
+  const imgSrc = characterPortraitPath(spec, char.appearance, char.custom_portrait_url);
   const iconEl = document.getElementById('portrait-icon');
   if (imgSrc) {
     iconEl.innerHTML = `<img src="${imgSrc}" style="width:100%;height:100%;object-fit:cover;" alt="">`;
@@ -903,6 +918,12 @@ function openAppearance() {
   const opts = variants[apGender] || [null];
   apVariant = opts.includes(char.appearance?.variant) ? char.appearance.variant : opts[0];
   renderAppearancePicker();
+  // If custom art is already set, that's what's actually showing everywhere right now —
+  // reflect that in the preview instead of the built-in picker's current selection.
+  if (char.custom_portrait_url) document.getElementById('appearance-preview').src = char.custom_portrait_url;
+  document.getElementById('portrait-upload-inp').value = '';
+  showError('portrait-upload-error', '');
+  document.getElementById('portrait-remove-btn').style.display = char.custom_portrait_url ? 'inline-block' : 'none';
   openModal('modal-appearance');
 }
 
@@ -937,6 +958,48 @@ async function saveAppearance() {
   const { error } = await db.from('characters').update({ appearance }).eq('id', charId);
   if (error) return alert('Failed to save appearance: ' + error.message);
   closeModal('modal-appearance');
+  populateSidebar();
+}
+
+// Custom character art — for players with their own commissioned/drawn portrait instead
+// of the built-in picker. Stored in the 'portraits' Storage bucket under a per-character
+// folder (RLS scopes writes to the character's owner); the object is always named
+// "portrait.<ext>" and upserted, so re-uploading replaces it rather than piling up files.
+const PORTRAIT_MAX_BYTES = 5 * 1024 * 1024;
+async function uploadCustomPortrait() {
+  const input = document.getElementById('portrait-upload-inp');
+  showError('portrait-upload-error', '');
+  const file = input.files?.[0];
+  if (!file) return showError('portrait-upload-error', 'Choose an image first.');
+  if (!file.type.startsWith('image/')) return showError('portrait-upload-error', 'Please choose an image file.');
+  if (file.size > PORTRAIT_MAX_BYTES) return showError('portrait-upload-error', 'Image must be under 5MB.');
+
+  const btn = document.getElementById('portrait-upload-btn');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+  const path = `${charId}/portrait.${ext}`;
+  const { error: upErr } = await db.storage.from('portraits').upload(path, file, { upsert: true, cacheControl: '3600' });
+  btn.disabled = false; btn.textContent = 'Upload';
+  if (upErr) return showError('portrait-upload-error', 'Upload failed: ' + upErr.message);
+
+  const { data: pub } = db.storage.from('portraits').getPublicUrl(path);
+  const url = pub.publicUrl + '?v=' + Date.now(); // cache-bust so a re-upload shows immediately
+  const { error: dbErr } = await db.from('characters').update({ custom_portrait_url: url }).eq('id', charId);
+  if (dbErr) return showError('portrait-upload-error', 'Uploaded, but failed to link it: ' + dbErr.message);
+
+  char.custom_portrait_url = url;
+  document.getElementById('appearance-preview').src = url;
+  document.getElementById('portrait-remove-btn').style.display = 'inline-block';
+  populateSidebar();
+}
+
+async function removeCustomPortrait() {
+  if (!confirm('Remove your custom art and go back to the built-in picker?')) return;
+  const { error } = await db.from('characters').update({ custom_portrait_url: null }).eq('id', charId);
+  if (error) return alert('Failed to remove: ' + error.message);
+  char.custom_portrait_url = null;
+  document.getElementById('portrait-remove-btn').style.display = 'none';
+  renderAppearancePicker(); // falls back to showing the built-in picker's current selection
   populateSidebar();
 }
 
