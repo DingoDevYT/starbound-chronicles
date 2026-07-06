@@ -463,6 +463,7 @@
         <div style="position:relative;">
           <canvas id="combat-canvas" height="520"></canvas>
           <div id="combat-fx-layer" class="combat-fx-layer"></div>
+          <div id="combat-turn-banner" class="combat-turn-banner" style="display:none;"></div>
         </div>
         <div id="combat-cheatsheet" class="combat-cheatsheet" style="display:none;"></div>
       </div>
@@ -798,6 +799,19 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="modal-end-turn-warning">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header"><span class="modal-title">End Turn Early?</span><button class="modal-close" onclick="closeModal('modal-end-turn-warning')">✕</button></div>
+    <div class="modal-body">
+      <p id="end-turn-warning-text" style="font-size:13px; color:var(--text-dim); line-height:1.6; margin:0;"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('modal-end-turn-warning')">Go Back</button>
+      <button class="btn-primary" onclick="endTurnAnyway()" style="width:auto; padding:10px 24px;">End Turn Anyway</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-add-cargo">
   <div class="modal" style="max-width:440px;">
     <div class="modal-header"><span class="modal-title">Add Item to Cargo Hold</span><button class="modal-close" onclick="closeModal('modal-add-cargo')">✕</button></div>
@@ -1105,7 +1119,8 @@ function preloadImages() {
     .on('postgres_changes', { event:'*',      schema:'public', table:'campaign_npcs',     filter:`campaign_id=eq.${campaignId}` }, loadNPCs)
     .on('postgres_changes', { event:'*',      schema:'public', table:'campaign_cargo',    filter:`campaign_id=eq.${campaignId}` }, loadCargo)
     .on('postgres_changes', { event:'*',      schema:'public', table:'ship_log',          filter:`campaign_id=eq.${campaignId}` }, loadLog)
-    .on('postgres_changes', { event:'INSERT', schema:'public', table:'dice_rolls',        filter:`campaign_id=eq.${campaignId}` }, loadDiceHistory)
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'dice_rolls',        filter:`campaign_id=eq.${campaignId}` },
+      p => { loadDiceHistory(); if (p.new.combat_fx) playAttackFx(p.new.combat_fx); })
     .on('postgres_changes', { event:'*',      schema:'public', table:'mining_sessions',   filter:`campaign_id=eq.${campaignId}` }, loadMiningSessions)
     .subscribe();
 })();
@@ -4279,9 +4294,11 @@ function refreshCombatUI() {
   endBtn.style.display   = (isGM && st.active) ? 'inline-block' : 'none';
   turnBtn.style.display  = (isGM && st.active) ? 'inline-block' : 'none';
 
+  const banner = document.getElementById('combat-turn-banner');
   if (!st.active) {
     status.textContent = isGM ? 'No active battle. Add combatants to Initiative, then Start Combat.' : 'No active battle.';
     cheat.style.display = 'none';
+    if (banner) banner.style.display = 'none';
     return;
   }
   const typeLabel = st.type === 'space' ? 'Spacecraft' : 'On-Foot';
@@ -4289,6 +4306,20 @@ function refreshCombatUI() {
   const active = combatants[activeTurn % (combatants.length || 1)];
   status.innerHTML = `<strong style="color:#e0ecff;">${typeLabel} battle</strong> · ${esc(mapLabel)} · Round ${campaign.round_num || 0}` +
     (active ? ` · <span style="color:#ffd23a;">${esc(active.combatant)}'s turn</span>` : '');
+
+  // Big, hard-to-miss banner pinned on the map itself (not just the small status
+  // line above it) — turns green and says "YOUR TURN" when it's this viewer's own
+  // combatant acting, so it's unmissable whose turn it is.
+  if (banner) {
+    if (!active) { banner.style.display = 'none'; }
+    else {
+      const isMine = active.character_id && active.character_id === myCharacterId;
+      banner.style.display = 'block';
+      banner.classList.toggle('mine', !!isMine);
+      banner.textContent = isMine ? `▸ YOUR TURN — ${active.combatant}` : `${active.combatant}'s Turn`;
+    }
+  }
+
   renderCheatSheet(active);
 }
 
@@ -4337,11 +4368,30 @@ async function renderCheatSheet(c) {
     <div class="combat-cheat-chip">To-hit: d20 ${(c.fight_mod??0)>=0?'+':''}${c.fight_mod??0} FIGHT</div>
     ${weaponHtml}
     ${actionsHtml}
-    <button class="btn-ghost" title="How does a turn work?" onclick="openTurnHelp()" style="font-size:12px; padding:5px 10px; border-radius:50%; margin-left:${isGM?'8px':'auto'};">ⓘ</button>
-    ${isGM ? `<button class="btn-secondary" style="font-size:11px; padding:5px 12px;" onclick="nextTurn()">End Turn ▸</button>` : ''}`;
+    <button class="btn-ghost" title="How does a turn work?" onclick="openTurnHelp()" style="font-size:12px; padding:5px 10px; border-radius:50%; margin-left:${(isGM||canAct)?'8px':'auto'};">ⓘ</button>
+    ${(isGM || canAct) ? `<button class="btn-secondary" style="font-size:11px; padding:5px 12px;" onclick="confirmEndTurn()">End Turn ▸</button>` : ''}`;
 }
 
 function openTurnHelp() { openModal('modal-turn-help'); }
+
+// Ending a turn without attacking/dashing/switching or using all movement is usually a
+// mistake (a player forgetting their action), not a deliberate choice — so it gets a
+// confirmation instead of silently passing. GM ending someone else's turn (no personal
+// turnActionState relevance) or a fully-spent turn both skip straight through.
+function confirmEndTurn() {
+  const skippedAction = !turnActionState.coreActionUsed;
+  const unusedMove = turnActionState.remainingMove > 0;
+  if (!skippedAction && !unusedMove) return nextTurn();
+  const bits = [];
+  if (skippedAction) bits.push("haven't used your Core action (Attack/Dash/Switch)");
+  if (unusedMove) bits.push(`have ${turnActionState.remainingMove} square${turnActionState.remainingMove===1?'':'s'} of movement left`);
+  document.getElementById('end-turn-warning-text').textContent = `You ${bits.join(' and ')}. End your turn anyway?`;
+  openModal('modal-end-turn-warning');
+}
+function endTurnAnyway() {
+  closeModal('modal-end-turn-warning');
+  nextTurn();
+}
 
 // Auto-resolve an attack: distance + simple cover heuristic (an obstacle in the target's
 // neighbour cell toward the attacker) determine Total AD, then roll to-hit and damage —
@@ -4387,17 +4437,19 @@ async function resolveAttack(attackerId) {
     summary = `${attacker.combatant} attacks ${target.combatant}: d20(${roll}) + ${attacker.fight_mod??0} FIGHT + ${weapon.accuracy_mod??0} acc = ${toHitTotal} vs AD ${totalAD}${hasCover?' (cover)':''} — MISS`;
   }
 
-  // Play the on-map reveal before applying/logging results, so watchers see the roll land
-  // and the outcome unfold at the target's token rather than only a line in the dice log.
-  await playAttackFx({
+  // The animation is broadcast via the dice_rolls row itself (combat_fx JSONB) rather
+  // than played locally here — the realtime INSERT handler every client already
+  // subscribes to (for the Dice Roller history) triggers playAttackFx() for everyone,
+  // including this browser, so all viewers see the identical sequence in sync.
+  const combatFx = {
     attackerX: attacker.grid_x, attackerY: attacker.grid_y,
     targetX: target.grid_x, targetY: target.grid_y, weaponType: weapon.weapon_type,
     roll, toHitTotal, totalAD, hit, hasCover,
-    weaponIcon: weapon.icon_path ? renderStoredIcon(weapon.icon_path, 28) : null,
+    weaponIconPath: weapon.icon_path || null,
     dmgResult, armor: targetArmor, finalDmg: dmg,
-  });
+  };
 
-  await db.from('dice_rolls').insert({ campaign_id: campaignId, user_id: currentUser.id, expression: summary, result: dmg, breakdown: [] });
+  await db.from('dice_rolls').insert({ campaign_id: campaignId, user_id: currentUser.id, expression: summary, result: dmg, breakdown: [], combat_fx: combatFx });
 
   if (hit && dmg > 0) {
     const newHp = Math.max(0, targetHpCurrent - dmg);
@@ -4542,6 +4594,15 @@ function tickChipNumber(el, prefix, to, duration, suffix) {
     if (i >= steps) clearInterval(iv);
   }, duration / steps);
 }
+// Slot-machine the d20 through random faces before locking to the real roll, so it
+// visibly "rolls" instead of just displaying the final number for the whole spin.
+function spinDiceCycle(el, finalValue, duration, intervalMs) {
+  return new Promise(resolve => {
+    if (!el) return resolve();
+    const iv = setInterval(() => { el.textContent = Math.floor(Math.random()*20) + 1; }, intervalMs || 80);
+    setTimeout(() => { clearInterval(iv); el.textContent = finalValue; resolve(); }, duration);
+  });
+}
 // A little bolt that travels along the line from attacker to target, timed with the
 // weapon's firing sound — colour varies by weapon type so lasers/slugs/blasts read
 // differently at a glance.
@@ -4620,9 +4681,10 @@ function playWeaponSfx(weaponType) {
 // hit-spark burst — all anchored at the target's position so it's obvious who's being hit
 // and by what, instead of only a text line in the dice log. Successive chips are stacked
 // upward (yOffsetCells) so they don't all print directly on top of each other.
-async function playAttackFx({ attackerX, attackerY, targetX, targetY, weaponType, roll, toHitTotal, totalAD, hit, hasCover, weaponIcon, dmgResult, armor, finalDmg }) {
+async function playAttackFx({ attackerX, attackerY, targetX, targetY, weaponType, roll, toHitTotal, totalAD, hit, hasCover, weaponIconPath, dmgResult, armor, finalDmg }) {
   const a = combatCellToScreen(attackerX, attackerY);
   const t = combatCellToScreen(targetX, targetY);
+  const weaponIcon = weaponIconPath ? renderStoredIcon(weaponIconPath, 28) : null;
 
   // 1. Measure the shot — a ruler-style line grows from attacker to target while a chip
   // ticks up through the AD the shot has to beat (size + distance + cover), same idea as
@@ -4633,19 +4695,14 @@ async function playAttackFx({ attackerX, attackerY, targetX, targetY, weaponType
   await combatSleep(450);
   if (adChip) adChip.textContent = `AD ${totalAD}${hasCover ? ' 🪨 cover' : ''} to beat`;
 
-  // 2. Fire — weapon-specific sound + a bolt travelling the line, then the line itself fades.
-  playWeaponSfx(weaponType);
-  spawnLaserBolt(a.x, a.y, t.x, t.y, weaponType, 220);
-  await combatSleep(260);
-  if (line) line.remove();
-
-  // 3. The roll — spins, lands on the actual number, and lingers a good while longer next
-  // to the AD-to-beat chip before flipping to hit/miss colour, so the "did it land" beat
-  // is legible instead of an instant flash.
+  // 2. The roll — resolved BEFORE the weapon fires, so watchers see "will this land"
+  // decided first and the shot itself reads as a consequence of the roll, not a
+  // random effect that happens to be followed by a number. Slot-machines through
+  // random faces before locking to the real roll, then reveals hit/miss.
   const d20 = spawnFxEl('combat-fx-d20 spinning', targetX, targetY, 'd20');
-  await combatSleep(500);
-  if (d20) d20.textContent = roll;
-  await combatSleep(1450);
+  await combatSleep(350);
+  await spinDiceCycle(d20, roll, 900, 70);
+  await combatSleep(350);
   if (d20) d20.classList.remove('spinning');
   if (adChip) adChip.className = `combat-fx-chip ${hit ? 'hit' : 'miss'}`;
   if (d20) d20.classList.add(hit ? 'hit' : 'miss');
@@ -4656,6 +4713,13 @@ async function playAttackFx({ attackerX, attackerY, targetX, targetY, weaponType
   spawnFxEl(`combat-fx-chip ${hit ? 'hit' : 'miss'}`, targetX, targetY,
     `${toHitTotal} vs AD ${totalAD} — ${hit ? 'HIT' : 'MISS'}`, 1100, -0.9);
   await combatSleep(250);
+
+  // 3. Fire — now that the outcome is known, the weapon-specific sound + bolt travel
+  // the line as the visible consequence of the roll, then the line itself fades.
+  playWeaponSfx(weaponType);
+  spawnLaserBolt(a.x, a.y, t.x, t.y, weaponType, 220);
+  await combatSleep(260);
+  if (line) line.remove();
 
   if (!hit) { await combatSleep(700); return; }
 

@@ -986,6 +986,25 @@
 /* ─── COMBAT ATTACK FX (on-map roll/hit/damage feedback) ────────── */
 .combat-fx-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 20; }
 
+.combat-turn-banner {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  z-index: 25; pointer-events: none;
+  padding: 6px 20px; border-radius: 999px;
+  font-size: 13px; font-weight: 700; letter-spacing: .3px; white-space: nowrap;
+  background: rgba(6,10,20,.88);
+  border: 1px solid #ffd23a;
+  color: #ffd23a;
+  animation: combat-turn-banner-pulse 1.6s ease-in-out infinite;
+}
+.combat-turn-banner.mine {
+  border-color: #4dff9e;
+  color: #4dff9e;
+}
+@keyframes combat-turn-banner-pulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(255,210,58,.35); }
+  50% { box-shadow: 0 0 22px rgba(255,210,58,.7); }
+}
+
 .combat-fx-d20 {
   position: absolute;
   transform: translate(-50%, -50%);

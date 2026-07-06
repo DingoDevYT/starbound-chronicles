@@ -1,0 +1,21 @@
+-- ============================================================
+--  STARBOUND CHRONICLES — Schema v27
+--  Broadcast attack visuals to every viewer, not just the attacker.
+--
+--  resolveAttack() used to call playAttackFx() directly in the
+--  attacking player's own browser — nobody else watching the same
+--  combat ever saw the roll/line/bolt/damage sequence, only the
+--  eventual HP change once it landed via the existing realtime
+--  subscriptions. dice_rolls INSERT is already broadcast to every
+--  client (it feeds the Dice Roller's history panel) — piggybacking
+--  the animation's parameters onto that same row means the existing
+--  realtime handler can trigger the identical sequence on every
+--  connected client, including the attacker's own (so there's a
+--  single source of truth for "what the animation looked like"
+--  instead of the attacker's client improvising it locally while
+--  everyone else sees nothing).
+--
+--  Run once. Safe to re-run.
+-- ============================================================
+
+ALTER TABLE dice_rolls ADD COLUMN IF NOT EXISTS combat_fx JSONB DEFAULT NULL;
