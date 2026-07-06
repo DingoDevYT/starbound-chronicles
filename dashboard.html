@@ -881,12 +881,19 @@ document.getElementById('create-char-btn').addEventListener('click', async () =>
   // storage folder, so this only happens after the row above is created.
   const portraitFile = document.getElementById('new-char-portrait-inp').files?.[0];
   if (portraitFile) {
-    const ext = (portraitFile.name.split('.').pop() || 'png').toLowerCase();
-    const path = `${newChar.id}/portrait.${ext}`;
-    const { error: upErr } = await db.storage.from('portraits').upload(path, portraitFile, { upsert: true, cacheControl: '3600' });
-    if (!upErr) {
-      const { data: pub } = db.storage.from('portraits').getPublicUrl(path);
-      await db.from('characters').update({ custom_portrait_url: pub.publicUrl + '?v=' + Date.now() }).eq('id', newChar.id);
+    try {
+      const ext = (portraitFile.name.split('.').pop() || 'png').toLowerCase();
+      const path = `${newChar.id}/portrait.${ext}`;
+      const { error: upErr } = await db.storage.from('portraits').upload(path, portraitFile, { upsert: true, cacheControl: '3600' });
+      if (upErr) {
+        alert('Character created, but the custom art upload failed: ' + upErr.message + ' — has schema-v25.sql been run in Supabase yet? You can also add art later from the character sheet.');
+      } else {
+        const { data: pub } = db.storage.from('portraits').getPublicUrl(path);
+        const { data: updated, error: dbErr } = await db.from('characters').update({ custom_portrait_url: pub.publicUrl + '?v=' + Date.now() }).eq('id', newChar.id).select();
+        if (dbErr || !updated?.length) alert('Character created and art uploaded, but saving the link failed — has schema-v25.sql been run yet? You can retry from the character sheet.');
+      }
+    } catch (e) {
+      alert('Character created, but the custom art upload hit an unexpected error: ' + (e?.message || e));
     }
   }
 

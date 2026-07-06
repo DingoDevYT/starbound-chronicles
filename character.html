@@ -976,27 +976,34 @@ async function uploadCustomPortrait() {
 
   const btn = document.getElementById('portrait-upload-btn');
   btn.disabled = true; btn.textContent = 'Uploading…';
-  const ext = (file.name.split('.').pop() || 'png').toLowerCase();
-  const path = `${charId}/portrait.${ext}`;
-  const { error: upErr } = await db.storage.from('portraits').upload(path, file, { upsert: true, cacheControl: '3600' });
-  btn.disabled = false; btn.textContent = 'Upload';
-  if (upErr) return showError('portrait-upload-error', 'Upload failed: ' + upErr.message);
+  try {
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+    const path = `${charId}/portrait.${ext}`;
+    const { error: upErr } = await db.storage.from('portraits').upload(path, file, { upsert: true, cacheControl: '3600' });
+    if (upErr) return showError('portrait-upload-error', 'Upload failed: ' + upErr.message + ' — has schema-v25.sql been run in Supabase yet? It creates the "portraits" bucket this needs.');
 
-  const { data: pub } = db.storage.from('portraits').getPublicUrl(path);
-  const url = pub.publicUrl + '?v=' + Date.now(); // cache-bust so a re-upload shows immediately
-  const { error: dbErr } = await db.from('characters').update({ custom_portrait_url: url }).eq('id', charId);
-  if (dbErr) return showError('portrait-upload-error', 'Uploaded, but failed to link it: ' + dbErr.message);
+    const { data: pub } = db.storage.from('portraits').getPublicUrl(path);
+    const url = pub.publicUrl + '?v=' + Date.now(); // cache-bust so a re-upload shows immediately
+    const { data: updated, error: dbErr } = await db.from('characters').update({ custom_portrait_url: url }).eq('id', charId).select();
+    if (dbErr) return showError('portrait-upload-error', 'Uploaded, but failed to link it: ' + dbErr.message + ' — has schema-v25.sql been run yet? It adds the custom_portrait_url column.');
+    if (!updated?.length) return showError('portrait-upload-error', 'Uploaded, but the save was blocked (no rows updated) — check schema-v25.sql has been run and RLS allows this.');
 
-  char.custom_portrait_url = url;
-  document.getElementById('appearance-preview').src = url;
-  document.getElementById('portrait-remove-btn').style.display = 'inline-block';
-  populateSidebar();
+    char.custom_portrait_url = url;
+    document.getElementById('appearance-preview').src = url;
+    document.getElementById('portrait-remove-btn').style.display = 'inline-block';
+    populateSidebar();
+  } catch (e) {
+    showError('portrait-upload-error', 'Unexpected error: ' + (e?.message || e));
+  } finally {
+    btn.disabled = false; btn.textContent = 'Upload';
+  }
 }
 
 async function removeCustomPortrait() {
   if (!confirm('Remove your custom art and go back to the built-in picker?')) return;
-  const { error } = await db.from('characters').update({ custom_portrait_url: null }).eq('id', charId);
+  const { data: updated, error } = await db.from('characters').update({ custom_portrait_url: null }).eq('id', charId).select();
   if (error) return alert('Failed to remove: ' + error.message);
+  if (!updated?.length) return alert('That was blocked (no rows updated) — check schema-v25.sql has been run.');
   char.custom_portrait_url = null;
   document.getElementById('portrait-remove-btn').style.display = 'none';
   renderAppearancePicker(); // falls back to showing the built-in picker's current selection
