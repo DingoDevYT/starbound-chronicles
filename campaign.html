@@ -1137,7 +1137,7 @@ function preloadImages() {
     .on('postgres_changes', { event:'*',      schema:'public', table:'campaign_cargo',    filter:`campaign_id=eq.${campaignId}` }, loadCargo)
     .on('postgres_changes', { event:'*',      schema:'public', table:'ship_log',          filter:`campaign_id=eq.${campaignId}` }, loadLog)
     .on('postgres_changes', { event:'INSERT', schema:'public', table:'dice_rolls',        filter:`campaign_id=eq.${campaignId}` },
-      p => { loadDiceHistory(); if (p.new.combat_fx) playAttackFx(p.new.combat_fx); })
+      p => { loadDiceHistory(); if (p.new.combat_fx) playAttackFx(p.new.combat_fx).catch(err => console.error('attack FX failed to play:', err)); })
     .on('postgres_changes', { event:'*',      schema:'public', table:'mining_sessions',   filter:`campaign_id=eq.${campaignId}` }, loadMiningSessions)
     .subscribe();
 })();
@@ -4711,14 +4711,19 @@ function init3D() {
       if (found) { select3DToken(found[0]); return; }
     }
 
+    // Same permission model as the 2D drag handler: the GM can move ANY token at any
+    // time (corrections, NPC placement, whatever), a player can only move their own
+    // character's token. Movement-budget enforcement (below, in move3DToken) is
+    // separate from this permission check and only ever applies to whoever's turn
+    // it actually is, regardless of who's moving them.
     if (!selected3DId) return;
-    const activeCombatant = combatants[activeTurn % (combatants.length || 1)];
-    if (!activeCombatant || selected3DId !== activeCombatant.id) return; // only the active combatant may move, same as the 2D drag gate
-    if (!isGM && activeCombatant.character_id !== myCharacterId) return;
+    const tok = combatants.find(c => c.id === selected3DId);
+    if (!tok) return;
+    if (!isGM && tok.character_id !== myCharacterId) return;
     const ix = new THREE.Vector3();
     if (raycaster.ray.intersectPlane(groundPlane, ix)) {
       const { gx, gy } = world3DToGrid(ix.x, ix.z);
-      move3DToken(activeCombatant, gx, gy);
+      move3DToken(tok, gx, gy);
     }
   });
 
@@ -4752,14 +4757,18 @@ function resize3D() {
   renderer3D.setSize(w, h);
 }
 
-// Only the active combatant's own token can actually be moved (mirrors the 2D drag
-// handler's gate); movement budget + obstacle blocking are enforced identically, and the
-// new position is written to the same `initiative_tracker` row the same way.
+// Mirrors the 2D drag handler's mouseup logic exactly: obstacles always block
+// regardless of who's moving; the movement-budget check only applies when the token
+// being moved is whoever's turn it currently is — so the GM can freely reposition any
+// OTHER combatant (corrections, NPC placement, "actually stand over here") without
+// being budgeted, while the active combatant's own move (by the GM or the player)
+// still spends their movement for the turn.
 async function move3DToken(tok, gx, gy) {
   const st = combatState();
   if ((st.obstacles || []).some(o => o[0] === gx && o[1] === gy)) return;
+  const isActiveToken = combatants.length > 0 && tok.id === combatants[activeTurn % combatants.length]?.id;
   let moveCells = 0;
-  if (tok.grid_x != null) {
+  if (isActiveToken && tok.grid_x != null) {
     moveCells = Math.round(Math.hypot(gx - tok.grid_x, gy - tok.grid_y));
     if (moveCells > turnActionState.remainingMove) {
       alert(`Not enough movement left (${turnActionState.remainingMove} square${turnActionState.remainingMove === 1 ? '' : 's'} remaining).`);
@@ -4768,8 +4777,7 @@ async function move3DToken(tok, gx, gy) {
   }
   tok.grid_x = gx; tok.grid_y = gy;
   await db.from('initiative_tracker').update({ grid_x: gx, grid_y: gy }).eq('id', tok.id);
-  turnActionState.remainingMove -= moveCells;
-  renderCheatSheet(tok);
+  if (isActiveToken) { turnActionState.remainingMove -= moveCells; renderCheatSheet(tok); }
   const entry = token3DIndex.get(tok.id);
   if (entry) animate3DMove(entry, gx, gy);
 }
@@ -4798,18 +4806,23 @@ function select3DToken(id) {
 // map already uses.
 async function build3DCombatMap(st) {
   init3D();
-  document.getElementById('combat-3d-loading').style.display = 'flex';
   try {
     const key = st.type + '|' + st.map + '|' + st.w + '|' + st.h + '|' + (st.obstacles || []).length;
     if (key !== built3DKey) {
+      // Only the (rare) full environment rebuild shows the loading overlay — this runs
+      // once per battle. Routine token syncs happen on EVERY combatant change (every HP
+      // tick, every move, mid-attack), and previously flashed the same full-screen dark
+      // overlay over the map on every single one of those, which could blank out an
+      // attack's FX chips right as they appeared. No overlay for the common case now.
+      document.getElementById('combat-3d-loading').style.display = 'flex';
       built3DKey = key;
       await build3DEnvironment(st);
+      document.getElementById('combat-3d-loading').style.display = 'none';
     }
     await sync3DTokens(st);
     if (!raf3D) tick3D();
   } catch (err) {
     console.error('3D combat map failed to build:', err);
-  } finally {
     document.getElementById('combat-3d-loading').style.display = 'none';
   }
 }
