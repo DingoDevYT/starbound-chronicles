@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>3D Combat Map — Viability Test</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #04070e; --surface: #0b111d; --border: #1c2740; --border2: #2a3a5c;
+    --text: #e0ecff; --text-dim: #9ab0d6; --text-faint: #5f7396;
+    --accent: #40c8ff; --accent2: #ffd23a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; }
+  #app { position: relative; width: 100vw; height: 100vh; }
+  #three-canvas-wrap { position: absolute; inset: 0; }
+  canvas { display: block; }
+
+  .test-banner {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 50;
+    background: linear-gradient(90deg, #3a1a4a, #1a2a4a);
+    border-bottom: 1px solid var(--border2);
+    padding: 6px 16px; font-size: 12px; text-align: center; color: var(--accent2);
+    letter-spacing: .4px;
+  }
+
+  .hud-bar {
+    position: absolute; top: 34px; left: 0; right: 0; z-index: 45;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 8px 14px; background: rgba(6,10,20,.85); border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(4px);
+  }
+  .hud-bar label { font-size: 11px; color: var(--text-dim); margin-right: 4px; }
+  select, button, input[type=text] {
+    background: var(--surface); color: var(--text); border: 1px solid var(--border2);
+    border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+    font-family: inherit;
+  }
+  input[type=text] { cursor: text; }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.active { border-color: var(--accent2); color: var(--accent2); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button:disabled:hover { border-color: var(--border2); color: var(--text); }
+  .spacer { flex: 1; }
+  .stat-chip {
+    font-size: 11px; color: var(--text-faint); background: rgba(255,255,255,.04);
+    border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; white-space: nowrap;
+  }
+  .stat-chip strong { color: var(--text-dim); }
+
+  #loading-overlay {
+    position: absolute; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
+    background: rgba(4,7,14,.92); flex-direction: column; gap: 10px;
+  }
+  #loading-overlay .spinner {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 3px solid var(--border2); border-top-color: var(--accent);
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading-overlay .msg { font-size: 13px; color: var(--text-dim); max-width: 480px; text-align: center; line-height: 1.6; }
+
+  #info-panel {
+    position: absolute; bottom: 14px; left: 14px; z-index: 45;
+    background: rgba(6,10,20,.88); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; font-size: 11.5px; color: var(--text-dim); max-width: 300px; line-height: 1.6;
+  }
+  #info-panel strong { color: var(--accent); }
+
+  #overlay-layer { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
+  .token-label {
+    position: absolute; transform: translate(-50%, -100%);
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    pointer-events: none;
+  }
+  .token-label .name {
+    background: rgba(6,10,20,.85); border: 1px solid var(--border2); border-radius: 5px;
+    padding: 2px 8px; font-size: 10.5px; font-weight: 700; color: var(--text); white-space: nowrap;
+  }
+  .token-label.enemy .name { border-color: #ff5a5a; color: #ff8a8a; }
+  .token-label.ally .name { border-color: #4dff9e; color: #7dffb8; }
+  .token-label.down .name { border-color: #5f7396; color: #5f7396; text-decoration: line-through; }
+  .token-hp-track { width: 52px; height: 5px; border-radius: 3px; background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.15); overflow: hidden; }
+  .token-hp-fill { height: 100%; background: #4dff9e; transition: width .3s ease; }
+
+  .fx-chip {
+    position: absolute; transform: translate(-50%, -50%);
+    background: rgba(6,10,20,.92); border: 1px solid var(--border2); border-radius: 6px;
+    padding: 4px 10px; font-size: 11.5px; font-weight: 700; white-space: nowrap; color: #e0ecff;
+    pointer-events: none;
+  }
+  .fx-chip.hit { border-color: #4dff9e; color: #7dffb8; }
+  .fx-chip.miss { border-color: #ff8888; color: #ffaaaa; }
+  .fx-d20 {
+    position: absolute; transform: translate(-50%, -50%);
+    width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+    border-radius: 8px; border: 2px solid #40c8ff; background: linear-gradient(135deg, #123a5a, #05070d);
+    box-shadow: 0 0 14px rgba(64,200,255,.8); font-weight: 800; font-size: 15px; color: #e0ecff;
+    pointer-events: none;
+  }
+  .fx-d20.spinning { animation: fx-d20-spin 0.12s linear infinite; }
+  .fx-d20.hit { border-color: #4dff9e; box-shadow: 0 0 16px rgba(77,255,158,.8); }
+  .fx-d20.miss { border-color: #ff5a5a; box-shadow: 0 0 16px rgba(255,90,90,.8); }
+  @keyframes fx-d20-spin { from { transform: translate(-50%,-50%) rotate(0deg); } to { transform: translate(-50%,-50%) rotate(360deg); } }
+  .fx-float {
+    position: absolute; transform: translate(-50%, -50%);
+    font-size: 15px; font-weight: 800; color: #ff8a8a; text-shadow: 0 0 8px rgba(0,0,0,.8);
+    pointer-events: none; animation: fx-float-up 1s ease-out forwards;
+  }
+  @keyframes fx-float-up { from { opacity: 1; transform: translate(-50%,-50%); } to { opacity: 0; transform: translate(-50%, calc(-50% - 40px)); } }
+
+  /* ── Character creator panel ── */
+  #creator-panel {
+    position: absolute; top: 78px; left: 14px; z-index: 45; width: 280px;
+    background: rgba(6,10,20,.92); border: 1px solid var(--border2); border-radius: 10px;
+    padding: 14px; display: flex; flex-direction: column; gap: 8px;
+  }
+  #creator-panel h3 { margin: 0 0 2px; font-size: 13px; color: var(--accent); }
+  #creator-panel .row { display: flex; align-items: center; gap: 8px; }
+  #creator-panel .row label { width: 62px; font-size: 11px; color: var(--text-dim); flex-shrink: 0; }
+  #creator-panel select, #creator-panel input { flex: 1; width: 100%; }
+  #creator-preview {
+    display: flex; align-items: center; gap: 10px; margin: 4px 0;
+  }
+  #creator-preview img {
+    width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border2);
+    background: #0b111d;
+  }
+  .variant-swatches { display: flex; gap: 5px; flex-wrap: wrap; flex: 1; }
+  .variant-swatch {
+    width: 22px; height: 22px; border-radius: 5px; border: 2px solid var(--border2);
+    background: var(--surface); cursor: pointer; font-size: 9px; display: flex; align-items: center; justify-content: center;
+    color: var(--text-dim);
+  }
+  .variant-swatch.selected { border-color: var(--accent2); color: var(--accent2); }
+  #creator-panel .spawn-btn { margin-top: 4px; background: linear-gradient(90deg, #1a5a3a, #123a2a); border-color: #4dff9e; color: #7dffb8; font-weight: 700; }
+
+  /* ── Combat console ── */
+  #combat-console {
+    position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 45;
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(6,10,20,.92); border: 1px solid var(--border2); border-radius: 10px;
+    padding: 10px 16px;
+  }
+  #combat-console .active-name { font-size: 12px; font-weight: 700; color: var(--accent2); white-space: nowrap; }
+
+  #turn-banner {
+    position: absolute; top: 78px; left: 50%; transform: translateX(-50%); z-index: 40;
+    padding: 6px 20px; border-radius: 999px; font-size: 13px; font-weight: 700; letter-spacing: .3px;
+    white-space: nowrap; background: rgba(6,10,20,.88); border: 1px solid #ffd23a; color: #ffd23a;
+    animation: turn-banner-pulse 1.6s ease-in-out infinite; display: none;
+  }
+  #turn-banner.mine { border-color: #4dff9e; color: #4dff9e; }
+  @keyframes turn-banner-pulse { 0%, 100% { box-shadow: 0 0 10px rgba(255,210,58,.35); } 50% { box-shadow: 0 0 22px rgba(255,210,58,.7); } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="test-banner">🧪 3D COMBAT MAP — VIABILITY TEST ONLY — standalone file, not linked from the live site, nothing here touches production</div>
+  <div class="hud-bar">
+    <label>Theme</label>
+    <select id="theme-sel">
+      <option value="arena">Training Arena</option>
+      <option value="forest">Forest</option>
+      <option value="town">Town</option>
+      <option value="dungeon">Dungeon</option>
+      <option value="factory">Factory</option>
+    </select>
+    <button id="recenter-btn">🎯 Recenter</button>
+    <button id="zoom-in-btn">+</button>
+    <button id="zoom-out-btn">−</button>
+    <button id="creator-toggle-btn">🧬 Character Creator</button>
+    <div class="spacer"></div>
+    <div class="stat-chip">FPS: <strong id="fps-stat">--</strong></div>
+    <div class="stat-chip">Triangles: <strong id="tri-stat">--</strong></div>
+    <div class="stat-chip">Load: <strong id="load-stat">--</strong></div>
+  </div>
+
+  <div id="creator-panel" style="display:none;">
+    <h3>Create Your Combatant</h3>
+    <div class="row"><label>Name</label><input type="text" id="cc-name" value="New Recruit"></div>
+    <div class="row"><label>Species</label>
+      <select id="cc-species">
+        <option value="human">Human</option>
+        <option value="skitterling">Skitterling</option>
+        <option value="kragol">Kragol</option>
+        <option value="myxos">Myxos</option>
+        <option value="arboran">Arboran</option>
+      </select>
+    </div>
+    <div class="row"><label>Gender</label>
+      <select id="cc-gender"></select>
+    </div>
+    <div class="row"><label>Weapon</label>
+      <select id="cc-weapon">
+        <option value="none">Unarmed</option>
+        <option value="sword">Vibro-Blade (melee)</option>
+        <option value="spear">Spear (melee)</option>
+        <option value="pistol">Sidearm Pistol</option>
+        <option value="rifle">Assault Rifle</option>
+      </select>
+    </div>
+    <div class="row"><label>Look</label><div class="variant-swatches" id="cc-variants"></div></div>
+    <div id="creator-preview">
+      <img id="cc-preview-img" src="" alt="preview">
+      <div class="stat-chip" id="cc-stats-preview" style="line-height:1.7;"></div>
+    </div>
+    <button class="spawn-btn" id="cc-spawn-btn">➕ Spawn onto Map</button>
+  </div>
+
+  <div id="turn-banner"></div>
+
+  <div id="three-canvas-wrap"></div>
+  <div id="overlay-layer"></div>
+
+  <div id="combat-console" style="display:none;">
+    <div class="active-name" id="combat-active-name">—</div>
+    <select id="combat-target-sel"></select>
+    <button id="combat-attack-btn">⚔ Attack</button>
+    <button id="combat-endturn-btn">End Turn ▸</button>
+    <div class="stat-chip">Round <strong id="combat-round-stat">1</strong></div>
+  </div>
+  <button id="combat-start-btn" style="position:absolute; bottom:14px; right:14px; z-index:45;">▶ Start Combat</button>
+
+  <div id="info-panel">
+    <strong>How to test:</strong> Left-drag to orbit, right-drag (Shift+drag) to pan, scroll to zoom.
+    Click a token to select it, click an empty tile to move it. Build a combatant in the
+    Character Creator (uses your actual species portrait art), spawn it, then hit
+    <strong>Start Combat</strong> to roll initiative order and try Attack. The floor
+    intentionally sprawls well past the tactical arena — pan out to see it keep going.
+  </div>
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <div class="msg" id="loading-msg">Loading models…</div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ============================================================================
+// INTEGRATION NOTES — this file is a standalone viability sandbox. It is not
+// wired into campaign.html and shouldn't be until the product decision to
+// actually ship 3D on-foot combat is made. If/when that happens, here is
+// what's real vs. mocked, and roughly what would need to change:
+//
+// REAL / reusable as-is:
+//   - Attack math (distanceAD, d20 + fightMod + accuracyMod vs total AD,
+//     parseDice damage − armor) is identical to rules.html / campaign.html.
+//   - Combat SFX files (assets/sfx/combat/*.wav) — same files, same functions.
+//   - Species portrait art + SPECIES_VARIANTS path convention — pulls the
+//     exact same assets/NN_Species_*.png files the live character sheet uses.
+//   - Theme/environment registry (THEMES) is already pluggable — a new
+//     environment is just a new entry (base path + floor model + obstacle
+//     pool), no code changes needed elsewhere.
+//
+// MOCKED — would need real wiring to integrate:
+//   - `combatants[]` is pure client-side state, reset on every reload. A real
+//     integration would source it from the campaign's `initiative_tracker` /
+//     `characters` rows (like campaign.html's `combatants`/`characters` do)
+//     and write HP/position changes back through Supabase, not local objects.
+//   - `SPECIES_BASE_STATS` (hp/baseAd/fightMod/armor) is flavor-balanced
+//     placeholder data — a real character's actual sheet stats should be used
+//     instead (characters.hp_current/hp_max/armor, computed fight_mod).
+//   - `WEAPON_CATALOG` is a small fixed local list — should be replaced with
+//     a character's real equipped weapon from `character_inventory`, the same
+//     way campaign.html's renderCheatSheet() fetches it.
+//   - There's no realtime/multiplayer sync at all here (no Supabase channel,
+//     no broadcast of attack FX to other viewers) — campaign.html's
+//     dice_rolls.combat_fx broadcast pattern would need to be reimplemented
+//     for whichever FX payload shape this 3D version ends up using.
+//   - Turn order here is just array order (no real initiative roll) and the
+//     "only the active combatant can move" gate has no GM-override escape
+//     hatch yet, unlike campaign.html's manual controls.
+// ============================================================================
+
+// ── Arena / floor sprawl constants ───────────────────────────────────────
+// The tactical arena (where obstacles + combatants live) is a fixed-ish
+// rectangle, but the *floor* and a sparse extended obstacle ring both go
+// well beyond it — same "boundless camera, sprawling terrain" idea as the
+// live 2D map (cbCamX/Y + generateExtendedObstacles), just in 3D. The grid
+// coordinate system itself has no bound at all: gx/gy are just integers,
+// centered on (0,0), so tokens can be moved anywhere.
+const ARENA_W = 20, ARENA_H = 14; // half-extents computed from these below
+const ARENA_X0 = -Math.floor(ARENA_W / 2), ARENA_X1 = ARENA_X0 + ARENA_W;
+const ARENA_Y0 = -Math.floor(ARENA_H / 2), ARENA_Y1 = ARENA_Y0 + ARENA_H;
+const FLOOR_MARGIN = 22; // extra cells of floor beyond the arena on every side
+let CELL = 2; // world units per grid cell — recomputed from the loaded floor tile's bbox
+
+const canvasWrap = document.getElementById('three-canvas-wrap');
+const overlayLayer = document.getElementById('overlay-layer');
+const loadingOverlay = document.getElementById('loading-overlay');
+const loadingMsg = document.getElementById('loading-msg');
+
+if (location.protocol === 'file:') {
+  loadingMsg.innerHTML = `<span style="color:#ff8a8a;">This page was opened directly as a file (file://) — model loading will hang here.</span><br><br>Serve this folder over http:// (a local static server) and reload from that URL instead.`;
+}
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+canvasWrap.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05070d);
+scene.fog = new THREE.Fog(0x05070d, 26, 74); // fades the sprawling floor into the horizon instead of a hard edge
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 500);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.minDistance = 4;
+controls.maxDistance = 110; // raised so you can actually pan back and see the sprawl
+
+const hemi = new THREE.HemisphereLight(0x8fb4ff, 0x1a1a22, 0.9);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -30; sun.shadow.camera.right = 30;
+sun.shadow.camera.top = 30; sun.shadow.camera.bottom = -30;
+sun.shadow.bias = -0.0015;
+scene.add(sun);
+scene.add(sun.target);
+
+function resize() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
+addEventListener('resize', resize);
+resize();
+
+// ── Asset loading helpers ──────────────────────────────────────────────
+const loader = new GLTFLoader();
+const textureLoader = new THREE.TextureLoader();
+const modelCache = new Map();
+const textureCache = new Map();
+function loadModel(path) {
+  if (modelCache.has(path)) return modelCache.get(path);
+  const p = new Promise((resolve, reject) => {
+    loader.load(path, gltf => resolve(gltf.scene), undefined,
+      err => reject(new Error(`Failed to load "${path}": ${err?.message || err}`)));
+  });
+  modelCache.set(path, p);
+  return p;
+}
+async function cloneModel(path) {
+  const src = await loadModel(path);
+  const clone = src.clone(true);
+  clone.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return clone;
+}
+function loadTexture(path) {
+  if (textureCache.has(path)) return textureCache.get(path);
+  const p = new Promise((resolve, reject) => {
+    textureLoader.load(path, tex => { tex.colorSpace = THREE.SRGBColorSpace; resolve(tex); }, undefined,
+      err => reject(new Error(`Failed to load texture "${path}": ${err?.message || err}`)));
+  });
+  textureCache.set(path, p);
+  return p;
+}
+function centerAndBox(obj) {
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = new THREE.Vector3(); box.getSize(size);
+  const center = new THREE.Vector3(); box.getCenter(center);
+  return { box, size, center };
+}
+
+// Every theme here is on-foot only (space/spacecraft combat stays 2D on the
+// live map — not a good fit for this billboard-token approach) but each is
+// a fully independent Kenney pack, so adding a 6th/7th environment later is
+// just another entry: base path + floor model + an obstacle pool.
+const THEMES = {
+  arena: {
+    label: 'Training Arena',
+    base: 'assets/3d/kenney_mini-arena/Models/GLB format/',
+    floor: 'floor.glb',
+    obstacles: ['block.glb', 'column.glb', 'column-damaged.glb', 'tree.glb', 'statue.glb', 'weapon-rack.glb'],
+    fogColor: 0x05070d,
+  },
+  forest: {
+    label: 'Forest',
+    // nature-kit has no dedicated ground-tile model (it's a scatter-prop
+    // pack), so the floor tile is borrowed from retro-urban-kit's grass
+    // tile — same cross-pack reuse as the on-foot map's obstacle sprites.
+    // Obstacles are almost entirely nature-kit (obstaclesExtra below); this
+    // primary pool just adds retro-urban-kit's tree/shrub as extra filler.
+    base: 'assets/3d/kenney_retro-urban-kit/Models/GLB format/',
+    floor: 'grass.glb',
+    obstacles: ['tree-large.glb', 'tree-shrub.glb'],
+    obstaclesExtra: { base: 'assets/3d/kenney_nature-kit/Models/GLTF format/', items: [] }, // populated below
+    fogColor: 0x0a1a0d,
+  },
+  town: {
+    label: 'Town',
+    base: 'assets/3d/kenney_retro-urban-kit/Models/GLB format/',
+    floor: 'road-asphalt-center.glb',
+    obstacles: [
+      'detail-dumpster-closed.glb', 'detail-dumpster-open.glb', 'detail-barrier-type-a.glb', 'detail-barrier-strong-type-a.glb',
+      'detail-bench.glb', 'detail-light-single.glb', 'pallet.glb', 'pallet-small.glb', 'tree-small.glb',
+      'tree-park-large.glb', 'tree-shrub.glb', 'truck-grey.glb', 'truck-green-cargo.glb', 'wall-a-column.glb',
+    ],
+    fogColor: 0x0d0f16,
+  },
+  dungeon: {
+    label: 'Dungeon',
+    base: 'assets/3d/kenney_mini-dungeon/Models/GLB format/',
+    floor: 'floor.glb',
+    obstacles: ['column.glb', 'barrel.glb', 'chest.glb', 'rocks.glb', 'stones.glb', 'wood-structure.glb', 'wood-support.glb', 'wall-half.glb', 'banner.glb'],
+    fogColor: 0x08060a,
+  },
+  factory: {
+    label: 'Factory',
+    base: 'assets/3d/kenney_factory-kit_3.0/Models/GLB format/',
+    floor: 'floor.glb',
+    obstacles: ['box-large.glb', 'box-long.glb', 'box-small.glb', 'box-wide.glb', 'machine.glb', 'machine-bed.glb', 'machine-fortified.glb', 'pipe-glass-large-long.glb', 'pipe-glass-large-bend.glb'],
+    fogColor: 0x0a0c10,
+  },
+};
+// Forest's second obstacle pool (nature-kit) filled in separately since the
+// array above needed the retro-urban-kit floor's `base` for its own entries.
+THEMES.forest.obstaclesExtra.items = [
+  'tree_pineTallA.glb', 'tree_pineTallB.glb', 'tree_pineRoundA.glb', 'tree_default.glb', 'tree_oak.glb', 'tree_fat.glb',
+  'tree_pineSmallA.glb', 'tree_pineSmallB.glb', 'tree_thin.glb', 'tree_small.glb', 'tree_tall.glb',
+  'rock_largeA.glb', 'rock_tallA.glb', 'rock_smallA.glb', 'rock_smallB.glb', 'rock_tallC.glb',
+  'log.glb', 'log_stack.glb', 'stump_round.glb', 'stump_old.glb',
+  'mushroom_redGroup.glb', 'mushroom_tanGroup.glb', 'flower_purpleA.glb', 'grass_leafsLarge.glb',
+];
+
+// ── Species portrait art (the actual character-creator sprites) ─────────
+// Same convention as dashboard.html/character.html/campaign.html:
+// assets/NN_Species_${SpeciesCap}${Gender}_${variant}.png
+const SPECIES_VARIANTS = {
+  human: { M: [0, 1, 2, 3], F: [0, 1, 2, 3] },
+  skitterling: { M: [0, 1, 2, 3], F: [0, 1, 2, 3] },
+  kragol: { M: [0, 1, 2, 3], F: [0, 1, 2, 3] },
+  myxos: { M: [0, 1, 2, 3, 4, 5], F: [0, 1, 2, 3, 4, 5] },
+  arboran: { M: [0, 1, 2, 3, 4] },
+};
+const SPECIES_BASE_STATS = {
+  human: { hp: 20, baseAd: 8, fightMod: 2, armor: 0 },
+  skitterling: { hp: 16, baseAd: 10, fightMod: 3, armor: 0 },
+  kragol: { hp: 28, baseAd: 7, fightMod: 1, armor: 2 },
+  myxos: { hp: 15, baseAd: 9, fightMod: 2, armor: 0 },
+  arboran: { hp: 24, baseAd: 8, fightMod: 1, armor: 1 },
+};
+function speciesImagePath(species, gender, variant) {
+  const cap = species.charAt(0).toUpperCase() + species.slice(1);
+  return `assets/NN_Species_${cap}${gender}_${variant}.png`;
+}
+
+// ── Weapon catalog — accuracy/damage mirrors the live 2D combat rules,
+// plus a small prop model attached near the token for a visual read. ────
+const WEAPON_CATALOG = {
+  none: { label: 'Unarmed', weaponType: 'melee', accuracyMod: 0, damageDice: '1d3', prop: null },
+  sword: { label: 'Vibro-Blade', weaponType: 'melee', accuracyMod: 1, damageDice: '1d8', prop: 'assets/3d/kenney_mini-arena/Models/GLB format/weapon-sword.glb' },
+  spear: { label: 'Spear', weaponType: 'melee', accuracyMod: 0, damageDice: '1d10', prop: 'assets/3d/kenney_mini-arena/Models/GLB format/weapon-spear.glb' },
+  pistol: { label: 'Sidearm Pistol', weaponType: 'pistol', accuracyMod: 1, damageDice: '1d6', prop: 'assets/3d/kenney_blaster-kit_2.1/Models/GLB format/blaster-a.glb' },
+  rifle: { label: 'Assault Rifle', weaponType: 'rifle', accuracyMod: 0, damageDice: '1d8', prop: 'assets/3d/kenney_blaster-kit_2.1/Models/GLB format/blaster-h.glb' },
+};
+const WEAPON_BOLT_COLOR = { pistol: '#40c8ff', rifle: '#40ffb0', melee: '#e0ecff' };
+const COMBAT_SQUARE_M = 5;
+const COVER_AD = 4;
+
+// ── Combat SFX — same recorded files wired into the live 2D combat map ──
+const WEAPON_SFX_FILES = {
+  pistol: 'assets/sfx/combat/pistol_fire.wav',
+  rifle: 'assets/sfx/combat/rifle_fire.wav',
+  melee: 'assets/sfx/combat/melee_fire.wav',
+};
+const IMPACT_SFX_FILES = {
+  hit: 'assets/sfx/combat/impact_hit.wav',
+  miss: 'assets/sfx/combat/impact_miss.wav',
+  melee: 'assets/sfx/combat/impact_melee.wav',
+};
+const sfxAudioCache = {};
+function playSfxFile(path, volume) {
+  try {
+    if (!sfxAudioCache[path]) sfxAudioCache[path] = new Audio(path);
+    const el = sfxAudioCache[path].cloneNode(true);
+    el.volume = volume ?? 0.55;
+    el.play().catch(() => {});
+  } catch (e) { /* missing/unsupported audio — fx stay visual-only */ }
+}
+function playWeaponSfx(weaponType) { playSfxFile(WEAPON_SFX_FILES[weaponType] || WEAPON_SFX_FILES.pistol, 0.55); }
+function playImpactSfx(weaponType, hit) {
+  if (!hit) return playSfxFile(IMPACT_SFX_FILES.miss, 0.45);
+  if (weaponType === 'melee') return playSfxFile(IMPACT_SFX_FILES.melee, 0.6);
+  playSfxFile(IMPACT_SFX_FILES.hit, 0.5);
+}
+
+function parseDice(expr) {
+  const m = /^(\d+)d(\d+)([+-]\d+)?$/i.exec(String(expr).trim());
+  if (!m) return { result: Math.max(1, parseInt(expr) || 1) };
+  const n = +m[1], d = +m[2], mod = +(m[3] || 0);
+  let total = mod;
+  for (let i = 0; i < n; i++) total += 1 + Math.floor(Math.random() * d);
+  return { result: Math.max(1, total) };
+}
+
+// ── World state ─────────────────────────────────────────────────────────
+let worldGroup = new THREE.Group();
+scene.add(worldGroup);
+let combatants = []; // { id, mesh(group), plane, ring, label, hpFill, gx, gy, team, species, gender, variant, weaponKey, weapon, hp, hpMax, baseAd, fightMod, armor }
+let selectedToken = null;
+let hoverHighlight = null;
+let occupied = new Set();
+let triCount = 0;
+let nextTokenId = 1;
+let activeFx = []; // { el, pos: Vector3, yOffset }
+
+function cellKey(gx, gy) { return gx + ',' + gy; }
+function gridToWorld(gx, gy) { return new THREE.Vector3(gx * CELL, 0, gy * CELL); }
+function worldToGrid(x, z) { return { gx: Math.round(x / CELL), gy: Math.round(z / CELL) }; }
+
+// Cell (gx,gy)'s CENTER sits at world (gx*cell, gy*cell) per gridToWorld above,
+// so cell boundaries fall at half-integer offsets — a line at (gx-0.5)*cell
+// for every gx in [x0, x1] (x1 exclusive upper bound on cell indices, so
+// x1-x0+1 boundary lines are needed to enclose x1-x0 cells).
+function createGridLines(x0, x1, y0, y1, cell, color) {
+  const pts = [];
+  const zMin = (y0 - 0.5) * cell, zMax = (y1 - 0.5) * cell;
+  for (let gx = x0; gx <= x1; gx++) {
+    const wx = (gx - 0.5) * cell;
+    pts.push(wx, 0, zMin, wx, 0, zMax);
+  }
+  const xMin = (x0 - 0.5) * cell, xMax = (x1 - 0.5) * cell;
+  for (let gy = y0; gy <= y1; gy++) {
+    const wz = (gy - 0.5) * cell;
+    pts.push(xMin, 0, wz, xMax, 0, wz);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.3 });
+  const grid = new THREE.LineSegments(geo, mat);
+  grid.position.y = 0.02;
+  return grid;
+}
+
+// ── Scene build ───────────────────────────────────────────────────────
+async function buildScene(themeKey) {
+  try {
+    await buildSceneInner(themeKey);
+  } catch (err) {
+    console.error('3D test scene failed to load:', err);
+    loadingMsg.innerHTML = `<span style="color:#ff8a8a;">Load failed: ${(err && err.message) || err}</span>` +
+      (location.protocol === 'file:'
+        ? `<br><br>This page was opened directly as a file (file://) — browsers block model loading (fetch/CORS) under file://.<br>Serve it over http:// instead and reload.`
+        : `<br><br>Check the browser console for the full error and confirm the model path exists.`);
+  }
+}
+
+let currentTheme = 'arena';
+async function buildSceneInner(themeKey) {
+  currentTheme = themeKey;
+  loadingOverlay.style.display = 'flex';
+  loadingMsg.innerHTML = '';
+  const t0 = performance.now();
+
+  while (worldGroup.children.length) worldGroup.remove(worldGroup.children[0]);
+  combatants.forEach(c => c.label.remove());
+  combatants = []; occupied = new Set(); selectedToken = null;
+  activeFx.forEach(f => f.el.remove()); activeFx = [];
+  triCount = 0;
+  document.getElementById('combat-console').style.display = 'none';
+  document.getElementById('turn-banner').style.display = 'none';
+  combatStarted = false;
+
+  const theme = THEMES[themeKey];
+  scene.fog.color.setHex(theme.fogColor);
+
+  // Floor tile — measure the model's own footprint, then tile it far past the
+  // tactical arena in every direction so the map visibly "just keeps going"
+  // instead of stopping at a hard edge (fog handles the far fade-out).
+  loadingMsg.textContent = 'Loading floor tiles…';
+  const floorSrc = await cloneModel(theme.base + theme.floor);
+  const { size: floorSize } = centerAndBox(floorSrc);
+  CELL = Math.max(floorSize.x, floorSize.z) || 2;
+
+  let floorMesh = null;
+  floorSrc.traverse(o => { if (o.isMesh && !floorMesh) floorMesh = o; });
+  const floorX0 = ARENA_X0 - FLOOR_MARGIN, floorX1 = ARENA_X1 + FLOOR_MARGIN;
+  const floorY0 = ARENA_Y0 - FLOOR_MARGIN, floorY1 = ARENA_Y1 + FLOOR_MARGIN;
+  const floorCols = floorX1 - floorX0, floorRows = floorY1 - floorY0;
+  if (floorMesh) {
+    const inst = new THREE.InstancedMesh(floorMesh.geometry, floorMesh.material, floorCols * floorRows);
+    inst.receiveShadow = true;
+    let i = 0;
+    const m = new THREE.Matrix4();
+    for (let gy = floorY0; gy < floorY1; gy++) {
+      for (let gx = floorX0; gx < floorX1; gx++) {
+        const pos = gridToWorld(gx, gy);
+        m.makeTranslation(pos.x, 0, pos.z);
+        inst.setMatrixAt(i++, m);
+      }
+    }
+    inst.instanceMatrix.needsUpdate = true;
+    worldGroup.add(inst);
+    const perTileTris = (floorMesh.geometry.index ? floorMesh.geometry.index.count / 3 : floorMesh.geometry.attributes.position.count / 3);
+    triCount += perTileTris * floorCols * floorRows;
+  }
+
+  // Grid overlay spans the FULL floor extent (not just the arena) so the
+  // visible grid always matches where tokens can actually be moved — the
+  // grid itself is boundless in the same sense the floor and click-to-move
+  // targeting are. Built from scratch as evenly-spaced LineSegments rather
+  // than THREE.GridHelper: GridHelper only supports a single square size +
+  // division count, so the previous version faked a rectangular arena by
+  // non-uniformly scaling a square grid — which stretched the cell spacing
+  // on one axis out of sync with the actual (uniform) floor-tile spacing,
+  // rendering as squashed rectangles instead of the square cells every
+  // other part of the map (floor tiles, click-to-move) actually uses.
+  worldGroup.add(createGridLines(floorX0, floorX1, floorY0, floorY1, CELL, 0x40c8ff));
+
+  const hoverGeo = new THREE.PlaneGeometry(CELL * 0.92, CELL * 0.92);
+  const hoverMat = new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.28, side: THREE.DoubleSide });
+  hoverHighlight = new THREE.Mesh(hoverGeo, hoverMat);
+  hoverHighlight.rotation.x = -Math.PI / 2;
+  hoverHighlight.position.y = 0.03;
+  hoverHighlight.visible = false;
+  worldGroup.add(hoverHighlight);
+
+  // Obstacles — a denser core inside the arena, plus a sparse extended ring
+  // beyond it out to the floor's edge, same idea as the 2D map's
+  // generateExtendedObstacles (terrain hazards that extend past the
+  // original footprint instead of stopping dead at its border).
+  loadingMsg.textContent = 'Placing obstacles…';
+  const obstaclePool = theme.obstacles.map(o => ({ base: theme.base, name: o }));
+  if (theme.obstaclesExtra) theme.obstaclesExtra.items.forEach(o => obstaclePool.push({ base: theme.obstaclesExtra.base, name: o }));
+
+  async function scatter(x0, x1, y0, y1, density, skipBox) {
+    const w = x1 - x0, h = y1 - y0;
+    const count = Math.floor(w * h * density);
+    for (let n = 0; n < count; n++) {
+      const gx = x0 + Math.floor(Math.random() * w), gy = y0 + Math.floor(Math.random() * h);
+      if (skipBox && gx >= skipBox.x0 && gx < skipBox.x1 && gy >= skipBox.y0 && gy < skipBox.y1) continue;
+      const key = cellKey(gx, gy);
+      if (occupied.has(key)) continue;
+      occupied.add(key);
+      const pick = obstaclePool[Math.floor(Math.random() * obstaclePool.length)];
+      try {
+        const obj = await cloneModel(pick.base + pick.name);
+        const { size } = centerAndBox(obj);
+        const scale = Math.min(1.6, (CELL * 0.8) / (Math.max(size.x, size.z) || 1));
+        obj.scale.setScalar(scale);
+        const pos = gridToWorld(gx, gy);
+        obj.position.set(pos.x, 0, pos.z);
+        obj.rotation.y = Math.random() * Math.PI * 2;
+        worldGroup.add(obj);
+        obj.traverse(o => { if (o.isMesh) triCount += (o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3); });
+      } catch (e) { console.warn('obstacle load failed', pick, e); }
+    }
+  }
+  await scatter(ARENA_X0, ARENA_X1, ARENA_Y0, ARENA_Y1, 0.1, null);
+  await scatter(floorX0, floorX1, floorY0, floorY1, 0.015, { x0: ARENA_X0, x1: ARENA_X1, y0: ARENA_Y0, y1: ARENA_Y1 });
+
+  // Starter combatants — one ally to test with immediately, two hostiles.
+  loadingMsg.textContent = 'Spawning combatants…';
+  await spawnCombatant({ name: 'Player 1', team: 'ally', species: 'human', gender: 'M', variant: 0, weaponKey: 'pistol' });
+  await spawnCombatant({ name: 'Hostile 1', team: 'enemy', species: 'skitterling', gender: 'M', variant: Math.floor(Math.random() * 4), weaponKey: 'sword' });
+  await spawnCombatant({ name: 'Hostile 2', team: 'enemy', species: 'kragol', gender: 'M', variant: Math.floor(Math.random() * 4), weaponKey: 'none' });
+
+  recenterCamera();
+  updateTargetOptions();
+
+  const dt = (performance.now() - t0).toFixed(0);
+  document.getElementById('load-stat').textContent = dt + 'ms';
+  document.getElementById('tri-stat').textContent = Math.round(triCount).toLocaleString();
+  loadingOverlay.style.display = 'none';
+}
+
+function recenterCamera() {
+  let cx = 0, cz = 0;
+  if (combatants.length) {
+    combatants.forEach(c => { const p = gridToWorld(c.gx, c.gy); cx += p.x; cz += p.z; });
+    cx /= combatants.length; cz /= combatants.length;
+  }
+  controls.target.set(cx, 0, cz);
+  camera.position.set(cx + CELL * 6, CELL * 7, cz + CELL * 7);
+  sun.position.set(cx + 20, 30, cz + 10);
+  sun.target.position.set(cx, 0, cz);
+  controls.update();
+}
+
+// ── Combatant tokens — billboarded planes textured with the actual
+// species-portrait art the user drew, standing upright on the grid like a
+// holographic tabletop marker (rotates to face the camera around Y only,
+// so it never tilts oddly when the camera looks down at the battlefield). ─
+function findOpenCell() {
+  for (let tries = 0; tries < 400; tries++) {
+    const gx = ARENA_X0 + Math.floor(Math.random() * ARENA_W);
+    const gy = ARENA_Y0 + Math.floor(Math.random() * ARENA_H);
+    if (!occupied.has(cellKey(gx, gy))) return { gx, gy };
+  }
+  return { gx: ARENA_X0, gy: ARENA_Y0 };
+}
+
+async function spawnCombatant({ name, team, species, gender, variant, weaponKey }) {
+  const { gx, gy } = findOpenCell();
+  occupied.add(cellKey(gx, gy));
+  const stats = SPECIES_BASE_STATS[species] || SPECIES_BASE_STATS.human;
+  const weapon = WEAPON_CATALOG[weaponKey] || WEAPON_CATALOG.none;
+  const portraitPath = speciesImagePath(species, gender, variant);
+
+  const group = new THREE.Group();
+  const pos = gridToWorld(gx, gy);
+  group.position.set(pos.x, 0, pos.z);
+
+  let plane;
+  try {
+    const tex = await loadTexture(portraitPath);
+    const h = CELL * 0.95;
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.35, side: THREE.DoubleSide });
+    const geo = new THREE.PlaneGeometry(h, h);
+    plane = new THREE.Mesh(geo, mat);
+    plane.position.y = h / 2;
+    group.add(plane);
+  } catch (e) {
+    console.warn('portrait texture failed to load, using a placeholder block', portraitPath, e);
+    const mat = new THREE.MeshStandardMaterial({ color: team === 'ally' ? 0x4dff9e : 0xff5a5a });
+    plane = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.5, CELL * 0.9, CELL * 0.5), mat);
+    plane.position.y = CELL * 0.45;
+    group.add(plane);
+  }
+
+  const ringGeo = new THREE.RingGeometry(CELL * 0.32, CELL * 0.4, 24);
+  const ringMat = new THREE.MeshBasicMaterial({ color: team === 'ally' ? 0x4dff9e : 0xff5a5a, transparent: true, opacity: 0.75, side: THREE.DoubleSide });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.025;
+  group.add(ring);
+
+  if (weapon.prop) {
+    try {
+      const prop = await cloneModel(weapon.prop);
+      const { size } = centerAndBox(prop);
+      const scale = (CELL * 0.4) / (Math.max(size.x, size.y, size.z) || 1);
+      prop.scale.setScalar(scale);
+      prop.position.set(CELL * 0.32, 0, CELL * 0.1);
+      prop.rotation.y = Math.PI / 4;
+      group.add(prop);
+      prop.traverse(o => { if (o.isMesh) triCount += (o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3); });
+    } catch (e) { console.warn('weapon prop failed to load', weapon.prop, e); }
+  }
+
+  worldGroup.add(group);
+
+  const label = document.createElement('div');
+  label.className = 'token-label ' + team;
+  label.innerHTML = `<div class="name">${escapeHtml(name)}</div><div class="token-hp-track"><div class="token-hp-fill"></div></div>`;
+  overlayLayer.appendChild(label);
+
+  const c = {
+    id: 'tok' + (nextTokenId++), name, team, species, gender, variant, weaponKey, weapon,
+    mesh: group, plane, ring, label, hpFill: label.querySelector('.token-hp-fill'),
+    gx, gy, hp: stats.hp, hpMax: stats.hp, baseAd: stats.baseAd, fightMod: stats.fightMod, armor: stats.armor,
+  };
+  combatants.push(c);
+  updateHpBar(c);
+  return c;
+}
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+
+function updateHpBar(c) {
+  const pct = Math.max(0, c.hp / c.hpMax * 100);
+  c.hpFill.style.width = pct + '%';
+  c.hpFill.style.background = pct > 50 ? '#4dff9e' : pct > 20 ? '#ffd23a' : '#ff5a5a';
+  c.label.classList.toggle('down', c.hp <= 0);
+  if (c.hp <= 0) { c.plane.material.opacity = 0.35; c.plane.material.transparent = true; }
+}
+
+// ── Interaction: click a token to select, click a cell to move it there ──
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+function setPointer(ev) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+}
+
+let dragDistance = 0;
+renderer.domElement.addEventListener('pointerdown', () => { dragDistance = 0; });
+renderer.domElement.addEventListener('pointermove', ev => { dragDistance += Math.abs(ev.movementX) + Math.abs(ev.movementY); });
+
+renderer.domElement.addEventListener('click', ev => {
+  if (dragDistance > 6) return;
+  setPointer(ev);
+  raycaster.setFromCamera(pointer, camera);
+
+  const tokenMeshes = combatants.map(c => c.mesh);
+  const hits = raycaster.intersectObjects(tokenMeshes, true);
+  if (hits.length) {
+    let obj = hits[0].object;
+    while (obj.parent && !combatants.some(c => c.mesh === obj)) obj = obj.parent;
+    const c = combatants.find(c => c.mesh === obj);
+    if (c) { selectToken(c); return; }
+  }
+
+  if (!selectedToken) return;
+  if (combatStarted && selectedToken !== combatants[activeTurnIndex]) return; // in combat, only the active combatant may move
+  const ix = new THREE.Vector3();
+  if (raycaster.ray.intersectPlane(groundPlane, ix)) {
+    const { gx, gy } = worldToGrid(ix.x, ix.z);
+    const key = cellKey(gx, gy);
+    if (occupied.has(key)) return;
+    moveToken(selectedToken, gx, gy);
+  }
+});
+
+renderer.domElement.addEventListener('pointermove', ev => {
+  if (!selectedToken) { hoverHighlight.visible = false; return; }
+  setPointer(ev);
+  raycaster.setFromCamera(pointer, camera);
+  const ix = new THREE.Vector3();
+  if (raycaster.ray.intersectPlane(groundPlane, ix)) {
+    const { gx, gy } = worldToGrid(ix.x, ix.z);
+    if (occupied.has(cellKey(gx, gy))) { hoverHighlight.visible = false; }
+    else {
+      const pos = gridToWorld(gx, gy);
+      hoverHighlight.position.set(pos.x, 0.03, pos.z);
+      hoverHighlight.visible = true;
+    }
+  }
+});
+
+function selectToken(c) {
+  selectedToken = c;
+  combatants.forEach(x => {
+    x.ring.scale.setScalar(x === c ? 1.35 : 1);
+    x.ring.material.color.setHex(x === c ? 0xffd23a : (x.team === 'ally' ? 0x4dff9e : 0xff5a5a));
+  });
+}
+
+function moveToken(c, gx, gy) {
+  occupied.delete(cellKey(c.gx, c.gy));
+  c.gx = gx; c.gy = gy;
+  occupied.add(cellKey(gx, gy));
+  const target = gridToWorld(gx, gy);
+  const start = c.mesh.position.clone();
+  const t0 = performance.now(); const dur = 260;
+  (function anim() {
+    const t = Math.min(1, (performance.now() - t0) / dur);
+    const e = 1 - Math.pow(1 - t, 3);
+    c.mesh.position.set(start.x + (target.x - start.x) * e, start.y, start.z + (target.z - start.z) * e);
+    if (t < 1) requestAnimationFrame(anim);
+  })();
+}
+
+// ── Character creator ────────────────────────────────────────────────
+const ccSpecies = document.getElementById('cc-species');
+const ccGender = document.getElementById('cc-gender');
+const ccVariants = document.getElementById('cc-variants');
+const ccPreviewImg = document.getElementById('cc-preview-img');
+const ccStatsPreview = document.getElementById('cc-stats-preview');
+const ccName = document.getElementById('cc-name');
+const ccWeapon = document.getElementById('cc-weapon');
+let ccVariant = 0;
+
+function refreshGenderOptions() {
+  const species = ccSpecies.value;
+  const genders = Object.keys(SPECIES_VARIANTS[species]);
+  ccGender.innerHTML = genders.map(g => `<option value="${g}">${g === 'M' ? 'Male' : 'Female'}</option>`).join('');
+}
+function refreshVariantSwatches() {
+  const species = ccSpecies.value, gender = ccGender.value;
+  const variants = SPECIES_VARIANTS[species][gender] || [0];
+  if (!variants.includes(ccVariant)) ccVariant = variants[0];
+  ccVariants.innerHTML = variants.map(v =>
+    `<div class="variant-swatch${v === ccVariant ? ' selected' : ''}" data-v="${v}">${v}</div>`
+  ).join('');
+  ccVariants.querySelectorAll('.variant-swatch').forEach(el => {
+    el.addEventListener('click', () => { ccVariant = +el.dataset.v; refreshVariantSwatches(); refreshPreview(); });
+  });
+}
+function refreshPreview() {
+  const species = ccSpecies.value, gender = ccGender.value;
+  ccPreviewImg.src = speciesImagePath(species, gender, ccVariant);
+  const stats = SPECIES_BASE_STATS[species];
+  ccStatsPreview.innerHTML = `HP <strong>${stats.hp}</strong><br>AD <strong>${stats.baseAd}</strong> · FIGHT +<strong>${stats.fightMod}</strong>`;
+}
+ccSpecies.addEventListener('change', () => { refreshGenderOptions(); refreshVariantSwatches(); refreshPreview(); });
+ccGender.addEventListener('change', () => { refreshVariantSwatches(); refreshPreview(); });
+refreshGenderOptions(); refreshVariantSwatches(); refreshPreview();
+
+document.getElementById('creator-toggle-btn').addEventListener('click', () => {
+  const p = document.getElementById('creator-panel');
+  p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+});
+document.getElementById('cc-spawn-btn').addEventListener('click', async () => {
+  await spawnCombatant({
+    name: ccName.value.trim() || 'New Recruit',
+    team: 'ally',
+    species: ccSpecies.value,
+    gender: ccGender.value,
+    variant: ccVariant,
+    weaponKey: ccWeapon.value,
+  });
+  updateTargetOptions();
+});
+
+// ── Combat: turn order, targeting, attack resolution + 3D FX ────────────
+let combatStarted = false;
+let activeTurnIndex = 0;
+let roundNum = 1;
+
+document.getElementById('combat-start-btn').addEventListener('click', () => {
+  const alive = combatants.filter(c => c.hp > 0);
+  if (alive.length < 2) { alert('Spawn at least one ally and one hostile first.'); return; }
+  combatStarted = true;
+  activeTurnIndex = 0;
+  roundNum = 1;
+  document.getElementById('combat-console').style.display = 'flex';
+  document.getElementById('turn-banner').style.display = 'block';
+  updateTurnBanner();
+  updateTargetOptions();
+});
+
+function updateTurnBanner() {
+  const banner = document.getElementById('turn-banner');
+  const active = combatants[activeTurnIndex];
+  if (!active) { banner.style.display = 'none'; return; }
+  banner.classList.toggle('mine', active.team === 'ally');
+  banner.textContent = (active.team === 'ally' ? '▸ YOUR TURN — ' : '') + active.name + (active.team === 'enemy' ? "'s Turn" : '');
+  document.getElementById('combat-active-name').textContent = active.name + "'s turn";
+  document.getElementById('combat-round-stat').textContent = roundNum;
+  selectToken(active);
+}
+
+function updateTargetOptions() {
+  const sel = document.getElementById('combat-target-sel');
+  const active = combatants[activeTurnIndex];
+  const targets = combatants.filter(c => c !== active && c.hp > 0);
+  sel.innerHTML = targets.map(t => `<option value="${t.id}">${escapeHtml(t.name)}${t.team === 'ally' ? ' (ally)' : ''}</option>`).join('') || '<option value="">No targets</option>';
+}
+
+function nextTurn() {
+  if (!combatants.length) return;
+  const alive = combatants.filter(c => c.hp > 0);
+  if (alive.length < 2) { document.getElementById('combat-active-name').textContent = 'Combat over'; return; }
+  let guard = 0;
+  do {
+    activeTurnIndex = (activeTurnIndex + 1) % combatants.length;
+    if (activeTurnIndex === 0) roundNum++;
+    guard++;
+  } while (combatants[activeTurnIndex].hp <= 0 && guard < combatants.length + 1);
+  updateTurnBanner();
+  updateTargetOptions();
+}
+document.getElementById('combat-endturn-btn').addEventListener('click', nextTurn);
+document.getElementById('combat-attack-btn').addEventListener('click', () => { resolveAttack(); });
+
+async function resolveAttack() {
+  const attacker = combatants[activeTurnIndex];
+  const targetId = document.getElementById('combat-target-sel').value;
+  const target = combatants.find(c => c.id === targetId);
+  if (!attacker || !target || attacker === target) return;
+
+  const attackBtn = document.getElementById('combat-attack-btn');
+  attackBtn.disabled = true;
+
+  const weapon = attacker.weapon;
+  const dx = target.gx - attacker.gx, dy = target.gy - attacker.gy;
+  const meters = Math.round(Math.hypot(dx, dy)) * COMBAT_SQUARE_M;
+  const stepX = Math.sign(dx), stepY = Math.sign(dy);
+  const hasCover = occupied.has(cellKey(target.gx - stepX, target.gy - stepY)) &&
+    !combatants.some(c => c.gx === target.gx - stepX && c.gy === target.gy - stepY);
+  const totalAD = (target.baseAd ?? 8) + Math.floor(meters / 20) + (hasCover ? COVER_AD : 0);
+  const roll = 1 + Math.floor(Math.random() * 20);
+  const toHitTotal = roll + (attacker.fightMod ?? 0) + (weapon.accuracyMod ?? 0);
+  const hit = toHitTotal >= totalAD;
+
+  let dmg = 0, dmgResult = 0;
+  if (hit) {
+    const { result } = parseDice(weapon.damageDice || '1d6');
+    dmgResult = result;
+    dmg = Math.max(1, result - (target.armor ?? 0));
+  }
+
+  await playAttackFx3D({ attacker, target, weapon, roll, toHitTotal, totalAD, hit, hasCover, dmgResult, dmg });
+
+  if (hit && dmg > 0) { target.hp = Math.max(0, target.hp - dmg); updateHpBar(target); }
+
+  attackBtn.disabled = false;
+  nextTurn();
+}
+
+function worldPosOf(c) { return c.mesh.position.clone(); }
+
+function spawnFxChip(worldPos, className, html, life, yOffsetCells) {
+  const el = document.createElement('div');
+  el.className = 'fx-chip ' + className;
+  el.innerHTML = html;
+  overlayLayer.appendChild(el);
+  const entry = { el, pos: worldPos.clone(), yOffset: (yOffsetCells ?? 0.9) * CELL + CELL * 0.9 };
+  activeFx.push(entry);
+  if (life) setTimeout(() => { el.remove(); activeFx = activeFx.filter(e => e !== entry); }, life);
+  return entry;
+}
+function spinDiceChip(entry, finalValue, duration, intervalMs) {
+  return new Promise(resolve => {
+    const iv = setInterval(() => { entry.el.textContent = 1 + Math.floor(Math.random() * 20); }, intervalMs || 70);
+    setTimeout(() => { clearInterval(iv); entry.el.textContent = finalValue; resolve(); }, duration);
+  });
+}
+function tickChipNumber(entry, prefix, to, duration, suffix) {
+  const steps = Math.max(6, Math.min(to, 14));
+  let i = 0;
+  const iv = setInterval(() => {
+    i++;
+    entry.el.textContent = `${prefix}${Math.round(to * i / steps)}${suffix || ''}`;
+    if (i >= steps) clearInterval(iv);
+  }, duration / steps);
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// A beam/bolt mesh that grows FROM the attacker TOWARD the target — not a
+// box centered on the midpoint. The geometry's local Z axis is its length
+// axis (translated so it runs from z=0 to z=1, i.e. one end sits at the
+// mesh's own origin) specifically so that Object3D.lookAt() — which aims
+// the local -Z axis at its target — lines the beam up along the actual
+// attacker→target direction. (The previous version used a box whose long
+// axis was X while lookAt() oriented for Z, so the beam rendered rotated
+// 90° from the real line — a small rectangle sitting sideways instead of
+// a line between the two combatants.)
+function spawnBeamMesh(a, b, color) {
+  const len = new THREE.Vector3().subVectors(b, a).length() || 0.001;
+  const geo = new THREE.BoxGeometry(0.06, 0.06, 1);
+  geo.translate(0, 0, 0.5);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(a);
+  mesh.position.y += CELL * 0.45;
+  mesh.lookAt(b.x, mesh.position.y, b.z);
+  mesh.scale.z = 0.001;
+  mesh.userData.fullLength = len;
+  worldGroup.add(mesh);
+  return mesh;
+}
+// Tweens are driven from the main tick() loop (elapsed real time, not frame
+// count), but the promise a caller awaits resolves on a plain setTimeout —
+// deliberately decoupled from requestAnimationFrame. rAF can be throttled or
+// paused entirely for a backgrounded/unfocused tab; if combat resolution
+// waited on an rAF-driven promise, tabbing away mid-attack would stall the
+// whole turn forever with no error. Game logic must proceed on schedule
+// regardless of whether rendering keeps up.
+let activeTweens = [];
+function tweenScale(mesh, axis, from, to, duration) {
+  const t0 = performance.now();
+  activeTweens.push({ mesh, axis, from, to, t0, duration });
+  return sleep(duration);
+}
+function updateTweens() {
+  const now = performance.now();
+  activeTweens = activeTweens.filter(tw => {
+    const t = Math.min(1, (now - tw.t0) / tw.duration);
+    tw.mesh.scale[tw.axis] = tw.from + (tw.to - tw.from) * t;
+    return t < 1;
+  });
+}
+function spawnBurst(pos, color, big) {
+  const geo = new THREE.SphereGeometry(1, 12, 12);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(pos); mesh.position.y += CELL * 0.45;
+  mesh.scale.setScalar(0.15);
+  worldGroup.add(mesh);
+  const t0 = performance.now(); const dur = 480; const peak = big ? 1.6 : 1.0;
+  activeBursts.push({ mesh, t0, dur, peak });
+  setTimeout(() => worldGroup.remove(mesh), dur + 30);
+}
+let activeBursts = [];
+function updateBursts() {
+  const now = performance.now();
+  activeBursts = activeBursts.filter(b => {
+    const t = Math.min(1, (now - b.t0) / b.dur);
+    b.mesh.scale.setScalar(0.15 + b.peak * t);
+    b.mesh.material.opacity = 0.9 * (1 - t);
+    return t < 1;
+  });
+}
+function missOffsetPoint(a, b) {
+  const dir = new THREE.Vector3().subVectors(b, a).normalize();
+  const perp = new THREE.Vector3(-dir.z, 0, dir.x);
+  const side = Math.random() < 0.5 ? -1 : 1;
+  const offset = (CELL * 0.35 + Math.random() * CELL * 0.3) * side;
+  const undershoot = 0.8 + Math.random() * 0.12;
+  const p = new THREE.Vector3().addVectors(a, new THREE.Vector3().subVectors(b, a).multiplyScalar(undershoot));
+  p.addScaledVector(perp, offset);
+  return p;
+}
+
+async function playAttackFx3D({ attacker, target, weapon, roll, toHitTotal, totalAD, hit, hasCover, dmgResult, dmg }) {
+  const a = worldPosOf(attacker), t = worldPosOf(target);
+  const color = WEAPON_BOLT_COLOR[weapon.weaponType] || '#40c8ff';
+
+  // 1. AD buildup line + ticking chip, same beat as the 2D map's ruler-style reveal.
+  const beam = spawnBeamMesh(a, t, color);
+  tweenScale(beam, 'z', 0, beam.userData.fullLength, 380);
+  const adChip = spawnFxChip(t, '', 'AD 0', 0, 1.4);
+  tickChipNumber(adChip, 'AD ', totalAD, 420);
+  await sleep(450);
+  adChip.el.textContent = `AD ${totalAD}${hasCover ? ' 🪨 cover' : ''} to beat`;
+
+  // 2. Roll resolves BEFORE the shot fires — same fix as the 2D map, so the
+  // outcome reads as decided first and the weapon fire is a consequence of it.
+  const d20 = document.createElement('div');
+  d20.className = 'fx-d20 spinning';
+  overlayLayer.appendChild(d20);
+  const d20Entry = { el: d20, pos: t.clone(), yOffset: CELL * 2.3 };
+  activeFx.push(d20Entry);
+  await sleep(350);
+  await spinDiceChip(d20Entry, roll, 900, 70);
+  await sleep(350);
+  d20.classList.remove('spinning');
+  d20.classList.add(hit ? 'hit' : 'miss');
+  adChip.el.className = 'fx-chip ' + (hit ? 'hit' : 'miss');
+  await sleep(300);
+  d20.remove(); activeFx = activeFx.filter(e => e !== d20Entry);
+  adChip.el.remove(); activeFx = activeFx.filter(e => e !== adChip);
+
+  spawnFxChip(t, hit ? 'hit' : 'miss', `${toHitTotal} vs AD ${totalAD} — ${hit ? 'HIT' : 'MISS'}`, 1100, 1.4);
+  await sleep(250);
+
+  // 3. Fire — sound + a real 3D bolt travelling attacker→target (or wide, on a miss).
+  playWeaponSfx(weapon.weaponType);
+  worldGroup.remove(beam);
+  const boltEnd = hit ? t : missOffsetPoint(a, t);
+  const bolt = spawnBeamMesh(a, boltEnd, color);
+  bolt.material.blending = THREE.AdditiveBlending;
+  await tweenScale(bolt, 'z', 0, bolt.userData.fullLength, 220);
+  worldGroup.remove(bolt);
+
+  playImpactSfx(weapon.weaponType, hit);
+  if (hit) spawnBurst(t, new THREE.Color(color), weapon.weaponType === 'rifle');
+  else spawnBurst(boltEnd, new THREE.Color(0xffd23a), false);
+
+  if (!hit) { await sleep(700); return; }
+
+  spawnFxChip(t, '', `-${dmg} HP`, 1000, 2.0).el.classList.add('fx-float');
+  await sleep(150);
+  spawnFxChip(t, 'hit', `${dmgResult} dmg − ${target.armor ?? 0} armor`, 1200, 2.6);
+  await sleep(600);
+}
+
+// ── HUD wiring ─────────────────────────────────────────────────────────
+document.getElementById('theme-sel').addEventListener('change', e => buildScene(e.target.value));
+document.getElementById('recenter-btn').addEventListener('click', recenterCamera);
+document.getElementById('zoom-in-btn').addEventListener('click', () => { camera.position.lerp(controls.target, 0.2); });
+document.getElementById('zoom-out-btn').addEventListener('click', () => { camera.position.lerp(controls.target, -0.25); });
+
+// ── Label/FX projection + render loop ────────────────────────────────────
+const tmpV = new THREE.Vector3();
+let frames = 0, lastFpsTime = performance.now();
+function projectToScreen(pos) {
+  tmpV.copy(pos); tmpV.project(camera);
+  return {
+    x: (tmpV.x * 0.5 + 0.5) * innerWidth,
+    y: (-tmpV.y * 0.5 + 0.5) * innerHeight,
+    visible: tmpV.z < 1,
+  };
+}
+function tick() {
+  requestAnimationFrame(tick);
+  controls.update();
+  updateTweens();
+  updateBursts();
+
+  combatants.forEach(c => {
+    // Cylindrical billboard: face the camera around Y only, so the portrait
+    // card stays upright even when the camera pitches down over the table.
+    const camPos = camera.position;
+    c.plane.lookAt(camPos.x, c.plane.getWorldPosition(new THREE.Vector3()).y, camPos.z);
+
+    const labelPos = c.mesh.position.clone(); labelPos.y += CELL * 1.25;
+    const s = projectToScreen(labelPos);
+    c.label.style.display = s.visible ? 'flex' : 'none';
+    c.label.style.left = s.x + 'px'; c.label.style.top = s.y + 'px';
+  });
+
+  activeFx.forEach(f => {
+    const p = f.pos.clone(); p.y += f.yOffset;
+    const s = projectToScreen(p);
+    f.el.style.display = s.visible ? '' : 'none';
+    f.el.style.left = s.x + 'px'; f.el.style.top = s.y + 'px';
+  });
+
+  renderer.render(scene, camera);
+
+  frames++;
+  const now = performance.now();
+  if (now - lastFpsTime >= 500) {
+    document.getElementById('fps-stat').textContent = Math.round(frames * 1000 / (now - lastFpsTime));
+    frames = 0; lastFpsTime = now;
+  }
+}
+tick();
+
+if (location.protocol !== 'file:') buildScene('arena');
+else loadingOverlay.querySelector('.spinner').style.display = 'none';
+</script>
+</body>
+</html>

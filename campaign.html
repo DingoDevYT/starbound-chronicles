@@ -7,6 +7,16 @@
 <link rel="stylesheet" href="css/wiki.css">
 <link rel="stylesheet" href="css/app.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Three.js (classic global build, not ES modules) — used only for the on-foot combat
+     map's 3D renderer. Pinned to r128 specifically because it's the newest release with
+     non-module builds for both the core library and the GLTFLoader/OrbitControls addons;
+     everything else in this file is one big classic script block (no module type), and
+     bridging module scope into that would mean explicitly exposing every shared variable
+     (combatants, db, campaignId, myCharacterId, etc.) onto window — far more error-prone
+     than just using a classic build that shares scope naturally. -->
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <style>
 .camp-layout { display:grid; grid-template-columns:220px 1fr 250px; margin-top:58px; min-height:calc(100vh - 58px); }
 .camp-main { padding:0 0 48px 0; overflow-y:auto; background:var(--bg); }
@@ -460,10 +470,17 @@
           <button class="btn-secondary" id="combat-start-btn" onclick="openStartCombat()" style="padding:4px 12px; font-size:11px; display:none;">Start Combat</button>
           <button class="btn-ghost" id="combat-end-btn" onclick="endCombat()" style="padding:4px 12px; font-size:11px; display:none; color:#ff8888;">End Combat</button>
         </div>
-        <div style="position:relative;">
+        <div id="combat-2d-wrap" style="position:relative;">
           <canvas id="combat-canvas" height="520"></canvas>
           <div id="combat-fx-layer" class="combat-fx-layer"></div>
           <div id="combat-turn-banner" class="combat-turn-banner" style="display:none;"></div>
+        </div>
+        <!-- On-foot combat renders here in 3D instead (see draw3DCombatMap); space combat
+             keeps using #combat-canvas above. Only one of the two is ever visible. -->
+        <div id="combat-3d-wrap" style="position:relative; display:none;">
+          <div id="combat-3d-canvas-holder"></div>
+          <div id="combat-3d-fx-layer" class="combat-fx-layer"></div>
+          <div id="combat-3d-loading" style="position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(4,7,14,.85); color:var(--text-dim); font-size:13px; z-index:60;">Loading battlefield…</div>
         </div>
         <div id="combat-cheatsheet" class="combat-cheatsheet" style="display:none;"></div>
       </div>
@@ -4091,11 +4108,15 @@ const COMBAT_MAPS = {
     asteroid: { label:'Asteroid Field', w:34, h:20, obstacles:[[6,4],[7,4],[6,5],[14,10],[15,10],[15,11],[22,6],[23,6],[9,14],[10,14],[26,15],[27,15],[27,14],[19,3],[3,12]], density:0.05 },
     debris:   { label:'Debris Corridor', w:34, h:20, obstacles:[...rect(10,0,11,7),...rect(22,12,23,19),[16,9],[17,10],[16,11]], density:0.03 },
   },
+  // theme3d picks which 3D environment pack (see COMBAT_3D_THEMES) renders this
+  // battlefield when on-foot combat now runs in the Three.js viewer instead of
+  // the flat 2D tileset — purely a visual pick, doesn't change w/h/density/obstacles.
   outside: {
-    open:   { label:'Open Plain',   w:26, h:18, biome:'grass',  density:0 },
-    canyon: { label:'Rocky Canyon', w:26, h:18, biome:'rocky',  density:0.16 },
-    ruins:  { label:'Ruins',        w:26, h:18, biome:'rocky',  density:0.11 },
-    desert: { label:'Desert Wastes',w:26, h:18, biome:'desert', density:0.06 },
+    open:     { label:'Open Plain',   w:26, h:18, biome:'grass',  density:0,    theme3d:'forest' },
+    canyon:   { label:'Rocky Canyon', w:26, h:18, biome:'rocky',  density:0.16, theme3d:'dungeon' },
+    ruins:    { label:'Ruins',        w:26, h:18, biome:'rocky',  density:0.11, theme3d:'town' },
+    desert:   { label:'Desert Wastes',w:26, h:18, biome:'desert', density:0.06, theme3d:'arena' },
+    facility: { label:'Industrial Facility', w:26, h:18, biome:'rocky', density:0.14, theme3d:'factory' },
   },
 };
 
@@ -4289,6 +4310,9 @@ function refreshCombatUI() {
   const turnBtn = document.getElementById('combat-turn-btn');
   const cheat = document.getElementById('combat-cheatsheet');
 
+  // The ruler is a 2D-canvas-only measuring tool — on-foot battles show live AD numbers
+  // directly in the attack FX instead, and the 2D canvas it draws on is hidden in 3D mode.
+  document.getElementById('combat-ruler-btn').style.display = (st.active && st.type === 'space') ? '' : 'none';
   document.getElementById('combat-ruler-btn').classList.toggle('active', rulerActive);
   startBtn.style.display = (isGM && !st.active) ? 'inline-block' : 'none';
   endBtn.style.display   = (isGM && st.active) ? 'inline-block' : 'none';
@@ -4494,6 +4518,621 @@ async function pickSwitchWeapon(itemId) {
   turnActionState.coreActionUsed = true;
   closeModal('modal-switch-weapon');
   renderCheatSheet(c);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 3D ON-FOOT COMBAT MAP — renders in place of the 2D canvas whenever the
+// active battle's combatState().type !== 'space' (spacecraft combat stays
+// on the flat 2D map above; this is purely a richer renderer for on-foot).
+//
+// Everything about WHAT a fight is — combatants[], combatState(), turn order,
+// movement budget, resolveAttack()'s math, the dice_rolls/combat_fx broadcast
+// — is completely unchanged and lives in the functions above/below this
+// block. This section only replaces HOW the on-foot map is drawn and how you
+// click/drag tokens on it, using Three.js (classic global build — see the
+// <script> tags in <head>) instead of Canvas2D. Ported from a standalone
+// viability prototype (campaign-3d-test.html) and adapted to real Supabase
+// data: the mocked local combatant list/species stats/weapon catalog there
+// are replaced here by the real `combatants` array, `characterPortraitPath`,
+// and the real `currentTurnWeapon`/`resolveAttack` already defined above.
+// ══════════════════════════════════════════════════════════════════════════
+
+const COMBAT_3D_THEMES = {
+  arena: {
+    base: 'assets/3d/kenney_mini-arena/Models/GLB format/',
+    floor: 'floor.glb',
+    obstacles: ['block.glb', 'column.glb', 'column-damaged.glb', 'tree.glb', 'statue.glb', 'weapon-rack.glb'],
+    fogColor: 0x05070d,
+  },
+  forest: {
+    base: 'assets/3d/kenney_retro-urban-kit/Models/GLB format/',
+    floor: 'grass.glb',
+    obstacles: ['tree-large.glb', 'tree-shrub.glb'],
+    obstaclesExtra: {
+      base: 'assets/3d/kenney_nature-kit/Models/GLTF format/',
+      items: [
+        'tree_pineTallA.glb', 'tree_pineTallB.glb', 'tree_pineRoundA.glb', 'tree_default.glb', 'tree_oak.glb', 'tree_fat.glb',
+        'tree_pineSmallA.glb', 'tree_pineSmallB.glb', 'tree_thin.glb', 'tree_small.glb', 'tree_tall.glb',
+        'rock_largeA.glb', 'rock_tallA.glb', 'rock_smallA.glb', 'rock_smallB.glb', 'rock_tallC.glb',
+        'log.glb', 'log_stack.glb', 'stump_round.glb', 'stump_old.glb',
+        'mushroom_redGroup.glb', 'mushroom_tanGroup.glb', 'flower_purpleA.glb', 'grass_leafsLarge.glb',
+      ],
+    },
+    fogColor: 0x0a1a0d,
+  },
+  town: {
+    base: 'assets/3d/kenney_retro-urban-kit/Models/GLB format/',
+    floor: 'road-asphalt-center.glb',
+    obstacles: [
+      'detail-dumpster-closed.glb', 'detail-dumpster-open.glb', 'detail-barrier-type-a.glb', 'detail-barrier-strong-type-a.glb',
+      'detail-bench.glb', 'detail-light-single.glb', 'pallet.glb', 'pallet-small.glb', 'tree-small.glb',
+      'tree-park-large.glb', 'tree-shrub.glb', 'truck-grey.glb', 'truck-green-cargo.glb', 'wall-a-column.glb',
+    ],
+    fogColor: 0x0d0f16,
+  },
+  dungeon: {
+    base: 'assets/3d/kenney_mini-dungeon/Models/GLB format/',
+    floor: 'floor.glb',
+    obstacles: ['column.glb', 'barrel.glb', 'chest.glb', 'rocks.glb', 'stones.glb', 'wood-structure.glb', 'wood-support.glb', 'wall-half.glb', 'banner.glb'],
+    fogColor: 0x08060a,
+  },
+  factory: {
+    base: 'assets/3d/kenney_factory-kit_3.0/Models/GLB format/',
+    floor: 'floor.glb',
+    obstacles: ['box-large.glb', 'box-long.glb', 'box-small.glb', 'box-wide.glb', 'machine.glb', 'machine-bed.glb', 'machine-fortified.glb', 'pipe-glass-large-long.glb', 'pipe-glass-large-bend.glb'],
+    fogColor: 0x0a0c10,
+  },
+};
+const COMBAT_3D_FLOOR_MARGIN = 22; // extra cells of floor sprawling past the battle footprint on every side
+
+let scene3D = null, camera3D = null, renderer3D = null, controls3D = null, world3D = null;
+let hover3D = null, raf3D = null, cell3D = 2, built3DKey = null;
+const token3DIndex = new Map(); // combatant id -> { group, ring, label, hpFill, plane, gx, gy }
+let selected3DId = null;
+let activeFx3D = [], activeTweens3D = [], activeBursts3D = [];
+const loader3D = new THREE.GLTFLoader();
+const textureLoader3D = new THREE.TextureLoader();
+const modelCache3D = new Map(), textureCache3D = new Map();
+
+function loadModel3D(path) {
+  if (modelCache3D.has(path)) return modelCache3D.get(path);
+  const p = new Promise((resolve, reject) => {
+    loader3D.load(path, gltf => resolve(gltf.scene), undefined,
+      err => reject(new Error(`3D combat map: failed to load "${path}": ${err?.message || err}`)));
+  });
+  modelCache3D.set(path, p);
+  return p;
+}
+async function cloneModel3D(path) {
+  const src = await loadModel3D(path);
+  const clone = src.clone(true);
+  clone.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return clone;
+}
+function loadTexture3D(path) {
+  if (textureCache3D.has(path)) return textureCache3D.get(path);
+  const p = new Promise((resolve, reject) => {
+    textureLoader3D.load(path, tex => { tex.encoding = THREE.sRGBEncoding; resolve(tex); }, undefined,
+      err => reject(new Error(`3D combat map: failed to load texture "${path}": ${err?.message || err}`)));
+  });
+  textureCache3D.set(path, p);
+  return p;
+}
+function centerAndBox3D(obj) {
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = new THREE.Vector3(); box.getSize(size);
+  return { box, size };
+}
+
+function grid3DToWorld(gx, gy) { return new THREE.Vector3(gx * cell3D, 0, gy * cell3D); }
+function world3DToGrid(x, z) { return { gx: Math.round(x / cell3D), gy: Math.round(z / cell3D) }; }
+function cellKey3D(gx, gy) { return gx + ',' + gy; }
+
+// A LineSegments grid built from scratch at the exact cell spacing, rather than a
+// THREE.GridHelper (which only supports a single square size/division count — no good
+// for an arbitrary w×h battlefield without non-uniformly scaling it out of alignment
+// with the actual floor tiles).
+function createGridLines3D(x0, x1, y0, y1, cell, color) {
+  const pts = [];
+  const zMin = (y0 - 0.5) * cell, zMax = (y1 - 0.5) * cell;
+  for (let gx = x0; gx <= x1; gx++) { const wx = (gx - 0.5) * cell; pts.push(wx, 0, zMin, wx, 0, zMax); }
+  const xMin = (x0 - 0.5) * cell, xMax = (x1 - 0.5) * cell;
+  for (let gy = y0; gy <= y1; gy++) { const wz = (gy - 0.5) * cell; pts.push(xMin, 0, wz, xMax, 0, wz); }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.3 });
+  const grid = new THREE.LineSegments(geo, mat);
+  grid.position.y = 0.02;
+  return grid;
+}
+
+function init3D() {
+  if (renderer3D) return;
+  const holder = document.getElementById('combat-3d-canvas-holder');
+  renderer3D = new THREE.WebGLRenderer({ antialias: true });
+  renderer3D.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer3D.shadowMap.enabled = true;
+  renderer3D.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer3D.outputEncoding = THREE.sRGBEncoding;
+  holder.appendChild(renderer3D.domElement);
+
+  scene3D = new THREE.Scene();
+  scene3D.background = new THREE.Color(0x05070d);
+  scene3D.fog = new THREE.Fog(0x05070d, 26, 74);
+
+  camera3D = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
+  controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
+  controls3D.enableDamping = true;
+  controls3D.dampingFactor = 0.08;
+  controls3D.maxPolarAngle = Math.PI * 0.49;
+  controls3D.minDistance = 4;
+  controls3D.maxDistance = 110;
+
+  const hemi = new THREE.HemisphereLight(0x8fb4ff, 0x1a1a22, 0.9);
+  scene3D.add(hemi);
+  const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -30; sun.shadow.camera.right = 30;
+  sun.shadow.camera.top = 30; sun.shadow.camera.bottom = -30;
+  sun.shadow.bias = -0.0015;
+  scene3D.add(sun); scene3D.add(sun.target);
+  scene3D.userData.sun = sun;
+
+  world3D = new THREE.Group();
+  scene3D.add(world3D);
+
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  let dragDistance = 0;
+  renderer3D.domElement.addEventListener('pointerdown', () => { dragDistance = 0; });
+  renderer3D.domElement.addEventListener('pointermove', ev => { dragDistance += Math.abs(ev.movementX) + Math.abs(ev.movementY); });
+
+  function setPointer(ev) {
+    const rect = renderer3D.domElement.getBoundingClientRect();
+    pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+  }
+
+  renderer3D.domElement.addEventListener('click', ev => {
+    if (dragDistance > 6) return; // was an orbit/pan drag, not a click
+    if (!combatState().active) return;
+    setPointer(ev);
+    raycaster.setFromCamera(pointer, camera3D);
+
+    const meshes = [...token3DIndex.values()].map(t => t.group);
+    const hits = raycaster.intersectObjects(meshes, true);
+    if (hits.length) {
+      let obj = hits[0].object;
+      const entries = [...token3DIndex.entries()];
+      while (obj.parent && !entries.some(([, t]) => t.group === obj)) obj = obj.parent;
+      const found = entries.find(([, t]) => t.group === obj);
+      if (found) { select3DToken(found[0]); return; }
+    }
+
+    if (!selected3DId) return;
+    const activeCombatant = combatants[activeTurn % (combatants.length || 1)];
+    if (!activeCombatant || selected3DId !== activeCombatant.id) return; // only the active combatant may move, same as the 2D drag gate
+    if (!isGM && activeCombatant.character_id !== myCharacterId) return;
+    const ix = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(groundPlane, ix)) {
+      const { gx, gy } = world3DToGrid(ix.x, ix.z);
+      move3DToken(activeCombatant, gx, gy);
+    }
+  });
+
+  renderer3D.domElement.addEventListener('pointermove', ev => {
+    if (!hover3D || !selected3DId) { if (hover3D) hover3D.visible = false; return; }
+    setPointer(ev);
+    raycaster.setFromCamera(pointer, camera3D);
+    const ix = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(groundPlane, ix)) {
+      const { gx, gy } = world3DToGrid(ix.x, ix.z);
+      const st = combatState();
+      const blocked = (st.obstacles || []).some(o => o[0] === gx && o[1] === gy);
+      if (blocked) { hover3D.visible = false; }
+      else {
+        const pos = grid3DToWorld(gx, gy);
+        hover3D.position.set(pos.x, 0.03, pos.z);
+        hover3D.visible = true;
+      }
+    }
+  });
+
+  addEventListener('resize', resize3D);
+}
+
+function resize3D() {
+  if (!renderer3D) return;
+  const holder = document.getElementById('combat-3d-canvas-holder');
+  const w = holder.clientWidth || 800, h = viewportHeight;
+  camera3D.aspect = w / h;
+  camera3D.updateProjectionMatrix();
+  renderer3D.setSize(w, h);
+}
+
+// Only the active combatant's own token can actually be moved (mirrors the 2D drag
+// handler's gate); movement budget + obstacle blocking are enforced identically, and the
+// new position is written to the same `initiative_tracker` row the same way.
+async function move3DToken(tok, gx, gy) {
+  const st = combatState();
+  if ((st.obstacles || []).some(o => o[0] === gx && o[1] === gy)) return;
+  let moveCells = 0;
+  if (tok.grid_x != null) {
+    moveCells = Math.round(Math.hypot(gx - tok.grid_x, gy - tok.grid_y));
+    if (moveCells > turnActionState.remainingMove) {
+      alert(`Not enough movement left (${turnActionState.remainingMove} square${turnActionState.remainingMove === 1 ? '' : 's'} remaining).`);
+      return;
+    }
+  }
+  tok.grid_x = gx; tok.grid_y = gy;
+  await db.from('initiative_tracker').update({ grid_x: gx, grid_y: gy }).eq('id', tok.id);
+  turnActionState.remainingMove -= moveCells;
+  renderCheatSheet(tok);
+  const entry = token3DIndex.get(tok.id);
+  if (entry) animate3DMove(entry, gx, gy);
+}
+function animate3DMove(entry, gx, gy) {
+  entry.gx = gx; entry.gy = gy;
+  const target = grid3DToWorld(gx, gy);
+  const start = entry.group.position.clone();
+  const t0 = performance.now(); const dur = 260;
+  (function step() {
+    const t = Math.min(1, (performance.now() - t0) / dur);
+    const e = 1 - Math.pow(1 - t, 3);
+    entry.group.position.set(start.x + (target.x - start.x) * e, start.y, start.z + (target.z - start.z) * e);
+    if (t < 1) requestAnimationFrame(step);
+  })();
+}
+function select3DToken(id) {
+  selected3DId = id;
+  token3DIndex.forEach((entry, tid) => {
+    entry.ring.scale.setScalar(tid === id ? 1.35 : 1);
+  });
+}
+
+// Builds (or rebuilds, if the battlefield fingerprint changed) the floor/grid/obstacles,
+// then always re-syncs tokens from the real `combatants` array — called every time
+// drawCombatMap() runs for an on-foot battle, same redraw-on-any-change cadence the 2D
+// map already uses.
+async function build3DCombatMap(st) {
+  init3D();
+  document.getElementById('combat-3d-loading').style.display = 'flex';
+  try {
+    const key = st.type + '|' + st.map + '|' + st.w + '|' + st.h + '|' + (st.obstacles || []).length;
+    if (key !== built3DKey) {
+      built3DKey = key;
+      await build3DEnvironment(st);
+    }
+    await sync3DTokens(st);
+    if (!raf3D) tick3D();
+  } catch (err) {
+    console.error('3D combat map failed to build:', err);
+  } finally {
+    document.getElementById('combat-3d-loading').style.display = 'none';
+  }
+}
+
+async function build3DEnvironment(st) {
+  while (world3D.children.length) world3D.remove(world3D.children[0]);
+  token3DIndex.clear(); selected3DId = null;
+  document.getElementById('combat-3d-fx-layer').innerHTML = '';
+  activeFx3D = []; activeTweens3D = []; activeBursts3D = [];
+
+  const themeKey = (COMBAT_MAPS.outside[st.map] || {}).theme3d || 'arena';
+  const theme = COMBAT_3D_THEMES[themeKey] || COMBAT_3D_THEMES.arena;
+  scene3D.fog.color.setHex(theme.fogColor);
+
+  const floorSrc = await cloneModel3D(theme.base + theme.floor);
+  const { size: floorSize } = centerAndBox3D(floorSrc);
+  cell3D = Math.max(floorSize.x, floorSize.z) || 2;
+
+  const x0 = -COMBAT_3D_FLOOR_MARGIN, x1 = st.w + COMBAT_3D_FLOOR_MARGIN;
+  const y0 = -COMBAT_3D_FLOOR_MARGIN, y1 = st.h + COMBAT_3D_FLOOR_MARGIN;
+  let floorMesh = null;
+  floorSrc.traverse(o => { if (o.isMesh && !floorMesh) floorMesh = o; });
+  if (floorMesh) {
+    const cols = x1 - x0, rows = y1 - y0;
+    const inst = new THREE.InstancedMesh(floorMesh.geometry, floorMesh.material, cols * rows);
+    inst.receiveShadow = true;
+    let i = 0; const m = new THREE.Matrix4();
+    for (let gy = y0; gy < y1; gy++) for (let gx = x0; gx < x1; gx++) {
+      const pos = grid3DToWorld(gx, gy);
+      m.makeTranslation(pos.x, 0, pos.z);
+      inst.setMatrixAt(i++, m);
+    }
+    inst.instanceMatrix.needsUpdate = true;
+    world3D.add(inst);
+  }
+
+  world3D.add(createGridLines3D(x0, x1, y0, y1, cell3D, 0x40c8ff));
+
+  const hoverGeo = new THREE.PlaneGeometry(cell3D * 0.92, cell3D * 0.92);
+  const hoverMat = new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.28, side: THREE.DoubleSide });
+  hover3D = new THREE.Mesh(hoverGeo, hoverMat);
+  hover3D.rotation.x = -Math.PI / 2;
+  hover3D.position.y = 0.03;
+  hover3D.visible = false;
+  world3D.add(hover3D);
+
+  // Obstacles are drawn EXACTLY at the real, shared combat_state.obstacles cells (same
+  // data every client's 2D map also reads) — deterministic per-cell prop pick via the
+  // existing cellHash() so the same cell always renders the same prop, but no invented
+  // decorative obstacles beyond what's actually blocking movement.
+  const pool = theme.obstacles.map(o => ({ base: theme.base, name: o }));
+  if (theme.obstaclesExtra) theme.obstaclesExtra.items.forEach(o => pool.push({ base: theme.obstaclesExtra.base, name: o }));
+  for (const [ox, oy] of (st.obstacles || [])) {
+    const pick = pool[Math.floor(cellHash(ox, oy) * 999) % pool.length];
+    try {
+      const obj = await cloneModel3D(pick.base + pick.name);
+      const { size } = centerAndBox3D(obj);
+      const scale = Math.min(1.6, (cell3D * 0.8) / (Math.max(size.x, size.z) || 1));
+      obj.scale.setScalar(scale);
+      const pos = grid3DToWorld(ox, oy);
+      obj.position.set(pos.x, 0, pos.z);
+      obj.rotation.y = cellHash(ox, oy + 0.5) * Math.PI * 2;
+      world3D.add(obj);
+    } catch (err) { console.warn('3D obstacle failed to load', pick, err); }
+  }
+}
+
+async function sync3DTokens(st) {
+  const seen = new Set();
+  for (const c of combatants) {
+    if (c.grid_x == null || c.grid_y == null) continue;
+    seen.add(c.id);
+    let entry = token3DIndex.get(c.id);
+    if (!entry) entry = await create3DToken(c);
+    if (entry.gx !== c.grid_x || entry.gy !== c.grid_y) animate3DMove(entry, c.grid_x, c.grid_y);
+    updateHpBar3D(entry, c);
+    entry.label.querySelector('.name3d').textContent = c.combatant || ''; // .textContent already escapes; esc() is for innerHTML contexts
+  }
+  for (const [id, entry] of [...token3DIndex.entries()]) {
+    if (!seen.has(id)) { world3D.remove(entry.group); entry.label.remove(); token3DIndex.delete(id); }
+  }
+  // Gold ring on whoever's turn it is, matching the 2D map's active-token highlight.
+  const active = combatants[activeTurn % (combatants.length || 1)];
+  token3DIndex.forEach((entry, id) => {
+    const isActive = active && active.id === id;
+    entry.ring.material.color.setHex(id === selected3DId ? 0xffd23a : isActive ? 0xffd23a : entry.baseColor);
+  });
+}
+
+async function create3DToken(c) {
+  const pos = grid3DToWorld(c.grid_x, c.grid_y);
+  const group = new THREE.Group();
+  group.position.set(pos.x, 0, pos.z);
+
+  let plane;
+  const portraitPath = c.characters?.species ? characterPortraitPath(c.characters.species, c.characters.appearance, c.characters.custom_portrait_url) : null;
+  if (portraitPath) {
+    try {
+      const tex = await loadTexture3D(portraitPath);
+      const h = cell3D * 0.95;
+      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.35, side: THREE.DoubleSide });
+      plane = new THREE.Mesh(new THREE.PlaneGeometry(h, h), mat);
+      plane.position.y = h / 2;
+    } catch (err) {
+      console.warn('token portrait failed to load, using placeholder', portraitPath, err);
+    }
+  }
+  if (!plane) {
+    const mat = new THREE.MeshStandardMaterial({ color: c.is_npc ? 0xc84040 : 0x3a78d4 });
+    plane = new THREE.Mesh(new THREE.BoxGeometry(cell3D * 0.5, cell3D * 0.9, cell3D * 0.5), mat);
+    plane.position.y = cell3D * 0.45;
+  }
+  group.add(plane);
+
+  const baseColorHex = c.is_npc ? 0xc84040 : (c.token_color ? parseInt(c.token_color.replace('#', ''), 16) : 0x5a98f4);
+  const ringMat = new THREE.MeshBasicMaterial({ color: baseColorHex, transparent: true, opacity: 0.75, side: THREE.DoubleSide });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(cell3D * 0.32, cell3D * 0.4, 24), ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.025;
+  group.add(ring);
+
+  world3D.add(group);
+
+  const label = document.createElement('div');
+  label.className = 'token-label-3d';
+  label.innerHTML = `<div class="name3d"></div><div class="hp3d-track"><div class="hp3d-fill"></div></div>`;
+  document.getElementById('combat-3d-fx-layer').appendChild(label);
+
+  const entry = { group, plane, ring, label, hpFill: label.querySelector('.hp3d-fill'), gx: c.grid_x, gy: c.grid_y, baseColor: baseColorHex };
+  token3DIndex.set(c.id, entry);
+  return entry;
+}
+function updateHpBar3D(entry, c) {
+  const pct = c.hp_max ? Math.max(0, Math.min(1, (c.hp_current ?? 0) / c.hp_max)) * 100 : 100;
+  entry.hpFill.style.width = pct + '%';
+  entry.hpFill.style.background = pct > 50 ? '#4acc7a' : pct > 25 ? '#d4af37' : '#cc4444';
+}
+
+function recenter3DCamera() {
+  if (!camera3D) return;
+  let cx = cbCamX, cz = cbCamY; // cbCamX/cbCamY already computed by recenterCombatView()
+  camera3D.position.set(cx * cell3D + cell3D * 6, cell3D * 7, cz * cell3D + cell3D * 7);
+  controls3D.target.set(cx * cell3D, 0, cz * cell3D);
+  const sun = scene3D?.userData.sun;
+  if (sun) { sun.position.set(cx * cell3D + 20, 30, cz * cell3D + 10); sun.target.position.set(cx * cell3D, 0, cz * cell3D); }
+  controls3D.update();
+}
+function zoom3DStep(factor) {
+  if (!camera3D) return;
+  camera3D.position.lerp(controls3D.target, factor > 1 ? 0.2 : -0.25);
+}
+
+// ── 3D attack FX — same beats as the 2D map's playAttackFx (AD build-up line, roll
+// resolves before the shot fires, weapon SFX + bolt travel, impact burst, damage
+// numbers), just rendered as real 3D geometry plus screen-projected DOM chips instead of
+// a flat canvas overlay. Reuses the exact same WEAPON_BOLT_COLOR/playWeaponSfx/
+// playImpactSfx/renderStoredIcon/parseDice already defined for the 2D version. ──
+function spawnBeamMesh3D(a, b, color) {
+  const len = new THREE.Vector3().subVectors(b, a).length() || 0.001;
+  const geo = new THREE.BoxGeometry(0.06, 0.06, 1);
+  geo.translate(0, 0, 0.5);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(a); mesh.position.y += cell3D * 0.45;
+  mesh.lookAt(b.x, mesh.position.y, b.z);
+  mesh.scale.z = 0.001;
+  mesh.userData.fullLength = len;
+  world3D.add(mesh);
+  return mesh;
+}
+function tweenScale3D(mesh, axis, from, to, duration) {
+  const t0 = performance.now();
+  activeTweens3D.push({ mesh, axis, from, to, t0, duration });
+  return combatSleep(duration);
+}
+function missBoltEndpoint3D(a, b) {
+  const dir = new THREE.Vector3().subVectors(b, a).normalize();
+  const perp = new THREE.Vector3(-dir.z, 0, dir.x);
+  const side = Math.random() < 0.5 ? -1 : 1;
+  const offset = (cell3D * 0.35 + Math.random() * cell3D * 0.3) * side;
+  const undershoot = 0.8 + Math.random() * 0.12;
+  const p = new THREE.Vector3().addVectors(a, new THREE.Vector3().subVectors(b, a).multiplyScalar(undershoot));
+  p.addScaledVector(perp, offset);
+  return p;
+}
+function spawnBurst3D(pos, color, big) {
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 12), mat);
+  mesh.position.copy(pos); mesh.position.y += cell3D * 0.45;
+  mesh.scale.setScalar(0.15);
+  world3D.add(mesh);
+  const t0 = performance.now(); const dur = 480; const peak = big ? 1.6 : 1.0;
+  activeBursts3D.push({ mesh, t0, dur, peak });
+  setTimeout(() => world3D.remove(mesh), dur + 30);
+}
+function spawnFxChip3D(worldPos, className, html, life, yOffsetCells) {
+  const el = document.createElement('div');
+  el.className = 'fx-chip-3d ' + (className || '');
+  el.innerHTML = html;
+  document.getElementById('combat-3d-fx-layer').appendChild(el);
+  const entry = { el, pos: worldPos.clone(), yOffset: (yOffsetCells ?? 0.9) * cell3D + cell3D * 0.9 };
+  activeFx3D.push(entry);
+  if (life) setTimeout(() => { el.remove(); activeFx3D = activeFx3D.filter(e => e !== entry); }, life);
+  return entry;
+}
+function tickChipNumber3D(entry, prefix, to, duration, suffix) {
+  const steps = Math.max(6, Math.min(to, 14));
+  let i = 0;
+  const iv = setInterval(() => {
+    i++;
+    entry.el.textContent = `${prefix}${Math.round(to * i / steps)}${suffix || ''}`;
+    if (i >= steps) clearInterval(iv);
+  }, duration / steps);
+}
+function spinDiceChip3D(entry, finalValue, duration, intervalMs) {
+  return new Promise(resolve => {
+    const iv = setInterval(() => { entry.el.textContent = 1 + Math.floor(Math.random() * 20); }, intervalMs || 70);
+    setTimeout(() => { clearInterval(iv); entry.el.textContent = finalValue; resolve(); }, duration);
+  });
+}
+
+async function playAttackFx3D({ attackerX, attackerY, targetX, targetY, weaponType, roll, toHitTotal, totalAD, hit, hasCover, weaponIconPath, dmgResult, armor, finalDmg }) {
+  init3D();
+  const a = grid3DToWorld(attackerX, attackerY), t = grid3DToWorld(targetX, targetY);
+  const color = WEAPON_BOLT_COLOR[weaponType] || '#40c8ff';
+  const weaponIcon = weaponIconPath ? renderStoredIcon(weaponIconPath, 28) : null;
+
+  const beam = spawnBeamMesh3D(a, t, color);
+  tweenScale3D(beam, 'z', 0, beam.userData.fullLength, 380);
+  const adChip = spawnFxChip3D(t, '', 'AD 0', 0, 1.4);
+  tickChipNumber3D(adChip, 'AD ', totalAD, 420);
+  await combatSleep(450);
+  adChip.el.textContent = `AD ${totalAD}${hasCover ? ' 🪨 cover' : ''} to beat`;
+
+  const d20 = document.createElement('div');
+  d20.className = 'fx-d20-3d spinning';
+  document.getElementById('combat-3d-fx-layer').appendChild(d20);
+  const d20Entry = { el: d20, pos: t.clone(), yOffset: cell3D * 2.3 };
+  activeFx3D.push(d20Entry);
+  await combatSleep(350);
+  await spinDiceChip3D(d20Entry, roll, 900, 70);
+  await combatSleep(350);
+  d20.classList.remove('spinning');
+  d20.classList.add(hit ? 'hit' : 'miss');
+  adChip.el.className = 'fx-chip-3d ' + (hit ? 'hit' : 'miss');
+  await combatSleep(300);
+  d20.remove(); activeFx3D = activeFx3D.filter(e => e !== d20Entry);
+  adChip.el.remove(); activeFx3D = activeFx3D.filter(e => e !== adChip);
+
+  spawnFxChip3D(t, hit ? 'hit' : 'miss', `${toHitTotal} vs AD ${totalAD} — ${hit ? 'HIT' : 'MISS'}`, 1100, 1.4);
+  await combatSleep(250);
+
+  playWeaponSfx(weaponType);
+  world3D.remove(beam);
+  const boltEnd = hit ? t : missBoltEndpoint3D(a, t);
+  const bolt = spawnBeamMesh3D(a, boltEnd, color);
+  bolt.material.blending = THREE.AdditiveBlending;
+  await tweenScale3D(bolt, 'z', 0, bolt.userData.fullLength, 220);
+  world3D.remove(bolt);
+
+  playImpactSfx(weaponType, hit);
+  if (hit) spawnBurst3D(t, new THREE.Color(color), weaponType === 'rifle' || weaponType === 'heavy');
+  else spawnBurst3D(boltEnd, new THREE.Color(0xffd23a), false);
+
+  if (!hit) { await combatSleep(700); return; }
+
+  if (weaponIcon) spawnFxChip3D(t, '', weaponIcon, 550, 0.5);
+  await combatSleep(350);
+  spawnFxChip3D(t, '', `-${finalDmg} HP`, 1000, 2.0).el.classList.add('fx-float-3d');
+  await combatSleep(150);
+  spawnFxChip3D(t, 'hit', `${dmgResult} dmg − ${armor} armor`, 1200, 2.6);
+  await combatSleep(600);
+}
+
+function tick3D() {
+  const st = combatState();
+  if (!renderer3D || shipViewMode !== 'combat' || !st.active || st.type === 'space') { raf3D = null; return; }
+  raf3D = requestAnimationFrame(tick3D);
+  controls3D.update();
+
+  const now = performance.now();
+  activeTweens3D = activeTweens3D.filter(tw => {
+    const t = Math.min(1, (now - tw.t0) / tw.duration);
+    tw.mesh.scale[tw.axis] = tw.from + (tw.to - tw.from) * t;
+    return t < 1;
+  });
+  activeBursts3D = activeBursts3D.filter(b => {
+    const t = Math.min(1, (now - b.t0) / b.dur);
+    b.mesh.scale.setScalar(0.15 + b.peak * t);
+    b.mesh.material.opacity = 0.9 * (1 - t);
+    return t < 1;
+  });
+
+  const tmpV = new THREE.Vector3();
+  function projectToScreen(pos) {
+    tmpV.copy(pos); tmpV.project(camera3D);
+    const rect = renderer3D.domElement.getBoundingClientRect();
+    return { x: (tmpV.x * 0.5 + 0.5) * rect.width, y: (-tmpV.y * 0.5 + 0.5) * rect.height, visible: tmpV.z < 1 };
+  }
+  token3DIndex.forEach(entry => {
+    const camPos = camera3D.position;
+    entry.plane.lookAt(camPos.x, entry.plane.getWorldPosition(new THREE.Vector3()).y, camPos.z);
+    const labelPos = entry.group.position.clone(); labelPos.y += cell3D * 1.25;
+    const s = projectToScreen(labelPos);
+    entry.label.style.display = s.visible ? 'flex' : 'none';
+    entry.label.style.left = s.x + 'px'; entry.label.style.top = s.y + 'px';
+  });
+  activeFx3D.forEach(f => {
+    const p = f.pos.clone(); p.y += f.yOffset;
+    const s = projectToScreen(p);
+    f.el.style.display = s.visible ? '' : 'none';
+    f.el.style.left = s.x + 'px'; f.el.style.top = s.y + 'px';
+  });
+
+  renderer3D.render(scene3D, camera3D);
+}
+
+function draw3DCombatMap(st) {
+  document.getElementById('combat-2d-wrap').style.display = 'none';
+  document.getElementById('combat-3d-wrap').style.display = 'block';
+  init3D();
+  resize3D();
+  build3DCombatMap(st);
 }
 
 // ── Combat canvas ────────────────────────────────────────────────
@@ -4711,7 +5350,15 @@ function playImpactSfx(weaponType, hit) {
 // hit-spark burst — all anchored at the target's position so it's obvious who's being hit
 // and by what, instead of only a text line in the dice log. Successive chips are stacked
 // upward (yOffsetCells) so they don't all print directly on top of each other.
-async function playAttackFx({ attackerX, attackerY, targetX, targetY, weaponType, roll, toHitTotal, totalAD, hit, hasCover, weaponIconPath, dmgResult, armor, finalDmg }) {
+// Dispatches to the 3D on-foot FX sequence or the 2D canvas-overlay one below,
+// depending on which renderer the current battle is using — both are driven by
+// the exact same combat_fx payload written by resolveAttack().
+async function playAttackFx(payload) {
+  if (combatState().type === 'space') return playAttackFx2D(payload);
+  return playAttackFx3D(payload);
+}
+
+async function playAttackFx2D({ attackerX, attackerY, targetX, targetY, weaponType, roll, toHitTotal, totalAD, hit, hasCover, weaponIconPath, dmgResult, armor, finalDmg }) {
   const a = combatCellToScreen(attackerX, attackerY);
   const t = combatCellToScreen(targetX, targetY);
   const weaponIcon = weaponIconPath ? renderStoredIcon(weaponIconPath, 28) : null;
@@ -4770,6 +5417,13 @@ async function playAttackFx({ attackerX, attackerY, targetX, targetY, weaponType
 }
 
 function drawCombatMap() {
+  const st0 = combatState();
+  // On-foot battles render in 3D (see draw3DCombatMap) — everything below this branch
+  // is the 2D canvas renderer, used for space combat and the "no active battle" placeholder.
+  if (st0.active && st0.type !== 'space') { draw3DCombatMap(st0); return; }
+  document.getElementById('combat-2d-wrap').style.display = '';
+  document.getElementById('combat-3d-wrap').style.display = 'none';
+
   const W = combatCanvas.offsetWidth || 800;
   combatCanvas.width = W;
   combatCanvas.height = viewportHeight;
@@ -5014,12 +5668,15 @@ combatCanvas.addEventListener('wheel', e => {
 
 function cbZoomStep(factor) {
   if (!combatState().active) return;
+  if (combatState().type !== 'space') { zoom3DStep(factor); return; }
   cbUserZoom = Math.max(0.3, Math.min(4, cbUserZoom * factor));
   drawCombatMap();
 }
 
 // Recenter the boundless camera on the average position of every combatant (falling back
-// to the map's original centre if nobody has a position yet), and reset zoom/pan.
+// to the map's original centre if nobody has a position yet), and reset zoom/pan. cbCamX/
+// cbCamY are shared with the 3D renderer too (recenter3DCamera reads them directly) so
+// this math only needs to live in one place regardless of which renderer is active.
 function recenterCombatView() {
   const positioned = combatants.filter(c => c.grid_x != null && c.grid_y != null);
   const st = combatState();
@@ -5030,6 +5687,7 @@ function recenterCombatView() {
     cbCamX = (st.w || 26) / 2; cbCamY = (st.h || 18) / 2;
   }
   cbUserZoom = 1; cbUserPanPxX = 0; cbUserPanPxY = 0;
+  if (st.active && st.type !== 'space') recenter3DCamera();
   drawCombatMap();
 }
 
