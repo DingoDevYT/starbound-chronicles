@@ -5,7 +5,6 @@
 <title>Ship 3D Harness — Starbound Chronicles</title>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="js/combat3d-structures.js"></script>
 <script src="js/ship3d.js"></script>
@@ -21,7 +20,7 @@
 <div id="bar"></div>
 <div id="stat">loading…</div>
 <script>
-let renderer, scene, camera, controls, env, curSize = 'medium', curVar = 1, shipGroup = null, curView = 'exterior', interiorLights = null, interiorGroup = null;
+let renderer, scene, camera, controls, env, curSize = 'medium', curTier = 1, world = null, lightGroup = null;
 function init() {
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -33,60 +32,35 @@ function init() {
   camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 2500);
   controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
   scene.add(new THREE.HemisphereLight(0xbcd6ff, 0x181c26, 0.85));
-  const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(30, 50, 20); scene.add(key);
+  const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(30, 50, 20); scene.add(key);
   const fill = new THREE.DirectionalLight(0x88aaff, 0.5); fill.position.set(-30, 12, -18); scene.add(fill);
   env = createShipEnvironment(scene);
   addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
   let last = performance.now();
   (function tick() { requestAnimationFrame(tick); const now = performance.now(); const dt = Math.min(0.05, (now - last) / 1000); last = now; controls.update(); env.update(dt); renderer.render(scene, camera); })();
 }
-function clearShip() {
-  if (shipGroup) { scene.remove(shipGroup); shipGroup = null; }
-  if (interiorGroup) { scene.remove(interiorGroup); interiorGroup = null; }
-  if (interiorLights) { scene.remove(interiorLights); interiorLights = null; }
-}
-async function show(size, variant) {
-  curSize = size; curVar = variant ?? curVar;
+function show(size, tier) {
+  curSize = size; curTier = tier ?? curTier;
   document.querySelectorAll('#bar button[data-size]').forEach(b => b.classList.toggle('on', b.dataset.size === size));
-  document.querySelectorAll('#bar button[data-var]').forEach(b => b.classList.toggle('on', +b.dataset.var === curVar));
-  document.querySelectorAll('#bar button[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === curView));
-  clearShip();
-  window.__ready = false;
-  if (curView === 'interior') {
-    // BOARD SHIP: the walkable deck (rooms + stations), looked into from above.
-    const built = buildShipInterior(size, { wingTier: curVar, thrusterTier: curVar, reactorTier: curVar, gunCount: 1 + curVar, gunTier: curVar });
-    interiorGroup = built.group; scene.add(interiorGroup);
-    interiorLights = new THREE.Group(); addShipLighting(interiorLights, built); scene.add(interiorLights);
-    env.bindShip(built, interiorGroup);
-    const o = built.outline;
-    camera.position.set(o.cx - o.maxHalf * 0.4, o.length * 0.9, o.zStern + o.length * 0.5);
-    controls.target.set(o.cx, 0, o.zMid); controls.update();
-    document.getElementById('stat').textContent = `${size} · INTERIOR · ${built.picks.length} deck tiles · mode ${env.mode}`;
-    window.__ready = true; window.__ship = built;
-    return;
-  }
-  try {
-    shipGroup = await loadRealShip(size, curVar);
-  } catch (err) {
-    document.getElementById('stat').innerHTML = '⚠ Ship model failed to load: ' + err +
-      (location.protocol === 'file:' ? '<br><b style="color:#ff9">You opened this with file:// — browsers block loading local models. Open it over http (the live site or a local server).</b>' : '');
-    console.error('ship load failed', err); return;
-  }
-  scene.add(shipGroup);
-  env.bindRealShip(shipGroup);
-  const L = shipGroup.userData.length;
-  camera.position.set(-L * 0.8, L * 0.5, L * 0.95); controls.target.set(0, 0, 0); controls.update();
-  document.getElementById('stat').textContent = `${size} · variant ${curVar} · len ${L.toFixed(1)} · mode ${env.mode}`;
-  window.__ready = true; window.__ship = shipGroup;
+  document.querySelectorAll('#bar button[data-tier]').forEach(b => b.classList.toggle('on', +b.dataset.tier === curTier));
+  if (world) scene.remove(world);
+  if (lightGroup) scene.remove(lightGroup);
+  const built = buildShip3D(size, { wingTier: curTier, thrusterTier: curTier, reactorTier: curTier, gunCount: 1 + curTier, gunTier: curTier });
+  world = built.group; scene.add(world);
+  lightGroup = new THREE.Group(); addShipLighting(lightGroup, built); scene.add(lightGroup);
+  env.bindShip(built, world);
+  const o = built.outline;
+  camera.position.set(o.cx - o.maxHalf * 2.4, o.maxHalf * 1.5, o.zStern + o.maxHalf * 1.8);
+  controls.target.set(o.cx, 0.4, o.zMid); controls.update();
+  document.getElementById('stat').textContent = `${size} · tier ${curTier} · ${built.picks.length} deck tiles · mode ${env.mode}`;
+  window.__built = built; window.__ready = true;
 }
-function setView(v) { curView = v; show(curSize, curVar); }
 function setMode(m) { env.setMode(m); document.querySelectorAll('#bar button[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m)); }
 const bar = document.getElementById('bar');
 ['small','medium','large','capital'].forEach(s => { const b = document.createElement('button'); b.textContent = s; b.dataset.size = s; b.onclick = () => show(s); bar.appendChild(b); });
-[1,2,3,4].forEach(v => { const b = document.createElement('button'); b.textContent = 'clr ' + v; b.dataset.var = v; b.onclick = () => show(curSize, v); bar.appendChild(b); });
-[['exterior','🚀 exterior'],['interior','🛸 board']].forEach(([v,l]) => { const b = document.createElement('button'); b.textContent = l; b.dataset.view = v; b.onclick = () => setView(v); bar.appendChild(b); });
+[1,2,3].forEach(t => { const b = document.createElement('button'); b.textContent = 'tier ' + t; b.dataset.tier = t; b.onclick = () => show(curSize, t); bar.appendChild(b); });
 ['travel','dock','planet'].forEach(m => { const b = document.createElement('button'); b.textContent = m; b.dataset.mode = m; b.onclick = () => setMode(m); bar.appendChild(b); });
-init(); show('medium', 1).then(() => setMode('travel'));
+init(); show('medium', 1); setMode('travel');
 </script>
 </body>
 </html>

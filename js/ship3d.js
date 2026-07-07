@@ -96,21 +96,22 @@ const shipMatCache = new Map();
 function shipMat(key) {
   if (shipMatCache.has(key)) return shipMatCache.get(key);
   let m;
+  // flatShading gives every facet a crisp flat face — the blocky low-poly look.
   switch (key) {
-    case 'hullBody': m = new THREE.MeshStandardMaterial({ color: scColor(0x3d4a66), roughness: 0.42, metalness: 0.58 }); break;
-    case 'hullWall': m = new THREE.MeshStandardMaterial({ color: scColor(0x4a5674), roughness: 0.48, metalness: 0.5, side: THREE.DoubleSide }); break;
-    case 'deckA':    m = new THREE.MeshStandardMaterial({ color: scColor(0x505b74), roughness: 0.6, metalness: 0.3 }); break;
-    case 'deckB':    m = new THREE.MeshStandardMaterial({ color: scColor(0x4a5570), roughness: 0.6, metalness: 0.3 }); break;
-    case 'deckWalk': m = new THREE.MeshStandardMaterial({ color: scColor(0x5b6884), roughness: 0.5, metalness: 0.35, emissive: scColor(0x16324a), emissiveIntensity: 0.35 }); break;
-    case 'part':     m = new THREE.MeshStandardMaterial({ color: scColor(0x5d6880), roughness: 0.5, metalness: 0.4 }); break;
-    case 'rim':      m = new THREE.MeshStandardMaterial({ color: scColor(0x76829e), roughness: 0.32, metalness: 0.68 }); break;
+    case 'hullBody': m = new THREE.MeshStandardMaterial({ color: scColor(0x3d4a66), roughness: 0.42, metalness: 0.58, flatShading: true }); break;
+    case 'hullWall': m = new THREE.MeshStandardMaterial({ color: scColor(0x4a5674), roughness: 0.48, metalness: 0.5, side: THREE.DoubleSide, flatShading: true }); break;
+    case 'deckA':    m = new THREE.MeshStandardMaterial({ color: scColor(0x505b74), roughness: 0.6, metalness: 0.3, flatShading: true }); break;
+    case 'deckB':    m = new THREE.MeshStandardMaterial({ color: scColor(0x4a5570), roughness: 0.6, metalness: 0.3, flatShading: true }); break;
+    case 'deckWalk': m = new THREE.MeshStandardMaterial({ color: scColor(0x5b6884), roughness: 0.5, metalness: 0.35, emissive: scColor(0x16324a), emissiveIntensity: 0.35, flatShading: true }); break;
+    case 'part':     m = new THREE.MeshStandardMaterial({ color: scColor(0x5d6880), roughness: 0.5, metalness: 0.4, flatShading: true }); break;
+    case 'rim':      m = new THREE.MeshStandardMaterial({ color: scColor(0x76829e), roughness: 0.32, metalness: 0.68, flatShading: true }); break;
     case 'accent':   m = new THREE.MeshStandardMaterial({ color: scColor(0x0d3348), emissive: scColor(SHIP_ACCENT), emissiveIntensity: 0.9, roughness: 0.4 }); break;
     case 'trim':     m = new THREE.MeshStandardMaterial({ color: scColor(0x0a2438), emissive: scColor(0x2ea8ff), emissiveIntensity: 1.4, roughness: 0.4 }); break;
-    case 'console':  m = new THREE.MeshStandardMaterial({ color: scColor(0x333c52), roughness: 0.38, metalness: 0.55 }); break;
+    case 'console':  m = new THREE.MeshStandardMaterial({ color: scColor(0x333c52), roughness: 0.38, metalness: 0.55, flatShading: true }); break;
     case 'screen':   m = new THREE.MeshStandardMaterial({ color: scColor(0x06131f), emissive: scColor(0x53c8ff), emissiveIntensity: 1.25, roughness: 0.3 }); break;
     case 'holo':     m = new THREE.MeshBasicMaterial({ color: 0x53c8ff, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }); break;
-    case 'seat':     m = new THREE.MeshStandardMaterial({ color: scColor(0x8a4f3c), roughness: 0.85, metalness: 0.05, side: THREE.DoubleSide }); break;
-    case 'gun':      m = new THREE.MeshStandardMaterial({ color: scColor(0x353f56), roughness: 0.38, metalness: 0.62 }); break;
+    case 'seat':     m = new THREE.MeshStandardMaterial({ color: scColor(0x8a4f3c), roughness: 0.85, metalness: 0.05, side: THREE.DoubleSide, flatShading: true }); break;
+    case 'gun':      m = new THREE.MeshStandardMaterial({ color: scColor(0x353f56), roughness: 0.38, metalness: 0.62, flatShading: true }); break;
     case 'glass':    m = new THREE.MeshStandardMaterial({ color: scColor(0x8fd8ff), transparent: true, opacity: 0.16, roughness: 0.08, metalness: 0.2, side: THREE.DoubleSide, depthWrite: false }); break;
     case 'padDark':  m = new THREE.MeshStandardMaterial({ color: scColor(0x2c3038), roughness: 0.8, metalness: 0.3 }); break;
     case 'padMark':  m = new THREE.MeshStandardMaterial({ color: scColor(0x3a2c08), emissive: scColor(0xf5b83a), emissiveIntensity: 1.0, roughness: 0.5 }); break;
@@ -143,31 +144,38 @@ function shipGlowTexture() {
   return shipGlowTex;
 }
 
-// ── Hull outline: long tapered nose, tight shoulders, gentle mid bulge,
-// narrowing tail into the engine block. Sleek — not fat. ─────────────────────
+// ── Hull outline: ANGULAR — straight edges + 45° diagonal chamfers, grid-aligned.
+// A blocky arrow/hex silhouette: pointed nose that widens at 45°, straight flanks,
+// chamfered stern. No curves. ────────────────────────────────────────────────
 function shipHullOutline(size) {
   const { w, h } = SHIP_GRID_DIMS[size] || SHIP_GRID_DIMS.medium;
   const c = SHIP_CELL;
   const cx = (w - 1) * c / 2;
   const zTop = -0.5 * c, zBot = (h - 0.5) * c;
   const maxHalf = (w - 1) * c / 2 + 0.55 * c;
-  const shoulderHalf = maxHalf * 0.5, sternHalf = maxHalf * 0.62;
-  const zNose = zTop - 4.2 * c, zShoulder = zTop + 2.4 * c, zMax = zTop + (zBot - zTop) * 0.55;
-  const zSternC = zBot - 0.3 * c, zStern = zBot + 0.35 * c;
-
+  const w1 = Math.round(maxHalf * 0.4 / c) * c || c;   // nose half-width, snapped to the grid
+  const stc = maxHalf * 0.55;                          // stern chamfer depth
+  const zNose = zTop - 3.6 * c;
+  const zStern = zBot + 0.35 * c;
+  const zShoulder = zNose + maxHalf;                   // 45° widening ends here (full beam)
+  const zSternC = zStern - stc;                        // stern chamfer starts here
+  // right-half corners, nose (−z) → stern (+z)
+  const R = [
+    [cx,              zNose],
+    [cx + w1,         zNose + w1],       // 45° off the nose tip
+    [cx + maxHalf,    zShoulder],        // 45° out to full beam
+    [cx + maxHalf,    zSternC],          // straight flank
+    [cx + maxHalf - stc, zStern],        // 45° stern chamfer
+  ];
+  const corners = R.map(p => p.slice());
+  for (let i = R.length - 1; i >= 0; i--) corners.push([2 * cx - R[i][0], R[i][1]]); // mirror to the left
   const s = new THREE.Shape();
-  s.moveTo(cx, zNose);
-  s.quadraticCurveTo(cx + shoulderHalf * 0.75, zNose + 1.6 * c, cx + shoulderHalf, zShoulder);
-  s.quadraticCurveTo(cx + maxHalf * 1.02, (zShoulder + zMax) / 2, cx + maxHalf, zMax);
-  s.quadraticCurveTo(cx + maxHalf * 0.94, (zMax + zSternC) / 2, cx + sternHalf, zSternC);
-  s.quadraticCurveTo(cx + sternHalf * 0.94, zStern, cx + sternHalf * 0.6, zStern);
-  s.lineTo(cx - sternHalf * 0.6, zStern);
-  s.quadraticCurveTo(cx - sternHalf * 0.94, zStern, cx - sternHalf, zSternC);
-  s.quadraticCurveTo(cx - maxHalf * 0.94, (zMax + zSternC) / 2, cx - maxHalf, zMax);
-  s.quadraticCurveTo(cx - maxHalf * 1.02, (zShoulder + zMax) / 2, cx - shoulderHalf, zShoulder);
-  s.quadraticCurveTo(cx - shoulderHalf * 0.75, zNose + 1.6 * c, cx, zNose);
-  const pts = s.getPoints(80);
-  return { shape: s, pts, w, h, cx, zNose, zShoulder, zMax, zSternC, zStern, maxHalf, shoulderHalf, sternHalf,
+  s.moveTo(corners[0][0], corners[0][1]);
+  for (let i = 1; i < corners.length; i++) s.lineTo(corners[i][0], corners[i][1]);
+  s.closePath();
+  const pts = corners.map(([x, z]) => ({ x, y: z }));
+  const zMax = (zShoulder + zSternC) / 2;
+  return { shape: s, pts, w, h, cx, zNose, zShoulder, zMax, zSternC, zStern, maxHalf, shoulderHalf: w1, sternHalf: maxHalf - stc,
            zMid: (zNose + zStern) / 2, length: zStern - zNose };
 }
 function shipPointInHull(px, pz, pts) {
@@ -178,10 +186,14 @@ function shipPointInHull(px, pz, pts) {
   }
   return inside;
 }
-function shipHalfWidthAt(o, z) { // approximate hull half-width at a given z, from the outline samples
-  let best = 0;
-  for (const p of o.pts) if (p.x > o.cx && Math.abs(p.y - z) < SHIP_CELL * 1.2) best = Math.max(best, p.x - o.cx);
-  return best;
+// Exact hull half-width at a given z: intersect the outline edges with the z line.
+function shipHalfWidthAt(o, z) {
+  let maxx = o.cx; const pts = o.pts;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const zi = pts[i].y, zj = pts[j].y, xi = pts[i].x, xj = pts[j].x;
+    if ((zi > z) !== (zj > z)) { const x = xi + (xj - xi) * (z - zi) / (zj - zi); if (x > maxx) maxx = x; }
+  }
+  return maxx - o.cx;
 }
 function shipRasterize(o) {
   const c = SHIP_CELL, floor = new Set();
@@ -257,9 +269,10 @@ function shipZones(floor, o, size) {
 
 // ── Builders ─────────────────────────────────────────────────────────────────
 function shipBuildBody(o) {
-  const geo = new THREE.ExtrudeGeometry(o.shape, { depth: 0.6, bevelEnabled: true, bevelThickness: 0.5, bevelSize: 0.55, bevelSegments: 4, curveSegments: 56 });
+  // Single-bevel extrude = one crisp 45° chamfer around the belly (blocky, not rounded).
+  const geo = new THREE.ExtrudeGeometry(o.shape, { depth: 0.7, bevelEnabled: true, bevelThickness: 0.55, bevelSize: 0.55, bevelSegments: 1, curveSegments: 1 });
   geo.rotateX(Math.PI / 2);
-  geo.translate(0, -0.5, 0);
+  geo.translate(0, -0.55, 0);
   const body = new THREE.Mesh(geo, shipMat('hullBody'));
   body.castShadow = true; body.receiveShadow = true;
   const g = new THREE.Group();
@@ -293,27 +306,34 @@ function shipBuildWalls(o) {
   wall.castShadow = true; wall.receiveShadow = true;
   const g = new THREE.Group();
   g.add(wall);
-  const ringAt = (y, r, mat, scale) => {
-    const curve = new THREE.CatmullRomCurve3(pts.map(p => {
-      const dx = p.x - o.cx, dz = p.y - o.zMid;
-      return new THREE.Vector3(o.cx + dx * (scale || 1), y, o.zMid + dz * (scale || 1));
-    }), true);
-    return new THREE.Mesh(new THREE.TubeGeometry(curve, 110, r, 8, true), mat);
+  // Flat angular trim bands hugging the outline (quads per edge — no tubes): a metal
+  // top lip, a painted accent stripe, and an emissive glow line at the base.
+  const band = (y, th, mat) => {
+    const p2 = new Float32Array(n * 6 * 3);
+    for (let i = 0; i < n; i++) {
+      const a = pts[i], b = pts[(i + 1) % n], o6 = i * 18;
+      p2.set([a.x, y - th, a.y,  b.x, y - th, b.y,  a.x, y + th, a.y,  b.x, y - th, b.y,  b.x, y + th, b.y,  a.x, y + th, a.y], o6);
+    }
+    const gg = new THREE.BufferGeometry();
+    gg.setAttribute('position', new THREE.BufferAttribute(p2, 3));
+    gg.computeVertexNormals();
+    return new THREE.Mesh(gg, mat);
   };
-  g.add(ringAt(H, 0.11, shipMat('rim')));            // rounded top rim
-  g.add(ringAt(H * 0.55, 0.06, shipMat('accent'), 1.006)); // painted accent stripe around the hull
-  g.add(ringAt(0.14, 0.05, shipMat('trim')));        // glow line at the base
-  // cockpit canopy: a low glass dome over the bow plating, sized to the hull's
-  // actual width where it sits so it never spills past the tapered nose
-  const canZ = o.zNose + 3.2;
-  const canR = Math.max(1.2, shipHalfWidthAt(o, canZ) * 0.8);
-  const canopy = new THREE.Mesh(new THREE.SphereGeometry(canR, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), shipMat('glass'));
-  canopy.position.set(o.cx, 0.12, canZ);
-  canopy.scale.set(1, 0.55, 1.5);
-  const canopyRim = new THREE.Mesh(new THREE.TorusGeometry(canR, 0.07, 8, 30), shipMat('rim'));
-  canopyRim.rotation.x = -Math.PI / 2;
-  canopyRim.position.copy(canopy.position);
-  canopyRim.scale.set(1, 1.5, 1);
+  g.add(band(H, 0.09, shipMat('rim')));            // top lip
+  g.add(band(H * 0.55, 0.07, shipMat('accent')));  // accent stripe
+  g.add(band(0.16, 0.05, shipMat('trim')));        // base glow line
+  // cockpit canopy: a faceted low-poly wedge (chamfered box) over the bow, sized to
+  // the hull width there — angular, matching the blocky hull.
+  const canZ = o.zNose + Math.max(2.4, o.maxHalf);
+  const canR = Math.max(1.0, shipHalfWidthAt(o, canZ) * 0.72);
+  const canGeo = new THREE.CylinderGeometry(canR * 0.5, canR, 0.9, 6, 1); // hexagonal prism = low-poly dome
+  canGeo.rotateY(Math.PI / 6);
+  const canopy = new THREE.Mesh(canGeo, shipMat('glass'));
+  canopy.scale.set(1, 1, 1.7);
+  canopy.position.set(o.cx, 0.2, canZ);
+  const canopyRim = new THREE.Mesh(new THREE.CylinderGeometry(canR, canR * 1.08, 0.18, 6), shipMat('rim'));
+  canopyRim.rotation.y = Math.PI / 6; canopyRim.scale.set(1, 1, 1.7);
+  canopyRim.position.set(o.cx, 0.08, canZ);
   g.add(canopy, canopyRim);
   return g;
 }
@@ -438,15 +458,15 @@ function shipBuildStations(zones, comps, group, dynamic) {
       const tier = comps.reactorTier || 1;
       const g = new THREE.Group();
       g.position.set(st.x * c, 0.08, st.y * c);
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.95, 0.18, 24), shipMat('console'));
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.95, 0.18, 8), shipMat('console'));
       base.position.y = 0.09;
-      const core = new THREE.Mesh(new THREE.CylinderGeometry(0.28 + tier * 0.06, 0.28 + tier * 0.06, 1.1 + tier * 0.25, 20), shipTierMat(tier));
+      const core = new THREE.Mesh(new THREE.CylinderGeometry(0.28 + tier * 0.06, 0.28 + tier * 0.06, 1.1 + tier * 0.25, 6), shipTierMat(tier));
       core.position.y = 0.75 + tier * 0.12;
-      const shell = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 1.2 + tier * 0.25, 20, 1, true), shipMat('glass'));
+      const shell = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 1.2 + tier * 0.25, 8, 1, true), shipMat('glass'));
       shell.position.y = 0.8 + tier * 0.12;
       g.add(base, core, shell);
       for (const rot of [0.9, -0.9]) {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.05, 8, 26), shipMat('rim'));
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.05, 4, 8), shipMat('rim'));
         ring.position.y = 0.85 + tier * 0.12; ring.rotation.x = rot;
         g.add(ring);
       }
@@ -478,13 +498,13 @@ function shipBuildExterior(o, comps, group, dynamic) {
   // — wings: swept delta blades angled back along the hull —
   const wTier = comps.wingTier || 1;
   const ws = (0.75 + wTier * 0.28) * (o.maxHalf / 8);
-  const wingShape = new THREE.Shape();
-  wingShape.moveTo(0, -1.2);
-  wingShape.quadraticCurveTo(2.6, -0.5, 3.9, 1.6);   // curved leading edge to the tip
-  wingShape.quadraticCurveTo(4.15, 2.2, 3.5, 2.5);   // rounded tip
-  wingShape.quadraticCurveTo(1.6, 2.4, 0, 3.6);      // trailing edge sweeping back to the root
-  wingShape.lineTo(0, -1.2);
-  const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth: 0.16, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.09, bevelSegments: 2, curveSegments: 24 });
+  const wingShape = new THREE.Shape();      // angular delta plate — all straight edges
+  wingShape.moveTo(0, -1.0);
+  wingShape.lineTo(4.2, 1.1);               // straight leading edge to the tip
+  wingShape.lineTo(3.5, 2.2);               // straight tip chord
+  wingShape.lineTo(0, 3.2);                 // straight trailing edge back to the root
+  wingShape.lineTo(0, -1.0);
+  const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth: 0.2, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.08, bevelSegments: 1, curveSegments: 1 });
   wingGeo.rotateX(Math.PI / 2);
   for (const side of [1, -1]) {
     const wing = new THREE.Mesh(wingGeo, shipMat('hullBody'));
@@ -498,7 +518,8 @@ function shipBuildExterior(o, comps, group, dynamic) {
     tipGlow.position.set(o.cx + side * (shipHalfWidthAt(o, o.zMax) - 0.3 + 3.6 * ws), 0.6, o.zMax - 1.2 + 2.2 * ws);
     group.add(tipGlow);
     if (wTier >= 2) {
-      const fin = new THREE.Mesh(new THREE.ConeGeometry(0.22 * ws, 1.3 * ws, 5), shipMat('rim'));
+      const fin = new THREE.Mesh(new THREE.ConeGeometry(0.22 * ws, 1.3 * ws, 4), shipMat('rim')); // 4-sided = angular fin
+      fin.rotation.y = Math.PI / 4;
       fin.position.set(o.cx + side * (shipHalfWidthAt(o, o.zMax) + 2.2 * ws), 0.95, o.zMax + 0.6 * ws);
       fin.rotation.z = side * -0.14;
       group.add(fin);
@@ -513,20 +534,17 @@ function shipBuildExterior(o, comps, group, dynamic) {
     const [gz, gy] = gunRows[Math.floor(i / 2) % gunRows.length];
     const hw = shipHalfWidthAt(o, gz);
     const gp = new THREE.Group();
-    // curved mount pod hugging the hull side
-    const pod = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), shipMat('gun'));
-    pod.scale.set(0.55, 0.5, 1.35);
+    // angular box mount pod hugging the hull side
+    const pod = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.42, 1.5), shipMat('gun'));
     gp.add(pod);
     const barrelLen = 1.5 + gTier * 0.3;
     for (let bIdx = 0; bIdx < gTier; bIdx++) {
-      const off = (bIdx - (gTier - 1) / 2) * 0.13;
-      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, barrelLen, 10), shipMat('gun'));
-      barrel.rotation.x = Math.PI / 2;
+      const off = (bIdx - (gTier - 1) / 2) * 0.15;
+      const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, barrelLen), shipMat('gun'));
       barrel.position.set(off, 0.06, -(0.55 + barrelLen / 2));
-      const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.12, 10), shipMat('rim'));
-      muzzle.rotation.x = Math.PI / 2;
+      const muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.14), shipMat('rim'));
       muzzle.position.set(off, 0.06, -(0.55 + barrelLen));
-      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), shipTierMat(gTier));
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), shipTierMat(gTier));
       tip.position.set(off, 0.06, -(0.62 + barrelLen));
       gp.add(barrel, muzzle, tip);
       dynamic.gunTips.push(tip);
@@ -540,34 +558,23 @@ function shipBuildExterior(o, comps, group, dynamic) {
   const sizeKey = Object.keys(SHIP_GRID_DIMS).find(k => SHIP_GRID_DIMS[k].w === o.w) || 'medium';
   const tCount = { small: 2, medium: 2, large: 3, capital: 4 }[sizeKey];
   const ts = 0.7 + tTier * 0.2;
-  const barW = o.sternHalf * 1.7, barH = 1.35;
-  const barShape = new THREE.Shape();
-  const bx = -barW / 2, by = -barH / 2, br = 0.5;
-  barShape.moveTo(bx + br, by); barShape.lineTo(bx + barW - br, by);
-  barShape.absarc(bx + barW - br, by + br, br, -Math.PI / 2, 0, false);
-  barShape.lineTo(bx + barW, by + barH - br);
-  barShape.absarc(bx + barW - br, by + barH - br, br, 0, Math.PI / 2, false);
-  barShape.lineTo(bx + br, by + barH);
-  barShape.absarc(bx + br, by + barH - br, br, Math.PI / 2, Math.PI, false);
-  barShape.lineTo(bx, by + br);
-  barShape.absarc(bx + br, by + br, br, Math.PI, Math.PI * 1.5, false);
-  const barGeo = new THREE.ExtrudeGeometry(barShape, { depth: 1.5, bevelEnabled: true, bevelThickness: 0.12, bevelSize: 0.14, bevelSegments: 2, curveSegments: 16 });
-  const bar = new THREE.Mesh(barGeo, shipMat('hullBody'));
+  const barW = o.sternHalf * 1.9, barH = 1.3;
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(barW, barH, 1.5), shipMat('hullBody')); // plain box engine housing
   bar.castShadow = true;
-  bar.position.set(o.cx, 0.75, o.zSternC - 0.2);
+  bar.position.set(o.cx, 0.7, o.zSternC - 0.2);
   group.add(bar);
-  // — thruster nacelles with layered flame + particle stream —
+  // — thruster nacelles: octagonal prisms + pyramid nose (all faceted) —
   dynamic.exhaust = [];
   for (let i = 0; i < tCount; i++) {
     const fx = tCount === 1 ? 0 : (i / (tCount - 1) - 0.5) * 2;
     const tx = o.cx + fx * (barW / 2 - 0.9), tz = o.zSternC + 1.55;
     const nac = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4 * ts, 0.5 * ts, 1.6 * ts, 18), shipMat('rim'));
-    body.rotation.x = Math.PI / 2; body.castShadow = true;
-    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.4 * ts, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), shipMat('rim'));
-    nose.rotation.x = -Math.PI / 2; nose.position.z = -0.8 * ts;
-    const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.46 * ts, 0.36 * ts, 0.45 * ts, 18, 1, true), shipMat('gun'));
-    nozzle.rotation.x = Math.PI / 2; nozzle.position.z = 0.95 * ts;
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.44 * ts, 0.52 * ts, 1.6 * ts, 8), shipMat('rim')); // octagonal
+    body.rotation.x = Math.PI / 2; body.rotation.z = Math.PI / 8; body.castShadow = true;
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.44 * ts, 0.7 * ts, 8), shipMat('rim'));
+    nose.rotation.x = -Math.PI / 2; nose.rotation.y = Math.PI / 8; nose.position.z = -1.1 * ts;
+    const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.48 * ts, 0.36 * ts, 0.45 * ts, 8, 1, true), shipMat('gun'));
+    nozzle.rotation.x = Math.PI / 2; nozzle.rotation.z = Math.PI / 8; nozzle.position.z = 0.95 * ts;
     nac.add(body, nose, nozzle);
     const tint = SHIP_TIER_COLORS[Math.min(2, tTier - 1)];
     // layered flame: white-hot core + colored outer cone (both additive)
