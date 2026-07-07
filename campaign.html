@@ -132,6 +132,7 @@
 }
 .bg-end-turn:hover { box-shadow:0 0 12px rgba(255,210,58,.4); }
 #combat-arrange-btn.active { border-color:#4dff9e; color:#7dffb8; background:var(--surface3); box-shadow:0 0 8px rgba(77,255,158,.35); }
+.me-brush.active { border-color:var(--accent2); color:var(--accent2); background:var(--surface3); }
 .combat-shield-ctl { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
 .combat-shield-ctl input { width:56px; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:5px 7px; font-size:12px; }
 
@@ -813,12 +814,16 @@
         <button class="btn-secondary" onclick="openMapEditorCanvas(null)" style="margin-top:10px; font-size:11px; padding:6px 14px;">➕ New Battlefield</button>
       </div>
       <div id="map-editor-canvas-view" style="display:none;">
-        <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:12px;">
+        <div style="display:grid; grid-template-columns:2fr 1fr 1fr; gap:10px;">
           <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="mapeditor-name-inp" placeholder="e.g. Landing Pad Ambush"></div>
-          <div class="form-group"><label class="form-label">Width</label><input class="form-input" id="mapeditor-w-inp" type="number" min="10" max="60" value="26"></div>
-          <div class="form-group"><label class="form-label">Height</label><input class="form-input" id="mapeditor-h-inp" type="number" min="8" max="40" value="18"></div>
+          <div class="form-group"><label class="form-label">Size (W×H)</label>
+            <div style="display:flex; gap:6px;">
+              <input class="form-input" id="mapeditor-w-inp" type="number" min="10" max="60" value="26" title="Width (set on New Battlefield)" readonly style="opacity:.7;">
+              <input class="form-input" id="mapeditor-h-inp" type="number" min="8" max="40" value="18" title="Height" readonly style="opacity:.7;">
+            </div>
+          </div>
           <div class="form-group"><label class="form-label">Theme</label>
-            <select class="form-select" id="mapeditor-theme-inp">
+            <select class="form-select" id="mapeditor-theme-inp" onchange="editorTheme=this.value; rebuildEditorWorld();">
               <option value="arena">Training Arena</option>
               <option value="forest">Forest</option>
               <option value="town">Town</option>
@@ -827,15 +832,26 @@
             </select>
           </div>
         </div>
-        <div style="display:flex; gap:8px; margin-bottom:8px;">
-          <button class="btn-ghost" onclick="resizeMapEditorGrid()" style="font-size:11px; padding:5px 10px;">↻ Resize Grid</button>
-          <button class="btn-ghost" onclick="clearMapEditorGrid()" style="font-size:11px; padding:5px 10px;">🧹 Clear Obstacles</button>
-          <div class="combat-cheat-chip" style="margin-left:auto; align-self:center;">Click cells to toggle obstacles — <strong id="mapeditor-count">0</strong> placed</div>
+        <div style="display:flex; gap:5px; flex-wrap:wrap; align-items:center; margin:2px 0 8px;">
+          <span style="font-size:10.5px;color:var(--text-faint);margin-right:2px;">Build:</span>
+          <button class="btn-ghost me-brush active" data-brush="floor"  onclick="setEditorBrush('floor')"  style="font-size:11px;padding:5px 9px;">▦ Floor</button>
+          <button class="btn-ghost me-brush" data-brush="wall"   onclick="setEditorBrush('wall')"   style="font-size:11px;padding:5px 9px;">🧱 Wall</button>
+          <button class="btn-ghost me-brush" data-brush="window" onclick="setEditorBrush('window')" style="font-size:11px;padding:5px 9px;">🪟 Window</button>
+          <button class="btn-ghost me-brush" data-brush="stairs" onclick="setEditorBrush('stairs')" style="font-size:11px;padding:5px 9px;">🪜 Stairs</button>
+          <button class="btn-ghost me-brush" data-brush="prop"   onclick="setEditorBrush('prop')"   style="font-size:11px;padding:5px 9px;">📦 Cover</button>
+          <button class="btn-ghost me-brush" data-brush="erase"  onclick="setEditorBrush('erase')"  style="font-size:11px;padding:5px 9px;">🧹 Erase</button>
+          <button class="btn-ghost" onclick="editorRotate()" style="font-size:11px;padding:5px 9px;" title="Rotate the next placed piece (walls/stairs)">↻ Rotate</button>
+          <button class="btn-ghost" onclick="editorStamp('house')" style="font-size:11px;padding:5px 9px;" title="Drop a 5×5 two-story house at the centre">🏠 House</button>
+          <button class="btn-ghost" onclick="editorStamp('platform')" style="font-size:11px;padding:5px 9px;" title="Drop a raised platform + stairs at the centre">🏗 Platform</button>
         </div>
-        <div style="border:1px solid var(--border2); border-radius:8px; overflow:auto; background:#04070e; max-height:360px;">
-          <canvas id="map-editor-canvas" style="display:block; cursor:pointer;"></canvas>
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+          <button class="btn-ghost" onclick="editorLevelDown()" style="font-size:11px;padding:5px 10px;">▼ Lower floor</button>
+          <div class="combat-cheat-chip">Building on level <strong id="me-level">0</strong></div>
+          <button class="btn-ghost" onclick="editorLevelUp()" style="font-size:11px;padding:5px 10px;">▲ Upper floor</button>
+          <div class="combat-cheat-chip" style="margin-left:auto;"><strong id="me-count">0</strong> pieces · drag to orbit, scroll to zoom</div>
         </div>
-        <div class="form-error" id="mapeditor-error"></div>
+        <div id="map-editor-3d-holder" style="border:1px solid var(--border2); border-radius:8px; background:#04070e; height:360px; overflow:hidden;"></div>
+        <div class="form-error" id="mapeditor-error" style="margin-top:8px;"></div>
       </div>
     </div>
     <div class="modal-footer" id="map-editor-list-footer"><button class="btn-ghost" onclick="closeModal('modal-map-editor')">Close</button></div>
@@ -4341,13 +4357,12 @@ async function addBestiaryToFight(id) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// MAP EDITOR — GM-authored on-foot battlefields, stored on the real `custom_maps`
-// table (schema-v29.sql) — campaign-shared like the Bestiary above, not tied to
-// one browser. The saved {w, h, theme3d, obstacles} shape plugs directly into the
-// same combat_state structure every other battlefield already produces (see
-// getMapPreset() and startCombat()'s preset.customObstacles branch) — nothing
-// downstream (3D rendering, cover/AD math, movement blocking) needs to know a
-// map was hand-drawn instead of generated.
+// MAP EDITOR — a real 3D grid-snap battlefield builder. Place floors/walls/
+// windows/stairs/cover a level at a time (or drop whole prefab stamps), climb
+// between stories, and save the full structure to the campaign-shared
+// `custom_maps.structure` column (schema-v30) — every member can then pick it
+// when starting combat, and it plays with the exact same multi-story mechanics
+// as a generated map.
 // ══════════════════════════════════════════════════════════════════════════
 let customMapsCache = [];
 async function fetchCustomMaps() {
@@ -4358,9 +4373,10 @@ async function fetchCustomMaps() {
 }
 function getCustomMaps() { return customMapsCache; } // used by renderMapPicker()/getMapPreset() — always pre-loaded by openStartCombat()
 let mapEditorEditingId = null;
-let mapEditorObstacles = new Set(); // "x,y" strings
-let mapEditorW = 26, mapEditorH = 18;
-const MAP_EDITOR_CELL_PX = 22;
+let editorPieces = [], editorW = 26, editorH = 18, editorTheme = 'arena';
+let editorLevel = 0, editorMaxLevels = 1, editorBrush = 'floor', editorRot = 0;
+let editorRenderer = null, editorScene = null, editorCamera = null, editorControls = null, editorWorld = null, editorRaf = null;
+let editorCell = 2, editorFloorH = 3, editorPlacePlane = null;
 
 async function openMapEditor() {
   if (!isGM) return;
@@ -4380,7 +4396,7 @@ function renderMapEditorList() {
     <div class="combat-cheat-chip" style="display:flex; align-items:center; gap:10px; justify-content:space-between;">
       <div>
         <div style="font-weight:700; color:#e0ecff;">${esc(m.label)}</div>
-        <div style="font-size:10.5px; color:var(--text-faint);">${m.w}×${m.h} · ${esc(m.theme3d)} · ${m.obstacles.length} obstacle cells</div>
+        <div style="font-size:10.5px; color:var(--text-faint);">${m.w}×${m.h} · ${esc(m.theme3d)} · ${(m.structure?.pieces?.length ?? (m.obstacles?.length||0))} pieces</div>
       </div>
       <div style="display:flex; gap:6px; flex-shrink:0;">
         <button class="btn-ghost" style="font-size:11px; padding:5px 10px;" onclick="openMapEditorCanvas('${m.id}')">✏ Edit</button>
@@ -4388,81 +4404,188 @@ function renderMapEditorList() {
       </div>
     </div>`).join('') : `<p style="font-size:12px; color:var(--text-faint); text-align:center; padding:20px 0;">No custom battlefields yet — build one below.</p>`;
 }
-function openMapEditorCanvas(id) {
+
+// One-time Three.js editor scene (its own renderer/camera/world, kept separate from the
+// combat renderer so their state never collides). Click a placement tile to drop the
+// current brush at the current build level; orbit/zoom to inspect.
+function initEditor3D() {
+  if (editorRenderer) return;
+  const holder = document.getElementById('map-editor-3d-holder');
+  editorRenderer = new THREE.WebGLRenderer({ antialias: true });
+  editorRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  editorRenderer.outputEncoding = THREE.sRGBEncoding;
+  holder.appendChild(editorRenderer.domElement);
+  editorScene = new THREE.Scene();
+  editorScene.background = new THREE.Color(0x0a1120);
+  editorCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
+  editorControls = new THREE.OrbitControls(editorCamera, editorRenderer.domElement);
+  editorControls.enableDamping = true;
+  editorScene.add(new THREE.HemisphereLight(0x9fc0ff, 0x202028, 1.0));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.1); sun.position.set(20, 40, 15); editorScene.add(sun);
+  editorWorld = new THREE.Group(); editorScene.add(editorWorld);
+
+  const ray = new THREE.Raycaster(), pt = new THREE.Vector2();
+  let dragDist = 0;
+  editorRenderer.domElement.addEventListener('pointerdown', () => { dragDist = 0; });
+  editorRenderer.domElement.addEventListener('pointermove', e => { dragDist += Math.abs(e.movementX) + Math.abs(e.movementY); });
+  editorRenderer.domElement.addEventListener('click', e => {
+    if (dragDist > 6 || !editorPlacePlane) return;
+    const r = editorRenderer.domElement.getBoundingClientRect();
+    pt.x = ((e.clientX - r.left) / r.width) * 2 - 1; pt.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+    ray.setFromCamera(pt, editorCamera);
+    const hit = ray.intersectObject(editorPlacePlane, false)[0];
+    if (!hit) return;
+    const gx = Math.round(hit.point.x / editorCell), gy = Math.round(hit.point.z / editorCell);
+    if (gx < 0 || gy < 0 || gx >= editorW || gy >= editorH) return;
+    applyEditorBrush(gx, gy, editorLevel);
+  });
+  addEventListener('resize', resizeEditor3D);
+}
+function resizeEditor3D() {
+  if (!editorRenderer) return;
+  const holder = document.getElementById('map-editor-3d-holder');
+  const w = holder.clientWidth || 700, h = holder.clientHeight || 360;
+  editorCamera.aspect = w / h; editorCamera.updateProjectionMatrix();
+  editorRenderer.setSize(w, h);
+}
+function tickEditor3D() {
+  if (!editorRenderer || !document.getElementById('modal-map-editor').classList.contains('open') ||
+      document.getElementById('map-editor-canvas-view').style.display === 'none') { editorRaf = null; return; }
+  editorRaf = requestAnimationFrame(tickEditor3D);
+  editorControls.update();
+  editorRenderer.render(editorScene, editorCamera);
+}
+
+async function openMapEditorCanvas(id) {
   if (!isGM) return;
   mapEditorEditingId = id;
   const cm = id ? customMapsCache.find(m => m.id === id) : null;
   document.getElementById('map-editor-title').textContent = cm ? `Edit ${cm.label}` : 'New Battlefield';
   document.getElementById('mapeditor-name-inp').value = cm?.label || '';
-  document.getElementById('mapeditor-theme-inp').value = cm?.theme3d || 'arena';
-  mapEditorW = cm?.w || 26;
-  mapEditorH = cm?.h || 18;
-  document.getElementById('mapeditor-w-inp').value = mapEditorW;
-  document.getElementById('mapeditor-h-inp').value = mapEditorH;
-  mapEditorObstacles = new Set((cm?.obstacles || []).map(o => o[0] + ',' + o[1]));
+  editorTheme = cm?.theme3d || 'arena';
+  document.getElementById('mapeditor-theme-inp').value = editorTheme;
+  editorW = cm?.w || 26; editorH = cm?.h || 18;
+  document.getElementById('mapeditor-w-inp').value = editorW;
+  document.getElementById('mapeditor-h-inp').value = editorH;
+  editorLevel = 0; editorRot = 0; editorBrush = 'floor';
+  document.querySelectorAll('.me-brush').forEach(b => b.classList.toggle('active', b.dataset.brush === 'floor'));
+  // Editing an existing map loads its pieces; a new map starts with a full ground floor.
+  if (cm?.structure) { editorPieces = cm.structure.pieces.map(p => ({...p})); editorMaxLevels = cm.structure.levels || 1; }
+  else { editorPieces = []; for (let x=0;x<editorW;x++) for (let y=0;y<editorH;y++) editorPieces.push({ m:'floor', x, y, z:0 }); editorMaxLevels = 1; }
   showError('mapeditor-error', '');
   document.getElementById('map-editor-list-view').style.display = 'none';
   document.getElementById('map-editor-canvas-view').style.display = '';
   document.getElementById('map-editor-list-footer').style.display = 'none';
   document.getElementById('map-editor-canvas-footer').style.display = '';
-  drawMapEditorCanvas();
+  initEditor3D();
+  // Derive editor cell/floor height from the same models the combat renderer uses.
+  const theme = COMBAT_3D_THEMES[editorTheme] || COMBAT_3D_THEMES.arena;
+  const groundSrc = await cloneModel3D(theme.base + theme.floor);
+  editorCell = Math.max(centerAndBox3D(groundSrc).size.x, centerAndBox3D(groundSrc).size.z) || 2;
+  const wallProbe = await cloneModel3D(STRUCT_KIT + 'wall.glb');
+  const ws = centerAndBox3D(wallProbe).size;
+  editorFloorH = Math.max(editorCell * 1.4, ws.y * (editorCell / (Math.max(ws.x, ws.z) || 1)));
+  setTimeout(resizeEditor3D, 30);
+  await rebuildEditorWorld();
+  editorCamera.position.set(editorW*editorCell*0.5, editorH*editorCell*0.9, editorH*editorCell*1.1);
+  editorControls.target.set(editorW*editorCell*0.5, 0, editorH*editorCell*0.5);
+  editorControls.update();
+  if (!editorRaf) tickEditor3D();
 }
-function resizeMapEditorGrid() {
-  mapEditorW = Math.max(10, Math.min(60, parseInt(document.getElementById('mapeditor-w-inp').value) || 26));
-  mapEditorH = Math.max(8, Math.min(40, parseInt(document.getElementById('mapeditor-h-inp').value) || 18));
-  document.getElementById('mapeditor-w-inp').value = mapEditorW;
-  document.getElementById('mapeditor-h-inp').value = mapEditorH;
-  // Drop any obstacles that fell outside the new (possibly smaller) grid.
-  mapEditorObstacles = new Set([...mapEditorObstacles].filter(k => {
-    const [x, y] = k.split(',').map(Number);
-    return x < mapEditorW && y < mapEditorH;
-  }));
-  drawMapEditorCanvas();
+function setEditorBrush(b) {
+  editorBrush = b;
+  document.querySelectorAll('.me-brush').forEach(el => el.classList.toggle('active', el.dataset.brush === b));
 }
-function clearMapEditorGrid() {
-  mapEditorObstacles.clear();
-  drawMapEditorCanvas();
+function editorRotate() { editorRot = (editorRot + 1) % 4; }
+function editorLevelUp() { editorLevel = Math.min(editorMaxLevels, editorLevel + 1); refreshEditorLevelLabel(); rebuildEditorWorld(); }
+function editorLevelDown() { editorLevel = Math.max(0, editorLevel - 1); refreshEditorLevelLabel(); rebuildEditorWorld(); }
+function refreshEditorLevelLabel() { document.getElementById('me-level').textContent = editorLevel; }
+
+// Placement rules keep the piece list gameplay-valid: at most one floor + one overlay
+// (wall/window/stairs/prop) per cell; props/stairs imply standable ground under them.
+function applyEditorBrush(x, y, z) {
+  const at = (m) => editorPieces.findIndex(p => p.x===x && p.y===y && p.z===z && (m ? p.m===m : true));
+  const removeWhere = (pred) => { editorPieces = editorPieces.filter(p => !(p.x===x && p.y===y && p.z===z && pred(p))); };
+  if (editorBrush === 'erase') { removeWhere(() => true); }
+  else if (editorBrush === 'floor') {
+    if (at('floor') >= 0) removeWhere(() => true);          // clearing the floor clears the cell
+    else editorPieces.push({ m:'floor', x, y, z });
+  } else {
+    removeWhere(p => p.m !== 'floor');                       // replace any existing overlay
+    if (editorBrush === 'prop' && at('floor') < 0) editorPieces.push({ m:'floor', x, y, z });
+    editorPieces.push({ m: editorBrush, x, y, z, r: editorRot });
+  }
+  editorMaxLevels = Math.max(editorMaxLevels, z + 1, ...editorPieces.map(p => p.z + 1));
+  rebuildEditorWorld();
 }
-function drawMapEditorCanvas() {
-  const canvas = document.getElementById('map-editor-canvas');
-  const cell = MAP_EDITOR_CELL_PX;
-  canvas.width = mapEditorW * cell;
-  canvas.height = mapEditorH * cell;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#0b111d';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = 'rgba(90,120,160,.18)';
-  for (let x = 0; x <= mapEditorW; x++) { ctx.beginPath(); ctx.moveTo(x*cell, 0); ctx.lineTo(x*cell, mapEditorH*cell); ctx.stroke(); }
-  for (let y = 0; y <= mapEditorH; y++) { ctx.beginPath(); ctx.moveTo(0, y*cell); ctx.lineTo(mapEditorW*cell, y*cell); ctx.stroke(); }
-  ctx.fillStyle = '#c84040';
-  mapEditorObstacles.forEach(k => {
-    const [x, y] = k.split(',').map(Number);
-    ctx.fillRect(x*cell + 1, y*cell + 1, cell - 2, cell - 2);
-  });
-  document.getElementById('mapeditor-count').textContent = mapEditorObstacles.size;
+function editorStamp(kind) {
+  const cx = Math.floor(editorW/2), cy = Math.floor(editorH/2);
+  if (kind === 'house') {
+    genBuilding(editorPieces, cx-2, cy-2, 5, 5, { twoStory: true });
+  } else { // raised platform + stairs
+    const x0=cx-2, y0=cy-2;
+    for (let x=x0;x<x0+4;x++) for (let y=y0;y<y0+4;y++) editorPieces.push({ m:'floor', x, y, z:1 });
+    editorPieces.push({ m:'stairs', x:x0, y:y0+1, z:0, r:2 });
+  }
+  editorMaxLevels = Math.max(editorMaxLevels, ...editorPieces.map(p => p.z + 1));
+  rebuildEditorWorld();
 }
-document.getElementById('map-editor-canvas').addEventListener('click', e => {
-  const rect = e.target.getBoundingClientRect();
-  const cell = MAP_EDITOR_CELL_PX;
-  const x = Math.floor((e.clientX - rect.left) / cell), y = Math.floor((e.clientY - rect.top) / cell);
-  if (x < 0 || y < 0 || x >= mapEditorW || y >= mapEditorH) return;
-  const key = x + ',' + y;
-  if (mapEditorObstacles.has(key)) mapEditorObstacles.delete(key); else mapEditorObstacles.add(key);
-  drawMapEditorCanvas();
-});
+
+// Rebuild the editor world from the piece list (cheap for a grid this size, and robust) plus
+// a translucent placement grid at the current build level so you can see where you're working.
+let editorBuildToken = 0;
+async function rebuildEditorWorld() {
+  const myToken = ++editorBuildToken;
+  while (editorWorld.children.length) editorWorld.remove(editorWorld.children[0]);
+  const theme = COMBAT_3D_THEMES[editorTheme] || COMBAT_3D_THEMES.arena;
+  // One flat ground plane stands in for the whole z=0 floor (drawn per-cell it'd be hundreds
+  // of models); upper floors and structural pieces are the only ones that load a model each.
+  const groundHasFloor = editorPieces.some(p => p.m === 'floor' && p.z === 0);
+  if (groundHasFloor) {
+    const gp = new THREE.Mesh(new THREE.PlaneGeometry(editorW*editorCell, editorH*editorCell), new THREE.MeshStandardMaterial({ color: 0x2a3346 }));
+    gp.rotation.x = -Math.PI/2;
+    gp.position.set((editorW-1)*editorCell/2, -0.02, (editorH-1)*editorCell/2);
+    editorWorld.add(gp);
+  }
+  for (const p of editorPieces) {
+    if (myToken !== editorBuildToken) return; // a newer rebuild superseded this one
+    if (p.m === 'floor' && p.z === 0) continue; // covered by the ground plane above
+    try {
+      const obj = await cloneModel3D(structPieceModel(theme, p));
+      const { size, box } = centerAndBox3D(obj);
+      const wx = p.x * editorCell, wz = p.y * editorCell, baseY = p.z * editorFloorH;
+      const s = (p.m === 'prop') ? Math.min(1.6, (editorCell*0.8)/(Math.max(size.x,size.z)||1)) : editorCell/(Math.max(size.x,size.z)||1);
+      obj.scale.setScalar(s);
+      obj.position.set(wx, baseY - box.min.y*s, wz);
+      if (p.m==='wall'||p.m==='window') obj.rotation.y = (p.r||0)*-Math.PI/2;
+      else if (p.m==='stairs') obj.rotation.y = (p.r||0)*-Math.PI/2 + STAIR_ROT_OFFSET;
+      else if (p.m==='prop') obj.rotation.y = cellHash(p.x, p.y+0.5)*Math.PI*2;
+      editorWorld.add(obj);
+    } catch (err) { console.warn('editor piece failed', p, err); }
+  }
+  // Placement plane at the current level.
+  const planeGeo = new THREE.PlaneGeometry(editorW*editorCell, editorH*editorCell);
+  const planeMat = new THREE.MeshBasicMaterial({ color: 0x4dc0ff, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false });
+  editorPlacePlane = new THREE.Mesh(planeGeo, planeMat);
+  editorPlacePlane.rotation.x = -Math.PI/2;
+  editorPlacePlane.position.set((editorW-1)*editorCell/2, editorLevel*editorFloorH + 0.04, (editorH-1)*editorCell/2);
+  editorWorld.add(editorPlacePlane);
+  editorWorld.add(createGridLines3D(0, editorW, 0, editorH, editorCell, 0x40c8ff).translateY(editorLevel*editorFloorH + 0.05));
+  document.getElementById('me-count').textContent = editorPieces.length;
+  refreshEditorLevelLabel();
+}
+
 async function saveMapEditorEntry() {
   const name = document.getElementById('mapeditor-name-inp').value.trim();
   if (!name) return showError('mapeditor-error', 'Enter a name.');
-  const entry = {
-    label: name, w: mapEditorW, h: mapEditorH,
-    theme3d: document.getElementById('mapeditor-theme-inp').value,
-    obstacles: [...mapEditorObstacles].map(k => k.split(',').map(Number)),
-  };
+  if (!editorPieces.some(p => p.m === 'floor')) return showError('mapeditor-error', 'A battlefield needs at least some floor to stand on.');
+  const structure = { levels: editorMaxLevels, pieces: editorPieces };
+  const entry = { label: name, w: editorW, h: editorH, theme3d: editorTheme, structure };
   showError('mapeditor-error', '');
   const { error } = mapEditorEditingId
     ? await db.from('custom_maps').update(entry).eq('id', mapEditorEditingId)
     : await db.from('custom_maps').insert({ campaign_id: campaignId, ...entry });
-  if (error) return showError('mapeditor-error', 'Failed to save — has schema-v29.sql been run in Supabase yet?\n' + error.message);
+  if (error) return showError('mapeditor-error', 'Failed to save — has schema-v30.sql been run in Supabase yet?\n' + error.message);
   await openMapEditor();
 }
 async function deleteCustomMap(id) {
@@ -4712,7 +4835,9 @@ async function openStartCombat() {
   selectedCombatType = 'outside'; selectedCombatMap = 'open'; selectedCombatDensity = 1;
   document.querySelectorAll('.combat-type-btn').forEach(b => b.classList.toggle('active', b.dataset.ctype === 'outside'));
   document.querySelectorAll('.combat-density-btn').forEach(b => b.classList.toggle('active', b.dataset.density === '1'));
-  document.getElementById('combat-density-group').style.display = '';
+  // On-foot maps are now full generated structures (not scattered props), so the old prop-
+  // density control no longer applies — hidden for both types.
+  document.getElementById('combat-density-group').style.display = 'none';
   document.getElementById('combat-map-editor-link').style.display = '';
   await fetchCustomMaps(); // so custom battlefields show up in the picker below immediately
   renderMapPicker();
@@ -4722,9 +4847,8 @@ async function openStartCombat() {
 function selectCombatType(t) {
   selectedCombatType = t; selectedCombatMap = 'open';
   document.querySelectorAll('.combat-type-btn').forEach(b => b.classList.toggle('active', b.dataset.ctype === t));
-  // Density and the custom Map Editor only apply to on-foot's procedural scatter — space
-  // maps use fixed, hand-placed layouts.
-  document.getElementById('combat-density-group').style.display = t === 'outside' ? '' : 'none';
+  // The custom Map Editor only applies to on-foot; the prop-density control is retired.
+  document.getElementById('combat-density-group').style.display = 'none';
   document.getElementById('combat-map-editor-link').style.display = t === 'outside' ? '' : 'none';
   renderMapPicker();
 }
@@ -4751,12 +4875,23 @@ function selectCombatMap(k) {
   selectedCombatMap = k;
   renderMapPicker();
 }
-// Resolves either a built-in COMBAT_MAPS preset or a custom map saved in the Map Editor into
-// the same {label, w, h, theme3d, density, obstacles?} shape startCombat() expects.
+// Resolves either a built-in COMBAT_MAPS preset or a custom map saved in the 3D Map Editor
+// into the shape startCombat() expects. A custom map carries a full `structure` (piece list);
+// a legacy custom map saved before schema-v30 only had flat obstacle cells, which we
+// synthesize into a one-level structure so it still works.
 function getMapPreset(type, key) {
   if (type === 'outside' && key.startsWith('custom_')) {
     const cm = getCustomMaps().find(m => m.id === key.slice(7));
-    if (cm) return { label: cm.label, w: cm.w, h: cm.h, theme3d: cm.theme3d, density: 0.05, biome: null, customObstacles: cm.obstacles };
+    if (cm) {
+      let structure = cm.structure;
+      if (!structure) {
+        const pieces = [];
+        for (let x=0;x<cm.w;x++) for (let y=0;y<cm.h;y++) pieces.push({ m:'floor', x, y, z:0 });
+        for (const o of (cm.obstacles||[])) pieces.push({ m:'prop', x:o[0], y:o[1], z:0 });
+        structure = { levels: 1, pieces };
+      }
+      return { label: cm.label, w: cm.w, h: cm.h, theme3d: cm.theme3d, biome: null, customStructure: structure };
+    }
   }
   return COMBAT_MAPS[type][key];
 }
@@ -4773,38 +4908,38 @@ async function startCombat() {
   // not scattered single-cell props, so the 3D renderer can place whole building models. A
   // custom Map Editor battlefield skips generation for the core entirely — the GM hand-placed
   // those obstacles already — but still gets the same extended sprawl ring beyond its edges.
-  const effDensity = selectedCombatType === 'outside' ? (preset.density || 0) * selectedCombatDensity : preset.density;
-  let coreObstacles, buildings = null;
-  if (selectedCombatType === 'space') {
-    coreObstacles = preset.obstacles;
-  } else if (preset.customObstacles) {
-    coreObstacles = preset.customObstacles;
-  } else if (preset.theme3d === 'town') {
-    const gen = generateClusteredObstacles(preset.w, preset.h, effDensity);
-    coreObstacles = gen.obstacles; buildings = gen.buildings;
-  } else {
-    coreObstacles = generateObstacles(preset.w, preset.h, effDensity);
-  }
-  const obstacles = [...coreObstacles, ...generateExtendedObstacles(preset.w, preset.h, effDensity, coreObstacles)];
   const state = {
     active: true, type: selectedCombatType, map: selectedCombatMap,
-    w: preset.w, h: preset.h, obstacles, biome: preset.biome || null, activeTurn: 0,
-    buildings: buildings || undefined,
+    w: preset.w, h: preset.h, biome: preset.biome || null, activeTurn: 0,
     // Stored directly instead of re-derived from COMBAT_MAPS[type][map] every time (which
     // would fail to find a theme/label for a custom_ prefixed map key that isn't a real
     // COMBAT_MAPS entry) — every reader (build3DEnvironment, refreshCombatUI's status line)
     // uses these first now, falling back to the old lookup only for pre-existing battles.
     theme3d: preset.theme3d || null, mapLabel: preset.label || null,
   };
-  // Cluster every current combatant near the centre so the GM can drag them out.
+  if (selectedCombatType === 'space') {
+    // Spacecraft combat stays flat/2D on the canvas renderer — unchanged.
+    const effDensity = preset.density;
+    const core = preset.obstacles;
+    state.obstacles = [...core, ...generateExtendedObstacles(preset.w, preset.h, effDensity, core)];
+  } else {
+    // On-foot combat is a full multi-story structure. A custom Map Editor battlefield uses
+    // its saved pieces; otherwise generate a fresh two-story layout for the theme.
+    state.structure = preset.customStructure || generateStructure(preset.theme3d || 'arena', preset.w, preset.h);
+  }
+  // Cluster every current combatant on standable ground-floor cells near the centre.
+  const grid = state.structure ? vcDeriveGrid(state.structure) : null;
   const cx = Math.floor(preset.w / 2), cy = Math.floor(preset.h / 2);
-  const obstacleSet = new Set(obstacles.map(o => o[0]+','+o[1]));
+  const used = new Set();
   let placed = 0;
   for (const c of combatants) {
-    let gx, gy, tries = 0;
-    do { gx = cx + (placed % 5) - 2; gy = cy + Math.floor(placed / 5) - 1; placed++; tries++; }
-    while (obstacleSet.has(gx+','+gy) && tries < 40);
-    await db.from('initiative_tracker').update({ grid_x: gx, grid_y: gy }).eq('id', c.id);
+    let gx, gy, tries = 0, okCell = false;
+    do {
+      gx = cx + (placed % 5) - 2; gy = cy + Math.floor(placed / 5) - 1; placed++; tries++;
+      okCell = (grid ? grid.standable(gx, gy, 0) : true) && !used.has(gx+','+gy);
+    } while (!okCell && tries < 80);
+    used.add(gx+','+gy);
+    await db.from('initiative_tracker').update({ grid_x: gx, grid_y: gy, grid_z: 0 }).eq('id', c.id);
   }
   activeTurn = 0;
   const { error } = await db.from('campaigns').update({ combat_state: state }).eq('id', campaignId);
@@ -5016,15 +5151,25 @@ async function resolveAttack(attackerId) {
   const weapon = currentTurnWeapon;
   if (!weapon) return alert('No weapon equipped — use Switch to equip one first.');
 
+  const st = combatState();
+  const aCell = { x: attacker.grid_x, y: attacker.grid_y, z: attacker.grid_z || 0 };
+  const tCell = { x: target.grid_x, y: target.grid_y, z: target.grid_z || 0 };
+  // On-foot battles are 3D: a shot is blocked entirely if there's no line of sight (a wall
+  // between them, or a ceiling if they're on different floors with no opening). Space combat
+  // has no structure grid — skip the LoS gate there.
+  if (st.type !== 'space' && combatGrid3D && !vcLineOfSight(combatGrid3D, aCell, tCell)) {
+    return alert('No line of sight to that target — a wall or floor is in the way. Reposition, or pick a target you can actually see.');
+  }
+
   turnActionState.coreActionUsed = true;
 
-  const dx = target.grid_x - attacker.grid_x, dy = target.grid_y - attacker.grid_y;
-  const meters = Math.round(Math.hypot(dx, dy)) * COMBAT_SQUARE_M;
-  // Cover cell is on the target's side facing the attacker — i.e. offset from the target
-  // BACK toward the attacker, the opposite direction from attacker-to-target (dx,dy).
-  const stepX = Math.sign(dx), stepY = Math.sign(dy);
-  const st = combatState();
-  const hasCover = (st.obstacles||[]).some(o => o[0] === target.grid_x-stepX && o[1] === target.grid_y-stepY);
+  // 3D distance (levels included) drives the range component of AD; cover uses the 3D grid
+  // when there is one, falling back to the flat obstacle heuristic for space combat.
+  const meters = Math.round((combatGrid3D && st.type !== 'space') ? vcDist(aCell, tCell) : Math.hypot(tCell.x-aCell.x, tCell.y-aCell.y)) * COMBAT_SQUARE_M;
+  const stepX = Math.sign(tCell.x - aCell.x), stepY = Math.sign(tCell.y - aCell.y);
+  const hasCover = (combatGrid3D && st.type !== 'space')
+    ? vcCover(combatGrid3D, aCell, tCell)
+    : (st.obstacles||[]).some(o => o[0] === target.grid_x-stepX && o[1] === target.grid_y-stepY);
 
   let targetArmor = target.armor ?? 0, targetHpCurrent = target.hp_current ?? 0, targetHpMax = target.hp_max ?? 0;
   if (target.character_id) {
@@ -5053,8 +5198,8 @@ async function resolveAttack(attackerId) {
   // subscribes to (for the Dice Roller history) triggers playAttackFx() for everyone,
   // including this browser, so all viewers see the identical sequence in sync.
   const combatFx = {
-    attackerX: attacker.grid_x, attackerY: attacker.grid_y,
-    targetX: target.grid_x, targetY: target.grid_y, weaponType: weapon.weapon_type,
+    attackerX: attacker.grid_x, attackerY: attacker.grid_y, attackerZ: attacker.grid_z || 0,
+    targetX: target.grid_x, targetY: target.grid_y, targetZ: target.grid_z || 0, weaponType: weapon.weapon_type,
     roll, toHitTotal, totalAD, hit, hasCover, baseAD, rangeAD, coverAD,
     weaponIconPath: weapon.icon_path || null,
     dmgResult, armor: targetArmor, finalDmg: dmg,
@@ -5197,9 +5342,191 @@ const COMBAT_3D_BUILDINGS = [
   'assets/3d/kenney_modular-buildings/Models/GLB format/building-sample-tower-d.glb',
 ];
 
+// ══════════════════════════════════════════════════════════════════════════
+// MULTI-STORY TACTICAL COMBAT — structure model + engine (pathfinding, line of
+// sight). A battlefield is a list of placed pieces on a 3D grid:
+//   combat_state.structure = { levels:N, pieces:[ {m:role, x, y, z, r} ] }
+// role ∈ 'floor'|'wall'|'window'|'stairs'|'prop-*'. The pure logic below was
+// developed and unit-tested standalone (20 scenarios: cross-doorway paths,
+// stair-gated level changes, wall/ceiling-blocked LoS, shooting down through
+// open ledges) before being embedded here — see the // vc* helpers.
+// ══════════════════════════════════════════════════════════════════════════
+const STRUCT_KIT = 'assets/3d/kenney_building-kit/Models/GLB format/'; // universal shell pieces (floors/walls/stairs) used across all themes
+const VC_STAIR_DIRS = [ [0,-1], [1,0], [0,1], [-1,0] ]; // r=0 north,1 east,2 south,3 west (ascent direction)
+const VC_LEVEL_H_CELLS = 1.4; // one story ≈ this many grid cells, for 3D distance/AD
+function vcKey(x,y,z){ return x+','+y+','+z; }
+function vcIsProp(role){ return role && role.startsWith('prop'); }
+
+// Which structural model renders a given piece, resolved against the active theme. The
+// building SHELL (walls/windows/stairs, and any UPPER floor) is one universal kit so
+// buildings always look coherent; only the GROUND floor and scatter props vary by theme.
+function structPieceModel(theme, p) {
+  const t = COMBAT_3D_THEMES[theme] || COMBAT_3D_THEMES.arena;
+  if (p.m === 'floor') return p.z > 0 ? (STRUCT_KIT + 'floor.glb') : (t.base + t.floor);
+  if (p.m === 'wall')   return STRUCT_KIT + 'wall.glb';
+  if (p.m === 'window') return STRUCT_KIT + 'wall-window-square.glb';
+  if (p.m === 'stairs') return STRUCT_KIT + 'stairs-open.glb';
+  if (vcIsProp(p.m)) {
+    const pool = (t.obstacles || ['column.glb']);
+    return t.base + pool[Math.floor(cellHash(p.x, p.y) * 999) % pool.length];
+  }
+  return STRUCT_KIT + 'floor.glb';
+}
+
+// Derive fast gameplay lookups from a piece list (run once when a battle loads).
+function vcDeriveGrid(structure) {
+  const floor = new Set(), floorCells = new Set(), blocker = new Set(), wallH = new Set(), cover = new Set();
+  const stairsAt = new Map();
+  for (const p of (structure.pieces || [])) {
+    const k = vcKey(p.x, p.y, p.z);
+    if (p.m === 'floor') { floor.add(k); floorCells.add(k); }
+    else if (p.m === 'stairs') { floor.add(k); stairsAt.set(k, VC_STAIR_DIRS[(p.r||0)%4]); }
+    else if (p.m === 'wall') { blocker.add(k); wallH.add(k); }
+    else if (p.m === 'window') { blocker.add(k); }
+    else if (vcIsProp(p.m)) { blocker.add(k); cover.add(k); }
+  }
+  const standable = (x,y,z) => floor.has(vcKey(x,y,z)) && !blocker.has(vcKey(x,y,z));
+  return { floor, floorCells, blocker, wallH, cover, stairsAt, standable, levels: structure.levels || 1 };
+}
+const VC_DIRS8 = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+function vcNeighbors(grid, x, y, z) {
+  const out = [];
+  for (const [dx,dy] of VC_DIRS8) {
+    const nx=x+dx, ny=y+dy;
+    if (!grid.standable(nx,ny,z)) continue;
+    if (dx!==0 && dy!==0 && grid.blocker.has(vcKey(x+dx,y,z)) && grid.blocker.has(vcKey(x,y+dy,z))) continue; // no corner-cutting through walls
+    out.push([nx,ny,z]);
+  }
+  const here = vcKey(x,y,z);
+  if (grid.stairsAt.has(here)) { const [ax,ay]=grid.stairsAt.get(here); if (grid.standable(x+ax,y+ay,z+1)) out.push([x+ax,y+ay,z+1]); }
+  for (const [dx,dy] of VC_DIRS8) {
+    const dk = vcKey(x+dx,y+dy,z-1);
+    if (grid.stairsAt.has(dk)) { const [sx,sy]=grid.stairsAt.get(dk); if (x+dx+sx===x && y+dy+sy===y && grid.standable(x+dx,y+dy,z-1)) out.push([x+dx,y+dy,z-1]); }
+  }
+  return out;
+}
+// BFS over the movement graph → Map "x,y,z" -> {cost, from} for cells reachable within budget.
+function vcReachable(grid, start, budget) {
+  const startK = vcKey(start.x,start.y,start.z);
+  const dist = new Map([[startK,0]]), from = new Map();
+  let frontier = [[start.x,start.y,start.z]], d = 0;
+  while (frontier.length && d < budget) {
+    d++; const next = [];
+    for (const [x,y,z] of frontier) for (const [nx,ny,nz] of vcNeighbors(grid,x,y,z)) {
+      const nk = vcKey(nx,ny,nz); if (dist.has(nk)) continue;
+      dist.set(nk,d); from.set(nk,vcKey(x,y,z)); next.push([nx,ny,nz]);
+    }
+    frontier = next;
+  }
+  const out = new Map();
+  for (const [k,cost] of dist) if (k!==startK) out.set(k,{cost,from:from.get(k)});
+  return out;
+}
+// Sampled 3D march LoS — walls are opaque voxels, floors are thin bottom slabs (shoot over
+// them freely, blocked where the line dips into an intact floor), both endpoints' own cells ignored.
+const VC_FLOOR_SLAB = 0.15;
+function vcLineOfSight(grid, a, b) {
+  if (a.x===b.x && a.y===b.y && a.z===b.z) return true;
+  const ax=a.x+0.5, ay=a.y+0.5, az=a.z+0.5, bx=b.x+0.5, by=b.y+0.5, bz=b.z+0.5;
+  const len = Math.hypot(bx-ax, by-ay, bz-az), steps = Math.max(2, Math.ceil(len/0.1));
+  for (let i=1;i<steps;i++){
+    const t=i/steps, px=ax+(bx-ax)*t, py=ay+(by-ay)*t, pz=az+(bz-az)*t;
+    const cx=Math.floor(px), cy=Math.floor(py), cz=Math.floor(pz);
+    if ((cx===a.x&&cy===a.y&&cz===a.z)||(cx===b.x&&cy===b.y&&cz===b.z)) continue;
+    if (grid.wallH.has(vcKey(cx,cy,cz))) return false;
+    if (grid.floorCells.has(vcKey(cx,cy,cz)) && (pz-cz) < VC_FLOOR_SLAB) return false;
+  }
+  return true;
+}
+function vcDist(a, b) { return Math.hypot(a.x-b.x, a.y-b.y, (a.z-b.z)*VC_LEVEL_H_CELLS); }
+function vcCover(grid, attacker, target) {
+  const sx = Math.sign(target.x-attacker.x), sy = Math.sign(target.y-attacker.y);
+  return grid.blocker.has(vcKey(target.x-sx, target.y-sy, target.z));
+}
+
+// ── Multi-story battlefield generators — emit combat_state.structure.pieces. Every
+// on-foot preset now has a ground floor, scattered cover, and one-or-more buildings/
+// platforms you can climb via stairs and fight across two levels. ────────────────────
+function genBuilding(pieces, x0, y0, bw, bh, opts) {
+  // Perimeter walls with a doorway + a window or two, an interior floor, and a 2nd story
+  // (floored over the footprint minus a stairwell hole) reached by stairs.
+  const x1 = x0+bw, y1 = y0+bh;
+  const doorSide = Math.floor(Math.random()*4), doorPos = 1 + Math.floor(Math.random()*(Math.max(bw,bh)-2||1));
+  for (let x=x0;x<x1;x++) for (let y=y0;y<y1;y++){
+    const edge = (x===x0||x===x1-1||y===y0||y===y1-1);
+    pieces.push({ m:'floor', x, y, z:0 });
+    if (edge){
+      // doorway gap + occasional windows punched into the perimeter
+      const isDoor = (doorSide===0&&y===y0&&x===x0+doorPos) || (doorSide===1&&x===x1-1&&y===y0+doorPos) ||
+                     (doorSide===2&&y===y1-1&&x===x0+doorPos) || (doorSide===3&&x===x0&&y===y0+doorPos);
+      if (isDoor) { /* leave open (floor only) */ }
+      else if (((x+y) % 3) === 0) pieces.push({ m:'window', x, y, z:0 });
+      else pieces.push({ m:'wall', x, y, z:0 });
+    }
+  }
+  if (opts.twoStory){
+    // stairwell hole at an interior corner; stairs climb up beside it
+    const sx = x0+1, sy = y0+1;              // stairs cell (ground)
+    const holeX = sx, holeY = sy-1 >= y0 ? sy-1 : sy+1; // open landing cell on 2nd floor above the stair top
+    for (let x=x0;x<x1;x++) for (let y=y0;y<y1;y++){
+      if (x===sx && y===sy) continue;        // don't floor over the stair shaft head-height (keep clear)
+      pieces.push({ m:'floor', x, y, z:1 });
+      const edge = (x===x0||x===x1-1||y===y0||y===y1-1);
+      if (edge && ((x+y)%2===0)) pieces.push({ m:'wall', x, y, z:1 });
+      else if (edge) pieces.push({ m:'window', x, y, z:1 });
+    }
+    pieces.push({ m:'stairs', x:sx, y:sy, z:0, r:2 }); // ascend south → landing (sx, sy+1, 1)
+  }
+}
+function generateStructure(theme3d, w, h) {
+  const pieces = [];
+  // Ground floor across the whole battlefield.
+  for (let x=0;x<w;x++) for (let y=0;y<h;y++) pieces.push({ m:'floor', x, y, z:0 });
+  const cx = w/2, cy = h/2, clearR = Math.min(w,h)*0.16;
+  const twoStory = theme3d !== 'forest'; // forest stays mostly open ground with a lookout tower or two
+  const buildingCount = theme3d === 'forest' ? 1 : (2 + Math.floor(Math.random()*2));
+  const placed = [];
+  let tries = 0;
+  while (placed.length < buildingCount && tries < 60){
+    tries++;
+    const bw = 3 + Math.floor(Math.random()*3), bh = 3 + Math.floor(Math.random()*3);
+    const x0 = 1 + Math.floor(Math.random()*Math.max(1, w-bw-2)), y0 = 1 + Math.floor(Math.random()*Math.max(1, h-bh-2));
+    const x1 = x0+bw, y1 = y0+bh;
+    if (Math.hypot((x0+x1)/2-cx, (y0+y1)/2-cy) < clearR) continue;
+    if (placed.some(b => x0-1 < b.x1 && x1+1 > b.x0 && y0-1 < b.y1 && y1+1 > b.y0)) continue;
+    placed.push({ x0, y0, x1, y1 });
+    genBuilding(pieces, x0, y0, bw, bh, { twoStory });
+  }
+  // Scatter loose ground cover (props) in the open, away from the centre and buildings.
+  const occupied = new Set(pieces.filter(p=>p.z===0 && p.m!=='floor').map(p=>vcKey(p.x,p.y,0)));
+  const propCount = Math.round(w*h*0.05);
+  for (let n=0;n<propCount;n++){
+    const x = Math.floor(Math.random()*w), y = Math.floor(Math.random()*h), k = vcKey(x,y,0);
+    if (occupied.has(k) || Math.hypot(x-cx,y-cy) < clearR) continue;
+    occupied.add(k); pieces.push({ m:'prop', x, y, z:0 });
+  }
+  const levels = pieces.some(p=>p.z>0) ? 2 : 1;
+  return { levels, pieces };
+}
+
 let scene3D = null, camera3D = null, renderer3D = null, controls3D = null, world3D = null;
 let hover3D = null, raf3D = null, cell3D = 2, built3DKey = null, dustParticles3D = null;
-const token3DIndex = new Map(); // combatant id -> { group, ring, label, hpFill, plane, gx, gy }
+let floorH3D = 3;            // world height of one story, derived from the wall model's bbox at build time
+let combatGrid3D = null;     // vcDeriveGrid() result for the active battle (movement/LoS lookups)
+let floorPick3D = [];        // floor/stairs meshes carrying userData.cell {x,y,z} — click-raycast targets so a click resolves to a cell AND its level
+const STAIR_ROT_OFFSET = Math.PI; // stairs-open.glb ascends toward its local -Z; align that with role r's ascent direction
+
+// A battle's structure — st.structure for new multi-story battles, or a flat one synthesized
+// from the legacy obstacles list so battles saved before schema-v30 still render/play.
+function combatStructure(st) {
+  if (st.structure) return st.structure;
+  const pieces = [];
+  const seen = new Set();
+  for (let x=0;x<(st.w||26);x++) for (let y=0;y<(st.h||18);y++) pieces.push({ m:'floor', x, y, z:0 });
+  for (const o of (st.obstacles||[])) { const k=o[0]+','+o[1]; if(seen.has(k))continue; seen.add(k); pieces.push({ m:'prop', x:o[0], y:o[1], z:0 }); }
+  return { levels: 1, pieces };
+}
+const token3DIndex = new Map(); // combatant id -> { group, ring, label, hpFill, plane, gx, gy, gz }
 // create3DToken() is async (awaits texture/model loads), and sync3DTokens() can be
 // re-entered concurrently — every realtime event (HP change, position change, someone
 // else's move) triggers a fresh sync while an earlier one may still be mid-flight. Without
@@ -5373,29 +5700,23 @@ function init3D() {
     const tok = combatants.find(c => c.id === selected3DId);
     if (!tok) return;
     if (!isGM && tok.character_id !== myCharacterId) return;
-    const ix = new THREE.Vector3();
-    if (raycaster.ray.intersectPlane(groundPlane, ix)) {
-      const { gx, gy } = world3DToGrid(ix.x, ix.z);
-      move3DToken(tok, gx, gy);
-    }
+    // Raycast the actual floor/stairs tiles (not an infinite plane) so a click resolves to a
+    // specific cell AND its level — clicking a 2nd-floor tile targets that upper cell.
+    const fhits = raycaster.intersectObjects(floorPick3D, false);
+    if (fhits.length) { const c = fhits[0].object.userData.cell; move3DToken(tok, c.x, c.y, c.z); }
   });
 
   renderer3D.domElement.addEventListener('pointermove', ev => {
     if (!hover3D || !selected3DId) { if (hover3D) hover3D.visible = false; return; }
     setPointer(ev);
     raycaster.setFromCamera(pointer, camera3D);
-    const ix = new THREE.Vector3();
-    if (raycaster.ray.intersectPlane(groundPlane, ix)) {
-      const { gx, gy } = world3DToGrid(ix.x, ix.z);
-      const st = combatState();
-      const blocked = (st.obstacles || []).some(o => o[0] === gx && o[1] === gy);
-      if (blocked) { hover3D.visible = false; }
-      else {
-        const pos = grid3DToWorld(gx, gy);
-        hover3D.position.set(pos.x, 0.03, pos.z);
-        hover3D.visible = true;
-      }
-    }
+    const fhits = raycaster.intersectObjects(floorPick3D, false);
+    if (fhits.length) {
+      const c = fhits[0].object.userData.cell;
+      const pos = grid3DToWorld(c.x, c.y);
+      hover3D.position.set(pos.x, c.z * floorH3D + 0.05, pos.z);
+      hover3D.visible = true;
+    } else hover3D.visible = false;
   });
 
   addEventListener('resize', resize3D);
@@ -5424,35 +5745,38 @@ function toggleArrangeMode() {
   gmArrangeMode = !gmArrangeMode;
   document.getElementById('combat-arrange-btn').classList.toggle('active', gmArrangeMode);
 }
-async function move3DToken(tok, gx, gy) {
-  const st = combatState();
-  if ((st.obstacles || []).some(o => o[0] === gx && o[1] === gy)) return;
+async function move3DToken(tok, gx, gy, gz) {
+  const grid = combatGrid3D;
+  if (!grid) return;
+  if (gz == null) gz = tok.grid_z || 0;
+  if (!grid.standable(gx, gy, gz)) return;
   const isActiveToken = combatants.length > 0 && tok.id === combatants[activeTurn % combatants.length]?.id;
   const skipBudget = isGM && gmArrangeMode;
   let moveCells = 0;
   if (isActiveToken && tok.grid_x != null && !skipBudget) {
-    moveCells = Math.round(Math.hypot(gx - tok.grid_x, gy - tok.grid_y));
-    if (moveCells > turnActionState.remainingMove) {
-      alert(`Not enough movement left (${turnActionState.remainingMove} square${turnActionState.remainingMove === 1 ? '' : 's'} remaining).`);
-      return;
-    }
+    // The destination must be reachable within the remaining budget via a real path
+    // (routing around walls and up stairs) — not just close in a straight line.
+    const reach = vcReachable(grid, { x: tok.grid_x, y: tok.grid_y, z: tok.grid_z || 0 }, turnActionState.remainingMove);
+    const cell = reach.get(vcKey(gx, gy, gz));
+    if (!cell) { alert(`Can't reach there with the movement you have left (${turnActionState.remainingMove} square${turnActionState.remainingMove === 1 ? '' : 's'}). Try a nearer tile, or route via the stairs.`); return; }
+    moveCells = cell.cost;
   }
-  tok.grid_x = gx; tok.grid_y = gy;
-  await db.from('initiative_tracker').update({ grid_x: gx, grid_y: gy }).eq('id', tok.id);
+  tok.grid_x = gx; tok.grid_y = gy; tok.grid_z = gz;
+  await db.from('initiative_tracker').update({ grid_x: gx, grid_y: gy, grid_z: gz }).eq('id', tok.id);
   if (isActiveToken) { turnActionState.remainingMove -= moveCells; renderCheatSheet(tok); }
   const entry = token3DIndex.get(tok.id);
-  if (entry) animate3DMove(entry, gx, gy);
+  if (entry) animate3DMove(entry, gx, gy, gz);
   updateMoveRangeHighlight();
 }
-function animate3DMove(entry, gx, gy) {
-  entry.gx = gx; entry.gy = gy;
-  const target = grid3DToWorld(gx, gy);
+function animate3DMove(entry, gx, gy, gz) {
+  entry.gx = gx; entry.gy = gy; entry.gz = gz;
+  const target = grid3DToWorld(gx, gy), targetY = gz * floorH3D;
   const start = entry.group.position.clone();
-  const t0 = performance.now(); const dur = 260;
+  const t0 = performance.now(); const dur = 300;
   (function step() {
     const t = Math.min(1, (performance.now() - t0) / dur);
     const e = 1 - Math.pow(1 - t, 3);
-    entry.group.position.set(start.x + (target.x - start.x) * e, start.y, start.z + (target.z - start.z) * e);
+    entry.group.position.set(start.x + (target.x - start.x) * e, start.y + (targetY - start.y) * e, start.z + (target.z - start.z) * e);
     if (t < 1) requestAnimationFrame(step);
   })();
 }
@@ -5473,30 +5797,24 @@ let moveRangeGroup = null;
 function updateMoveRangeHighlight() {
   if (moveRangeGroup) { world3D.remove(moveRangeGroup); moveRangeGroup = null; }
   const active = combatants[activeTurn % (combatants.length || 1)];
-  if (!active || selected3DId !== active.id || active.grid_x == null) return;
+  if (!active || selected3DId !== active.id || active.grid_x == null || !combatGrid3D) return;
   if (!isGM && active.character_id !== myCharacterId) return;
-  const reach = turnActionState.remainingMove;
-  if (reach <= 0) return;
-  const st = combatState();
+  const budget = turnActionState.remainingMove;
+  if (budget <= 0) return;
+  // The highlight IS the pathfinder's reachable set — exactly the cells move3DToken will
+  // accept — so it can never disagree with what actually happens, and it spans levels
+  // (upstairs cells light up too once they're within budget via the stairs).
+  const reach = vcReachable(combatGrid3D, { x: active.grid_x, y: active.grid_y, z: active.grid_z || 0 }, budget);
   moveRangeGroup = new THREE.Group();
   const geo = new THREE.PlaneGeometry(cell3D * 0.88, cell3D * 0.88);
-  for (let dy = -reach; dy <= reach; dy++) {
-    for (let dx = -reach; dx <= reach; dx++) {
-      if (dx === 0 && dy === 0) continue;
-      // Must match move3DToken's actual budget check EXACTLY (rounded Euclidean, not a
-      // Manhattan diamond) — otherwise a cell shown as "reachable" could cost more than
-      // remainingMove once you actually moved there, or vice versa, which read as the
-      // highlight just being wrong ("I used my whole diagonal and still had squares left").
-      if (Math.round(Math.hypot(dx, dy)) > reach) continue;
-      const gx = active.grid_x + dx, gy = active.grid_y + dy;
-      if ((st.obstacles || []).some(o => o[0] === gx && o[1] === gy)) continue;
-      const mat = new THREE.MeshBasicMaterial({ color: 0x4dff9e, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false });
-      const tile = new THREE.Mesh(geo, mat);
-      tile.rotation.x = -Math.PI / 2;
-      const pos = grid3DToWorld(gx, gy);
-      tile.position.set(pos.x, 0.028, pos.z);
-      moveRangeGroup.add(tile);
-    }
+  for (const [k] of reach) {
+    const [x, y, z] = k.split(',').map(Number);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x4dff9e, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false });
+    const tile = new THREE.Mesh(geo, mat);
+    tile.rotation.x = -Math.PI / 2;
+    const pos = grid3DToWorld(x, y);
+    tile.position.set(pos.x, z * floorH3D + 0.06, pos.z);
+    moveRangeGroup.add(tile);
   }
   world3D.add(moveRangeGroup);
 }
@@ -5508,7 +5826,7 @@ function updateMoveRangeHighlight() {
 async function build3DCombatMap(st) {
   init3D();
   try {
-    const key = st.type + '|' + st.map + '|' + st.w + '|' + st.h + '|' + (st.obstacles || []).length;
+    const key = st.type + '|' + st.map + '|' + st.w + '|' + st.h + '|' + (st.structure ? 's' + st.structure.pieces.length : 'o' + (st.obstacles || []).length);
     if (key !== built3DKey) {
       // Only the (rare) full environment rebuild shows the loading overlay — this runs
       // once per battle. Routine token syncs happen on EVERY combatant change (every HP
@@ -5541,82 +5859,102 @@ async function build3DEnvironment(st) {
   scene3D.userData.sky.material.uniforms.bottomColor.value.setHex(theme.fogColor);
   scene3D.userData.sky.material.uniforms.topColor.value.setHex(theme.skyTop || 0x142a4a);
 
-  const floorSrc = await cloneModel3D(theme.base + theme.floor);
-  const { size: floorSize } = centerAndBox3D(floorSrc);
-  cell3D = Math.max(floorSize.x, floorSize.z) || 2;
+  const structure = combatStructure(st);
+  combatGrid3D = vcDeriveGrid(structure);
+  floorPick3D = [];
 
-  const x0 = -COMBAT_3D_FLOOR_MARGIN, x1 = st.w + COMBAT_3D_FLOOR_MARGIN;
-  const y0 = -COMBAT_3D_FLOOR_MARGIN, y1 = st.h + COMBAT_3D_FLOOR_MARGIN;
-  let floorMesh = null;
-  floorSrc.traverse(o => { if (o.isMesh && !floorMesh) floorMesh = o; });
-  if (floorMesh) {
+  // Cell size from the theme's ground-floor model; story height from the wall model's bbox so
+  // upper floors and wall-tops line up. Both are measured once here and reused everywhere.
+  const groundSrc = await cloneModel3D(theme.base + theme.floor);
+  cell3D = Math.max(centerAndBox3D(groundSrc).size.x, centerAndBox3D(groundSrc).size.z) || 2;
+  const wallProbe = await cloneModel3D(STRUCT_KIT + 'wall.glb');
+  const wallSize = centerAndBox3D(wallProbe).size;
+  const wallFootScale = cell3D / (Math.max(wallSize.x, wallSize.z) || 1);
+  floorH3D = Math.max(cell3D * 1.4, wallSize.y * wallFootScale);
+
+  // A cheap far-out ground plane so the world doesn't end at the battlefield edge — a big
+  // instanced ground extends past the structure and fades into the fog.
+  const groundMeshes = []; groundSrc.traverse(o => { if (o.isMesh) groundMeshes.push(o); });
+  if (groundMeshes[0]) {
+    const gm = groundMeshes[0];
+    const x0 = -COMBAT_3D_FLOOR_MARGIN, x1 = st.w + COMBAT_3D_FLOOR_MARGIN, y0 = -COMBAT_3D_FLOOR_MARGIN, y1 = st.h + COMBAT_3D_FLOOR_MARGIN;
     const cols = x1 - x0, rows = y1 - y0;
-    const inst = new THREE.InstancedMesh(floorMesh.geometry, floorMesh.material, cols * rows);
+    const inst = new THREE.InstancedMesh(gm.geometry, gm.material, cols * rows);
     inst.receiveShadow = true;
     let i = 0; const m = new THREE.Matrix4();
-    for (let gy = y0; gy < y1; gy++) for (let gx = x0; gx < x1; gx++) {
-      const pos = grid3DToWorld(gx, gy);
-      m.makeTranslation(pos.x, 0, pos.z);
-      inst.setMatrixAt(i++, m);
-    }
+    for (let gy = y0; gy < y1; gy++) for (let gx = x0; gx < x1; gx++) { const p = grid3DToWorld(gx, gy); m.makeTranslation(p.x, -0.04, p.z); inst.setMatrixAt(i++, m); }
     inst.instanceMatrix.needsUpdate = true;
     world3D.add(inst);
+    world3D.add(createGridLines3D(x0, x1, y0, y1, cell3D, 0x40c8ff));
   }
 
-  world3D.add(createGridLines3D(x0, x1, y0, y1, cell3D, 0x40c8ff));
-
   const hoverGeo = new THREE.PlaneGeometry(cell3D * 0.92, cell3D * 0.92);
-  const hoverMat = new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.28, side: THREE.DoubleSide });
+  const hoverMat = new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false });
   hover3D = new THREE.Mesh(hoverGeo, hoverMat);
   hover3D.rotation.x = -Math.PI / 2;
-  hover3D.position.y = 0.03;
   hover3D.visible = false;
   world3D.add(hover3D);
 
-  // Town footprints get ONE whole building model each (scaled non-uniformly to fit,
-  // rotation snapped to 90° so the non-uniform scale doesn't shear it visually) instead of
-  // tiling small street props across the block — this is the actual fix for "asset spam":
-  // a real building silhouette reads as a town, a dozen barrels scattered in a grid doesn't.
-  const buildingCells = new Set();
-  for (const b of (st.buildings || [])) {
-    const pick = COMBAT_3D_BUILDINGS[Math.floor(cellHash(b.x0, b.y0) * 999) % COMBAT_3D_BUILDINGS.length];
-    try {
-      const obj = await cloneModel3D(pick);
-      const { size } = centerAndBox3D(obj);
-      const footW = (b.x1 - b.x0) * cell3D, footD = (b.y1 - b.y0) * cell3D;
-      const scaleX = footW / (size.x || 1), scaleZ = footD / (size.z || 1);
-      obj.scale.set(scaleX, (scaleX + scaleZ) / 2, scaleZ);
-      const pos = grid3DToWorld((b.x0 + b.x1 - 1) / 2, (b.y0 + b.y1 - 1) / 2);
-      obj.position.set(pos.x, 0, pos.z);
-      obj.rotation.y = Math.floor(cellHash(b.x0, b.y1) * 4) * (Math.PI / 2);
-      world3D.add(obj);
-      for (let gy = b.y0; gy < b.y1; gy++) for (let gx = b.x0; gx < b.x1; gx++) buildingCells.add(gx + ',' + gy);
-    } catch (err) { console.warn('3D building failed to load', pick, err); }
-  }
-
-  // Everything else — obstacle cells NOT already covered by a building footprint (the
-  // extended sprawl ring beyond the core battlefield, or any non-Town theme) — draws real
-  // per-cell prop art exactly at the shared combat_state.obstacles cells (same data every
-  // client's math also reads), deterministic per cell via cellHash() so the same cell
-  // always renders the same prop.
-  const pool = theme.obstacles.map(o => ({ base: theme.base, name: o }));
-  if (theme.obstaclesExtra) theme.obstaclesExtra.items.forEach(o => pool.push({ base: theme.obstaclesExtra.base, name: o }));
-  for (const [ox, oy] of (st.obstacles || [])) {
-    if (buildingCells.has(ox + ',' + oy)) continue;
-    const pick = pool[Math.floor(cellHash(ox, oy) * 999) % pool.length];
-    try {
-      const obj = await cloneModel3D(pick.base + pick.name);
-      const { size } = centerAndBox3D(obj);
-      const scale = Math.min(1.6, (cell3D * 0.8) / (Math.max(size.x, size.z) || 1));
-      obj.scale.setScalar(scale);
-      const pos = grid3DToWorld(ox, oy);
-      obj.position.set(pos.x, 0, pos.z);
-      obj.rotation.y = cellHash(ox, oy + 0.5) * Math.PI * 2;
-      world3D.add(obj);
-    } catch (err) { console.warn('3D obstacle failed to load', pick, err); }
+  // Render each structure piece at its cell + level. Floors also become the click-raycast
+  // targets (floorPick3D) so movement can resolve which cell AND level was clicked.
+  for (const p of structure.pieces) {
+    try { await render3DPiece(theme, p); }
+    catch (err) { console.warn('3D piece failed to load', p, err); }
   }
 
   dustParticles3D = createDustParticles3D(st);
+}
+
+// Places one structure piece (floor/wall/window/stairs/prop) into the world at its grid cell
+// and story height. Floors/stairs get a flat pick-plane on top so a click there resolves to
+// that exact cell + level for movement.
+async function render3DPiece(theme, p) {
+  const pos0 = grid3DToWorld(p.x, p.y);
+  // The ground floor (z=0) is already drawn by the big instanced ground plane, so its
+  // hundreds of cells don't each need their own model+draw-call — we only add the invisible
+  // click-pick tile so movement can still target those cells.
+  if (p.m === 'floor' && p.z === 0) {
+    const pick = new THREE.Mesh(new THREE.PlaneGeometry(cell3D, cell3D), new THREE.MeshBasicMaterial({ visible: false }));
+    pick.rotation.x = -Math.PI / 2;
+    pick.position.set(pos0.x, 0.02, pos0.z);
+    pick.userData.cell = { x: p.x, y: p.y, z: 0 };
+    world3D.add(pick); floorPick3D.push(pick);
+    return;
+  }
+  const model = structPieceModel(theme, p);
+  const obj = await cloneModel3D(model);
+  const { size, box } = centerAndBox3D(obj);
+  const pos = grid3DToWorld(p.x, p.y);
+  const baseY = p.z * floorH3D;
+  if (p.m === 'floor') {
+    const s = cell3D / (Math.max(size.x, size.z) || 1);
+    obj.scale.setScalar(s);
+    obj.position.set(pos.x, baseY - box.min.y * s, pos.z);
+  } else if (p.m === 'wall' || p.m === 'window') {
+    const s = cell3D / (Math.max(size.x, size.z) || 1);
+    obj.scale.setScalar(s);
+    obj.position.set(pos.x, baseY - box.min.y * s, pos.z);
+    obj.rotation.y = (p.r || 0) * -Math.PI / 2;
+  } else if (p.m === 'stairs') {
+    const s = cell3D / (Math.max(size.x, size.z) || 1);
+    obj.scale.setScalar(s);
+    obj.position.set(pos.x, baseY - box.min.y * s, pos.z);
+    obj.rotation.y = (p.r || 0) * -Math.PI / 2 + STAIR_ROT_OFFSET;
+  } else { // prop
+    const s = Math.min(1.6, (cell3D * 0.8) / (Math.max(size.x, size.z) || 1));
+    obj.scale.setScalar(s);
+    obj.position.set(pos.x, baseY - box.min.y * s, pos.z);
+    obj.rotation.y = cellHash(p.x, p.y + 0.5) * Math.PI * 2;
+  }
+  world3D.add(obj);
+  if (p.m === 'floor' || p.m === 'stairs') {
+    const pick = new THREE.Mesh(new THREE.PlaneGeometry(cell3D, cell3D), new THREE.MeshBasicMaterial({ visible: false }));
+    pick.rotation.x = -Math.PI / 2;
+    pick.position.set(pos.x, baseY + 0.02, pos.z);
+    pick.userData.cell = { x: p.x, y: p.y, z: p.z };
+    world3D.add(pick);
+    floorPick3D.push(pick);
+  }
 }
 
 // A soft radial-gradient dot, generated once at runtime (no image asset needed) and reused
@@ -5665,7 +6003,7 @@ async function sync3DTokens(st) {
     if (c.grid_x == null || c.grid_y == null) continue;
     seen.add(c.id);
     const entry = await getOrCreate3DToken(c);
-    if (entry.gx !== c.grid_x || entry.gy !== c.grid_y) animate3DMove(entry, c.grid_x, c.grid_y);
+    if (entry.gx !== c.grid_x || entry.gy !== c.grid_y || entry.gz !== (c.grid_z || 0)) animate3DMove(entry, c.grid_x, c.grid_y, c.grid_z || 0);
     updateHpBar3D(entry, c);
     const nameEl = entry.label.querySelector('.name3d');
     const name = c.combatant || '';
@@ -5696,7 +6034,7 @@ let lastAutoSelected3DTurnId = null;
 async function create3DToken(c) {
   const pos = grid3DToWorld(c.grid_x, c.grid_y);
   const group = new THREE.Group();
-  group.position.set(pos.x, 0, pos.z);
+  group.position.set(pos.x, (c.grid_z || 0) * floorH3D, pos.z);
 
   let plane;
   const portraitPath = resolveCombatantPortraitPath(c);
@@ -5758,7 +6096,7 @@ async function create3DToken(c) {
   label.innerHTML = `<div class="name3d"></div><div class="hp3d-track"><div class="hp3d-fill"></div></div>`;
   document.getElementById('combat-3d-fx-layer').appendChild(label);
 
-  const entry = { group, plane, ring, label, hpFill: label.querySelector('.hp3d-fill'), gx: c.grid_x, gy: c.grid_y, baseColor: baseColorHex, muzzleOffset };
+  const entry = { group, plane, ring, label, hpFill: label.querySelector('.hp3d-fill'), gx: c.grid_x, gy: c.grid_y, gz: c.grid_z || 0, baseColor: baseColorHex, muzzleOffset };
   token3DIndex.set(c.id, entry);
   return entry;
 }
@@ -5863,13 +6201,16 @@ function spinDiceChip3D(entry, finalValue, duration, intervalMs) {
   });
 }
 
-async function playAttackFx3D({ attackerX, attackerY, targetX, targetY, weaponType, roll, toHitTotal, totalAD, hit, hasCover, baseAD, rangeAD, coverAD, weaponIconPath, dmgResult, armor, finalDmg }) {
+async function playAttackFx3D({ attackerX, attackerY, attackerZ, targetX, targetY, targetZ, weaponType, roll, toHitTotal, totalAD, hit, hasCover, baseAD, rangeAD, coverAD, weaponIconPath, dmgResult, armor, finalDmg }) {
   init3D();
   const attackerEntry = find3DTokenAt(attackerX, attackerY);
+  // Raise the shot's endpoints to the shooter's/target's floor level so cross-story shots
+  // arc between the correct heights instead of along the ground.
   const a = grid3DToWorld(attackerX, attackerY), t = grid3DToWorld(targetX, targetY);
+  a.y = (attackerZ || 0) * floorH3D; t.y = (targetZ || 0) * floorH3D;
   // Fire from the attacker's actual held weapon position when we can find their token,
   // not the middle of their body — makes the shot read as coming from the gun itself.
-  const muzzle = attackerEntry ? a.clone().add(attackerEntry.muzzleOffset) : a.clone().setY(cell3D * 0.45);
+  const muzzle = attackerEntry ? a.clone().add(attackerEntry.muzzleOffset) : a.clone().setY(a.y + cell3D * 0.45);
   const color = WEAPON_BOLT_COLOR[weaponType] || '#40c8ff';
   const weaponIcon = weaponIconPath ? renderStoredIcon(weaponIconPath, 28) : null;
 
