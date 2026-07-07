@@ -17,6 +17,7 @@
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="js/combat3d-structures.js"></script>
 <style>
 .camp-layout { display:grid; grid-template-columns:220px 1fr 250px; margin-top:58px; min-height:calc(100vh - 58px); }
 .camp-main { padding:0 0 48px 0; overflow-y:auto; background:var(--bg); }
@@ -837,7 +838,7 @@
               <button class="btn-ghost" onclick="editorLevelDown()" style="font-size:11px;padding:5px 10px;">▼ Lower</button>
               <div class="combat-cheat-chip">Building on level <strong id="me-level">0</strong> <span style="color:var(--text-faint)">(½-tile steps)</span></div>
               <button class="btn-ghost" onclick="editorLevelUp()" style="font-size:11px;padding:5px 10px;">▲ Higher</button>
-              <div class="combat-cheat-chip" style="margin-left:auto;"><strong id="me-count">0</strong> pieces · drag to orbit, scroll to zoom</div>
+              <div class="combat-cheat-chip" style="margin-left:auto;"><strong id="me-count">0</strong> pieces · LMB paint · RMB orbit · wheel zoom</div>
             </div>
             <div class="form-error" id="mapeditor-error"></div>
           </div>
@@ -4395,9 +4396,19 @@ function renderMapEditorList() {
     </div>`).join('') : `<p style="font-size:12px; color:var(--text-faint); text-align:center; padding:20px 0;">No custom battlefields yet — build one below.</p>`;
 }
 
-// One-time Three.js editor scene (its own renderer/camera/world, kept separate from the
-// combat renderer so their state never collides). Click a placement tile to drop the
-// current brush at the current build level; orbit/zoom to inspect.
+// ── 3D Map Editor — full toolkit. LMB paints (drag to paint runs), RMB orbits,
+// wheel zooms. Wall/window/railing brushes snap to the cell edge NEAREST the
+// cursor (no rotate-guessing); a translucent ghost previews every placement.
+// R rotates stairs/slopes, Q/E change the working level (everything above it
+// fades out), Ctrl+Z / Ctrl+Y undo/redo, and a Room tool drags out a whole
+// walled room with a doorway in one gesture. Rendering goes through the same
+// buildStructureGroup as live combat, so what you build is what you fight on.
+const EDITOR_ROT_NAMES = ['North', 'East', 'South', 'West'];
+const EDITOR_EDGE_BRUSHES = ['wall', 'window', 'railing'];
+let editorGhost = null, editorRoomGhost = null, editorRoomAnchor = null;
+let editorPainting = false, editorStrokeCells = null, editorHover = null;
+let editorUndoStack = [], editorRedoStack = [];
+
 function initEditor3D() {
   if (editorRenderer) return;
   const holder = document.getElementById('map-editor-3d-holder');
@@ -4406,16 +4417,16 @@ function initEditor3D() {
   editorRenderer.outputEncoding = THREE.sRGBEncoding;
   holder.appendChild(editorRenderer.domElement);
   editorScene = new THREE.Scene();
-  editorScene.background = new THREE.Color(0x8fb6d8);
-  // Gentle daylight fog so the far ground fades into the painted sky instead of ending abruptly.
-  editorScene.fog = new THREE.Fog(0xbcd4ea, 90, 340);
   editorCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
   editorControls = new THREE.OrbitControls(editorCamera, editorRenderer.domElement);
   editorControls.enableDamping = true;
-  editorScene.add(new THREE.HemisphereLight(0x9fc0ff, 0x202028, 1.0));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.1); sun.position.set(20, 40, 15); editorScene.add(sun);
-  // Same painted sky dome (blue sky, clouds, mountains) the combat view uses — so themes and the
-  // horizon read the same in the editor as in play.
+  // LMB is the paintbrush; orbit lives on RMB (drag) + wheel. -1 = no action.
+  editorControls.mouseButtons = { LEFT: -1, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+  editorScene.add(new THREE.HemisphereLight(0xe9eef7, 0x57503f, 0.5));
+  editorScene.add(new THREE.AmbientLight(0xffffff, 0.22));
+  const sun = new THREE.DirectionalLight(0xfff4e0, 1.2);
+  sun.position.set(40, 32, 26);
+  editorScene.add(sun);
   const esky = new THREE.Mesh(
     new THREE.SphereGeometry(400, 32, 20),
     new THREE.MeshBasicMaterial({ map: getSkyTexture3D(), side: THREE.BackSide, depthWrite: false, fog: false })
@@ -4424,21 +4435,69 @@ function initEditor3D() {
   editorWorld = new THREE.Group(); editorScene.add(editorWorld);
 
   const ray = new THREE.Raycaster(), pt = new THREE.Vector2();
-  let dragDist = 0;
-  editorRenderer.domElement.addEventListener('pointerdown', () => { dragDist = 0; });
-  editorRenderer.domElement.addEventListener('pointermove', e => { dragDist += Math.abs(e.movementX) + Math.abs(e.movementY); });
-  editorRenderer.domElement.addEventListener('click', e => {
-    if (dragDist > 6 || !editorPlacePlane) return;
+  const resolveCell = (e) => {
+    if (!editorPlacePlane) return null;
     const r = editorRenderer.domElement.getBoundingClientRect();
-    pt.x = ((e.clientX - r.left) / r.width) * 2 - 1; pt.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+    pt.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+    pt.y = -((e.clientY - r.top) / r.height) * 2 + 1;
     ray.setFromCamera(pt, editorCamera);
     const hit = ray.intersectObject(editorPlacePlane, false)[0];
-    if (!hit) return;
+    if (!hit) return null;
     const gx = Math.round(hit.point.x / editorCell), gy = Math.round(hit.point.z / editorCell);
-    if (gx < 0 || gy < 0 || gx >= editorW || gy >= editorH) return;
-    applyEditorBrush(gx, gy, editorLevel);
+    if (gx < 0 || gy < 0 || gx >= editorW || gy >= editorH) return null;
+    const edgeR = scNearestEdgeR(hit.point.x - gx * editorCell, hit.point.z - gy * editorCell, editorCell);
+    return { x: gx, y: gy, edgeR };
+  };
+
+  editorRenderer.domElement.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    const c = resolveCell(e);
+    if (!c) return;
+    if (editorBrush === 'room') { editorRoomAnchor = c; return; }
+    pushEditorUndo();
+    editorPainting = true; editorStrokeCells = new Set();
+    paintAt(c);
+  });
+  editorRenderer.domElement.addEventListener('pointermove', e => {
+    const c = resolveCell(e);
+    editorHover = c;
+    if (editorPainting && c) paintAt(c);
+    if (editorBrush === 'room' && editorRoomAnchor && c) updateRoomGhost(editorRoomAnchor, c);
+    updateEditorGhost();
+  });
+  const endStroke = e => {
+    if (editorBrush === 'room' && editorRoomAnchor) {
+      const c = resolveCell(e) || editorHover;
+      if (c) placeRoom(editorRoomAnchor, c);
+      editorRoomAnchor = null;
+      clearRoomGhost();
+      return;
+    }
+    editorPainting = false; editorStrokeCells = null;
+  };
+  editorRenderer.domElement.addEventListener('pointerup', endStroke);
+  editorRenderer.domElement.addEventListener('pointerleave', () => { editorHover = null; updateEditorGhost(); });
+  editorRenderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+
+  document.addEventListener('keydown', e => {
+    const modal = document.getElementById('modal-map-editor');
+    if (!modal.classList.contains('open') || document.getElementById('map-editor-canvas-view').style.display === 'none') return;
+    if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    const k = e.key.toLowerCase();
+    if (k === 'r') { editorRotate(); e.preventDefault(); }
+    else if (k === 'q') { editorLevelDown(); e.preventDefault(); }
+    else if (k === 'e') { editorLevelUp(); e.preventDefault(); }
+    else if (k === 'z' && (e.ctrlKey || e.metaKey)) { editorUndo(); e.preventDefault(); }
+    else if (k === 'y' && (e.ctrlKey || e.metaKey)) { editorRedo(); e.preventDefault(); }
   });
   addEventListener('resize', resizeEditor3D);
+}
+// One brush application per cell (edge brushes: per cell+edge) per stroke.
+function paintAt(c) {
+  const r = EDITOR_EDGE_BRUSHES.includes(editorBrush) || editorBrush === 'erase' ? c.edgeR : editorRot;
+  const strokeKey = `${c.x},${c.y},${r}`;
+  if (editorStrokeCells) { if (editorStrokeCells.has(strokeKey)) return; editorStrokeCells.add(strokeKey); }
+  applyEditorBrush(c.x, c.y, editorLevel, r);
 }
 function resizeEditor3D() {
   if (!editorRenderer) return;
@@ -4455,7 +4514,7 @@ function tickEditor3D() {
   editorRenderer.render(editorScene, editorCamera);
 }
 
-async function openMapEditorCanvas(id) {
+function openMapEditorCanvas(id) {
   if (!isGM) return;
   mapEditorEditingId = id;
   const cm = id ? customMapsCache.find(m => m.id === id) : null;
@@ -4467,6 +4526,7 @@ async function openMapEditorCanvas(id) {
   document.getElementById('mapeditor-w-inp').value = editorW;
   document.getElementById('mapeditor-h-inp').value = editorH;
   editorLevel = 0; editorRot = 0; editorBrush = 'floor';
+  editorUndoStack = []; editorRedoStack = [];
   renderEditorPalette();
   // Editing an existing map loads its pieces; a new map starts with a full ground floor.
   if (cm?.structure) { editorPieces = cm.structure.pieces.map(p => ({...p})); editorMaxLevels = cm.structure.levels || 1; }
@@ -4477,39 +4537,35 @@ async function openMapEditorCanvas(id) {
   document.getElementById('map-editor-list-footer').style.display = 'none';
   document.getElementById('map-editor-canvas-footer').style.display = '';
   initEditor3D();
-  // Derive editor cell/floor height from the same models the combat renderer uses.
-  const theme = COMBAT_3D_THEMES[editorTheme] || COMBAT_3D_THEMES.arena;
-  const groundSrc = await cloneModel3D(theme.base + theme.floor);
-  editorCell = Math.max(centerAndBox3D(groundSrc).size.x, centerAndBox3D(groundSrc).size.z) || 2;
-  editorFloorH = editorCell * VC_LEVEL_H_CELLS; // one level = half a tile, same as combat
+  editorCell = 2; editorFloorH = editorCell * VC_LEVEL_H_CELLS; // fixed world scale, same as combat
   setTimeout(resizeEditor3D, 30);
-  await rebuildEditorWorld();
+  rebuildEditorWorld();
   editorCamera.position.set(editorW*editorCell*0.5, editorH*editorCell*0.9, editorH*editorCell*1.1);
   editorControls.target.set(editorW*editorCell*0.5, 0, editorH*editorCell*0.5);
   editorControls.update();
   if (!editorRaf) tickEditor3D();
 }
-// Left "asset browser": categorized brush chips (Terrain / Structure / Cover), tools (Erase,
-// Rotate) and one-click room stamps. Chips carry class `me-brush` + data-brush so setEditorBrush
-// can highlight the active one.
-const EDITOR_ROT_NAMES = ['North', 'East', 'South', 'West'];
+// Left "asset browser": categorized brushes, tools and stamps. Edge pieces note
+// that they snap to the cursor-nearest edge; R only matters for stairs/slopes.
 function renderEditorPalette() {
   const groups = [
-    { name: 'Terrain', items: [['floor', '▦ Floor'], ['slope', '◣ Slope · ½-step']] },
-    { name: 'Structure', items: [['wall', '▮ Wall · edge'], ['window', '▤ Window · edge'], ['stairs', '▚ Stairs · 1 storey']] },
+    { name: 'Terrain', items: [['floor', '▦ Floor slab'], ['terrain', '⬢ Terrain block · solid'], ['slope', '◣ Slope · ½-step']] },
+    { name: 'Structure', items: [['wall', '▮ Wall · edge-snap'], ['window', '▤ Window · edge-snap'], ['railing', '☰ Railing · edge-snap'], ['stairs', '▚ Stairs · 1 storey']] },
     { name: 'Cover', items: [['prop-cover', '♜ Cover / Prop']] },
+    { name: 'Tools', items: [['room', '⬚ Room · drag a rectangle'], ['erase', '⌫ Erase']] },
   ];
   const chip = (b, l) => `<button class="me-brush btn-ghost" data-brush="${b}" onclick="setEditorBrush('${b}')" style="text-align:left;font-size:11.5px;padding:6px 9px;">${l}</button>`;
   const heading = t => `<div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-faint);margin:9px 0 4px;font-weight:700;">${t}</div>`;
   let html = '';
   for (const g of groups) html += heading(g.name) + `<div style="display:flex;flex-direction:column;gap:4px;">` + g.items.map(([b, l]) => chip(b, l)).join('') + `</div>`;
-  html += heading('Tools') + `<div style="display:flex;flex-direction:column;gap:4px;">
-    ${chip('erase', '⌫ Erase')}
-    <button class="btn-ghost" onclick="editorRotate()" style="text-align:left;font-size:11.5px;padding:6px 9px;">↻ Rotate · facing <strong id="me-rot">North</strong></button>
+  html += heading('Actions') + `<div style="display:flex;flex-direction:column;gap:4px;">
+    <button class="btn-ghost" onclick="editorRotate()" style="text-align:left;font-size:11.5px;padding:6px 9px;">↻ Rotate (R) · <strong id="me-rot">North</strong></button>
+    <button class="btn-ghost" onclick="editorUndo()" style="text-align:left;font-size:11.5px;padding:6px 9px;">↶ Undo (Ctrl+Z)</button>
+    <button class="btn-ghost" onclick="editorRedo()" style="text-align:left;font-size:11.5px;padding:6px 9px;">↷ Redo (Ctrl+Y)</button>
   </div>`;
-  html += heading('Room Stamps') + `<div style="display:flex;flex-direction:column;gap:4px;">
-    <button class="btn-ghost" onclick="editorStamp('house')" style="text-align:left;font-size:11.5px;padding:6px 9px;">🏠 2-storey House</button>
-    <button class="btn-ghost" onclick="editorStamp('platform')" style="text-align:left;font-size:11.5px;padding:6px 9px;">⬛ Raised Platform</button>
+  html += heading('Stamps') + `<div style="display:flex;flex-direction:column;gap:4px;">
+    <button class="btn-ghost" onclick="editorStamp('house')" style="text-align:left;font-size:11.5px;padding:6px 9px;">🏠 2-storey building</button>
+    <button class="btn-ghost" onclick="editorStamp('platform')" style="text-align:left;font-size:11.5px;padding:6px 9px;">⬛ Railed platform</button>
   </div>`;
   document.getElementById('me-palette').innerHTML = html;
   setEditorBrush(editorBrush);
@@ -4518,18 +4574,15 @@ function renderEditorPalette() {
 function refreshEditorRotLabel() { const el = document.getElementById('me-rot'); if (el) el.textContent = EDITOR_ROT_NAMES[editorRot]; }
 function setEditorBrush(b) {
   editorBrush = b;
+  editorRoomAnchor = null; clearRoomGhost();
   document.querySelectorAll('#me-palette .me-brush').forEach(el => el.classList.toggle('active', el.dataset.brush === b));
+  updateEditorGhost(true);
 }
-function editorRotate() { editorRot = (editorRot + 1) % 4; refreshEditorRotLabel(); }
-// Live theme swap: recompute cell/floor from the new theme's ground model, then rebuild so the
-// ground colour/material (and any themed props) update in the viewport immediately.
-async function applyEditorTheme(theme) {
+function editorRotate() { editorRot = (editorRot + 1) % 4; refreshEditorRotLabel(); updateEditorGhost(true); }
+// Live theme swap — instant, since all structure is generated geometry.
+function applyEditorTheme(theme) {
   editorTheme = theme;
-  const t = COMBAT_3D_THEMES[theme] || COMBAT_3D_THEMES.arena;
-  const groundSrc = await cloneModel3D(t.base + t.floor);
-  editorCell = Math.max(centerAndBox3D(groundSrc).size.x, centerAndBox3D(groundSrc).size.z) || 2;
-  editorFloorH = editorCell * VC_LEVEL_H_CELLS;
-  await rebuildEditorWorld();
+  rebuildEditorWorld();
 }
 // Apply the width/height inputs — resizing clears the map back to a fresh ground floor.
 function resizeEditorGrid() {
@@ -4540,6 +4593,7 @@ function resizeEditorGrid() {
     document.getElementById('mapeditor-h-inp').value = editorH;
     return;
   }
+  pushEditorUndo();
   editorW = w; editorH = h;
   editorPieces = [];
   for (let x = 0; x < editorW; x++) for (let y = 0; y < editorH; y++) editorPieces.push({ m: 'floor', x, y, z: 0 });
@@ -4555,94 +4609,149 @@ function editorLevelUp() { editorLevel = Math.min(editorMaxLevels, editorLevel +
 function editorLevelDown() { editorLevel = Math.max(0, editorLevel - 1); refreshEditorLevelLabel(); rebuildEditorWorld(); }
 function refreshEditorLevelLabel() { document.getElementById('me-level').textContent = editorLevel; }
 
-// Placement rules keep the piece list gameplay-valid. Walls/windows are EDGE pieces, so a cell
-// can hold up to four of them (one per edge, chosen by the current Rotate facing); floors, stairs,
-// slopes and props are one-per-cell. Stairs/slopes/props imply standable ground beneath them.
-function applyEditorBrush(x, y, z) {
-  const b = editorBrush, r = editorRot;
+// ── Undo/redo — whole-piece-list snapshots (small arrays; simple and bulletproof).
+function pushEditorUndo() {
+  editorUndoStack.push(JSON.stringify({ pieces: editorPieces, w: editorW, h: editorH, levels: editorMaxLevels }));
+  if (editorUndoStack.length > 60) editorUndoStack.shift();
+  editorRedoStack = [];
+}
+function editorUndo() { editorSwapState(editorUndoStack, editorRedoStack); }
+function editorRedo() { editorSwapState(editorRedoStack, editorUndoStack); }
+function editorSwapState(from, to) {
+  if (!from.length) return;
+  to.push(JSON.stringify({ pieces: editorPieces, w: editorW, h: editorH, levels: editorMaxLevels }));
+  const s = JSON.parse(from.pop());
+  editorPieces = s.pieces; editorW = s.w; editorH = s.h; editorMaxLevels = s.levels;
+  editorLevel = Math.min(editorLevel, editorMaxLevels);
+  document.getElementById('mapeditor-w-inp').value = editorW;
+  document.getElementById('mapeditor-h-inp').value = editorH;
+  rebuildEditorWorld();
+}
+
+// Placement rules keep the piece list gameplay-valid. Wall/window/railing are EDGE
+// pieces (up to four per cell, one per edge — r comes from the cursor-nearest edge);
+// floor/terrain/stairs/slope are one-per-cell; props imply ground beneath them.
+function applyEditorBrush(x, y, z, rOverride) {
+  const b = editorBrush;
+  const r = (rOverride != null) ? rOverride : editorRot;
   const here = p => p.x === x && p.y === y && p.z === z;
-  const isEdge = p => p.m === 'wall' || p.m === 'window';
+  const isEdge = p => EDITOR_EDGE_BRUSHES.includes(p.m);
   if (b === 'erase') {
-    // Erase the wall/window on the current facing edge first; if none, clear the whole cell.
+    // Erase the edge piece on the cursor-nearest edge first; if none, clear the whole cell.
     const before = editorPieces.length;
     editorPieces = editorPieces.filter(p => !(here(p) && isEdge(p) && (p.r || 0) === r));
     if (editorPieces.length === before) editorPieces = editorPieces.filter(p => !here(p));
-  } else if (b === 'floor') {
-    if (editorPieces.some(p => here(p) && p.m === 'floor')) editorPieces = editorPieces.filter(p => !here(p));
-    else editorPieces.push({ m: 'floor', x, y, z });
-  } else if (b === 'wall' || b === 'window') {
+  } else if (b === 'floor' || b === 'terrain') {
+    editorPieces = editorPieces.filter(p => !(here(p) && (p.m === 'floor' || p.m === 'terrain' || p.m === 'stairs' || p.m === 'slope')));
+    editorPieces.push({ m: b, x, y, z });
+  } else if (EDITOR_EDGE_BRUSHES.includes(b)) {
     editorPieces = editorPieces.filter(p => !(here(p) && isEdge(p) && (p.r || 0) === r)); // replace on this edge only
     editorPieces.push({ m: b, x, y, z, r });
   } else if (b === 'stairs' || b === 'slope') {
-    editorPieces = editorPieces.filter(p => !(here(p) && (p.m === 'stairs' || p.m === 'slope' || p.m === 'floor')));
+    editorPieces = editorPieces.filter(p => !(here(p) && (p.m === 'stairs' || p.m === 'slope' || p.m === 'floor' || p.m === 'terrain')));
     editorPieces.push({ m: b, x, y, z, r });
   } else { // prop / cover
     editorPieces = editorPieces.filter(p => !(here(p) && vcIsProp(p.m)));
-    if (!editorPieces.some(p => here(p) && p.m === 'floor')) editorPieces.push({ m: 'floor', x, y, z });
+    if (!editorPieces.some(p => here(p) && (p.m === 'floor' || p.m === 'terrain'))) editorPieces.push({ m: 'floor', x, y, z });
     editorPieces.push({ m: b, x, y, z });
   }
   editorMaxLevels = Math.max(editorMaxLevels, z + 1, ...editorPieces.map(p => p.z + 1));
   rebuildEditorWorld();
 }
 function editorStamp(kind) {
+  pushEditorUndo();
   const cx = Math.floor(editorW/2), cy = Math.floor(editorH/2);
   if (kind === 'house') {
-    genBuilding(editorPieces, cx-2, cy-2, 5, 5, { twoStory: true });
-  } else { // raised platform one full storey up, reached by a stair on its south edge
+    scAddBuilding(editorPieces, cx-2, cy-2, 5, 5, {});
+  } else { // storey-high platform with railings + stairs up the south side
     const x0=cx-2, y0=cy-2, uz=VC_STAIR_RISE;
-    for (let x=x0;x<x0+4;x++) for (let y=y0;y<y0+4;y++) editorPieces.push({ m:'floor', x, y, z:uz });
-    editorPieces.push({ m:'stairs', x:x0+1, y:y0+4, z:0, r:0 }); // south of the platform, ascending north onto it
+    scAddFloorRect(editorPieces, x0, y0, x0+4, y0+4, uz);
+    for (let x=x0;x<x0+4;x+=3) for (let y=y0;y<y0+4;y+=3) editorPieces.push({ m:'post', x, y, z:uz });
+    editorPieces.push({ m:'stairs', x:x0+1, y:y0+4, z:0, r:0 });
+    scAddWallsAround(editorPieces, x0, y0, x0+4, y0+4, uz, { role:'railing', doors:[{ x:x0+1, y:y0+3, r:2 }] });
   }
   editorMaxLevels = Math.max(editorMaxLevels, ...editorPieces.map(p => p.z + 1));
   rebuildEditorWorld();
 }
+// Room tool: drag a rectangle → floors + perimeter walls (some windows) + a doorway
+// centred on the south run, all at the current working level.
+function placeRoom(a, b) {
+  const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x) + 1;
+  const y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y) + 1;
+  if (x1 - x0 < 2 || y1 - y0 < 2) return; // too small to be a room
+  pushEditorUndo();
+  const z = editorLevel;
+  for (let x = x0; x < x1; x++) for (let y = y0; y < y1; y++)
+    if (!editorPieces.some(p => p.x===x && p.y===y && p.z===z && (p.m==='floor'||p.m==='terrain'))) editorPieces.push({ m:'floor', x, y, z });
+  scAddWallsAround(editorPieces, x0, y0, x1, y1, z, { doors: [{ x: Math.floor((x0+x1-1)/2), y: y1-1, r: 2 }] });
+  editorMaxLevels = Math.max(editorMaxLevels, z + 1, ...editorPieces.map(p => p.z + 1));
+  rebuildEditorWorld();
+}
+function updateRoomGhost(a, b) {
+  clearRoomGhost();
+  const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
+  const w = (x1 - x0 + 1) * editorCell, d = (y1 - y0 + 1) * editorCell, hgt = editorFloorH * VC_STAIR_RISE;
+  const geo = new THREE.BoxGeometry(w, hgt, d);
+  editorRoomGhost = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x4dc0ff }));
+  editorRoomGhost.position.set((x0 + x1) / 2 * editorCell, editorLevel * editorFloorH + hgt / 2, (y0 + y1) / 2 * editorCell);
+  editorWorld.add(editorRoomGhost);
+}
+function clearRoomGhost() {
+  if (editorRoomGhost) { editorWorld.remove(editorRoomGhost); editorRoomGhost = null; }
+}
+// Translucent hologram of the current brush under the cursor (edge pieces snap
+// to the nearest edge; erase shows a red slab over what would be cleared).
+function updateEditorGhost(force) {
+  if (!editorWorld) return;
+  if (editorGhost) { editorWorld.remove(editorGhost); editorGhost = null; }
+  if (!editorHover || editorBrush === 'room') return;
+  const r = (EDITOR_EDGE_BRUSHES.includes(editorBrush) || editorBrush === 'erase') ? editorHover.edgeR : editorRot;
+  let piece;
+  if (editorBrush === 'erase') {
+    editorGhost = new THREE.Mesh(new THREE.BoxGeometry(editorCell, editorFloorH * 0.3, editorCell), scEraseMat());
+    editorGhost.position.set(editorHover.x * editorCell, editorLevel * editorFloorH + editorFloorH * 0.15, editorHover.y * editorCell);
+  } else if (vcIsProp(editorBrush)) {
+    editorGhost = new THREE.Mesh(new THREE.BoxGeometry(editorCell * 0.6, editorFloorH, editorCell * 0.6), scGhostMat());
+    editorGhost.position.set(editorHover.x * editorCell, editorLevel * editorFloorH + editorFloorH / 2, editorHover.y * editorCell);
+  } else {
+    piece = { m: editorBrush, x: editorHover.x, y: editorHover.y, z: editorLevel, r };
+    editorGhost = scBuildPieceMesh(piece, editorTheme, editorCell, editorFloorH, { ghost: true });
+    editorGhost.position.set(editorHover.x * editorCell, editorLevel * editorFloorH, editorHover.y * editorCell);
+  }
+  editorWorld.add(editorGhost);
+}
 
-// Rebuild the editor world from the piece list (cheap for a grid this size, and robust) plus
-// a translucent placement grid at the current build level so you can see where you're working.
-let editorBuildToken = 0;
-async function rebuildEditorWorld() {
-  const myToken = ++editorBuildToken;
+// Rebuild the editor world from the piece list — synchronous geometry via the shared
+// combat renderer, so it's instant on every click. Pieces above the working level
+// fade to holograms; a translucent placement grid marks the level you're building on.
+function rebuildEditorWorld() {
+  if (!editorWorld) return;
   while (editorWorld.children.length) editorWorld.remove(editorWorld.children[0]);
-  const theme = COMBAT_3D_THEMES[editorTheme] || COMBAT_3D_THEMES.arena;
-  // The z=0 floor is drawn as a single themed InstancedMesh over its footprint (per-cell models
-  // would be hundreds of draw calls) so the theme's actual ground colour/material shows — this is
-  // what makes the "Theme" selector visibly change the editor. Everything else goes through the
-  // shared place3DPiece so edge-walls, stairs and slopes look exactly as they will in play.
-  const groundFloor = editorPieces.filter(p => p.m === 'floor' && p.z === 0);
-  if (groundFloor.length) {
-    try {
-      const groundSrc = await cloneModel3D(theme.base + theme.floor);
-      if (myToken !== editorBuildToken) return;
-      const meshes = []; groundSrc.traverse(o => { if (o.isMesh) meshes.push(o); });
-      const gm = meshes[0];
-      if (gm) {
-        const gb = centerAndBox3D(groundSrc);
-        const s = editorCell / (Math.max(gb.size.x, gb.size.z) || 1);
-        const inst = new THREE.InstancedMesh(gm.geometry, gm.material, groundFloor.length);
-        const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(s, s, s), pos = new THREE.Vector3();
-        groundFloor.forEach((p, i) => { pos.set(p.x * editorCell, -gb.box.min.y * s - 0.02, p.y * editorCell); m.compose(pos, q, sc); inst.setMatrixAt(i, m); });
-        inst.instanceMatrix.needsUpdate = true;
-        editorWorld.add(inst);
-      }
-    } catch (err) { console.warn('editor ground failed', err); }
+  editorGhost = null; editorRoomGhost = null;
+  scApplyFog(editorScene, editorW, editorH, editorCell);
+  editorWorld.add(scBuildSurround(editorTheme, editorW, editorH, editorCell));
+  const built = buildStructureGroup({ levels: editorMaxLevels, pieces: editorPieces }, editorTheme, editorCell, editorFloorH, { fadeAboveZ: editorLevel, picks: false });
+  editorWorld.add(built.group);
+  // Props stay GLB — loaded async and slotted in as they arrive (token-guarded).
+  const myToken = ++editorBuildToken;
+  for (const p of built.props) {
+    if (p.z > editorLevel) continue; // hidden above the working level
+    scPlacePropGLB(editorWorld, editorTheme, p, editorCell, editorFloorH)
+      .then(obj => { if (obj && myToken !== editorBuildToken) editorWorld.remove(obj); })
+      .catch(err => console.warn('editor prop failed', p, err));
   }
-  for (const p of editorPieces) {
-    if (myToken !== editorBuildToken) return; // a newer rebuild superseded this one
-    if (p.m === 'floor' && p.z === 0) continue; // covered by the instanced ground above
-    try { await place3DPiece(editorWorld, editorTheme, p, editorCell, editorFloorH, []); }
-    catch (err) { console.warn('editor piece failed', p, err); }
-  }
-  // Placement plane at the current level.
+  // Placement plane + grid at the current level.
   const planeGeo = new THREE.PlaneGeometry(editorW*editorCell, editorH*editorCell);
-  const planeMat = new THREE.MeshBasicMaterial({ color: 0x4dc0ff, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false });
+  const planeMat = new THREE.MeshBasicMaterial({ color: 0x4dc0ff, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false });
   editorPlacePlane = new THREE.Mesh(planeGeo, planeMat);
   editorPlacePlane.rotation.x = -Math.PI/2;
   editorPlacePlane.position.set((editorW-1)*editorCell/2, editorLevel*editorFloorH + 0.04, (editorH-1)*editorCell/2);
   editorWorld.add(editorPlacePlane);
-  editorWorld.add(createGridLines3D(0, editorW, 0, editorH, editorCell, 0x40c8ff).translateY(editorLevel*editorFloorH + 0.05));
+  editorWorld.add(scGridLines(0, editorW, 0, editorH, editorCell, scPalette(editorTheme).grid, 0.45).translateY(editorLevel*editorFloorH + 0.05));
   document.getElementById('me-count').textContent = editorPieces.length;
   refreshEditorLevelLabel();
 }
+let editorBuildToken = 0;
 
 async function saveMapEditorEntry() {
   const name = document.getElementById('mapeditor-name-inp').value.trim();
@@ -4993,8 +5102,9 @@ async function startCombat() {
     state.obstacles = [...core, ...generateExtendedObstacles(preset.w, preset.h, effDensity, core)];
   } else {
     // On-foot combat is a full multi-story structure. A custom Map Editor battlefield uses
-    // its saved pieces; otherwise generate a fresh two-story layout for the theme.
-    state.structure = preset.customStructure || generateStructure(preset.theme3d || 'arena', preset.w, preset.h);
+    // its saved pieces; otherwise every theme gets its HAND-CRAFTED battlefield layout
+    // (designed cover lanes, enterable buildings, catwalks — see js/combat3d-structures.js).
+    state.structure = preset.customStructure || buildHandcraftedMap(preset.theme3d || 'arena', preset.w, preset.h);
   }
   // Cluster every current combatant on standable ground-floor cells near the centre.
   const grid = state.structure ? vcDeriveGrid(state.structure) : null;
@@ -5338,53 +5448,7 @@ async function pickSwitchWeapon(itemId) {
 // and the real `currentTurnWeapon`/`resolveAttack` already defined above.
 // ══════════════════════════════════════════════════════════════════════════
 
-const COMBAT_3D_THEMES = {
-  arena: {
-    base: 'assets/3d/kenney_mini-arena/Models/GLB format/',
-    floor: 'floor.glb',
-    obstacles: ['block.glb', 'column.glb', 'column-damaged.glb', 'tree.glb', 'statue.glb', 'weapon-rack.glb'],
-    fogColor: 0x05070d, skyTop: 0x142a4a,
-  },
-  forest: {
-    base: 'assets/3d/kenney_retro-urban-kit/Models/GLB format/',
-    floor: 'grass.glb',
-    obstacles: ['tree-large.glb', 'tree-shrub.glb'],
-    obstaclesExtra: {
-      base: 'assets/3d/kenney_nature-kit/Models/GLTF format/',
-      items: [
-        'tree_pineTallA.glb', 'tree_pineTallB.glb', 'tree_pineRoundA.glb', 'tree_default.glb', 'tree_oak.glb', 'tree_fat.glb',
-        'tree_pineSmallA.glb', 'tree_pineSmallB.glb', 'tree_thin.glb', 'tree_small.glb', 'tree_tall.glb',
-        'rock_largeA.glb', 'rock_tallA.glb', 'rock_smallA.glb', 'rock_smallB.glb', 'rock_tallC.glb',
-        'log.glb', 'log_stack.glb', 'stump_round.glb', 'stump_old.glb',
-        'mushroom_redGroup.glb', 'mushroom_tanGroup.glb', 'flower_purpleA.glb', 'grass_leafsLarge.glb',
-      ],
-    },
-    fogColor: 0x0a1a0d, skyTop: 0x1c3a24,
-  },
-  town: {
-    base: 'assets/3d/kenney_retro-urban-kit/Models/GLB format/',
-    floor: 'road-asphalt-center.glb',
-    obstacles: [
-      'detail-dumpster-closed.glb', 'detail-dumpster-open.glb', 'detail-barrier-type-a.glb', 'detail-barrier-strong-type-a.glb',
-      'detail-bench.glb', 'detail-light-single.glb', 'pallet.glb', 'pallet-small.glb', 'tree-small.glb',
-      'tree-park-large.glb', 'tree-shrub.glb', 'truck-grey.glb', 'truck-green-cargo.glb', 'wall-a-column.glb',
-    ],
-    fogColor: 0x0d0f16, skyTop: 0x24283a,
-  },
-  dungeon: {
-    base: 'assets/3d/kenney_mini-dungeon/Models/GLB format/',
-    floor: 'floor.glb',
-    obstacles: ['column.glb', 'barrel.glb', 'chest.glb', 'rocks.glb', 'stones.glb', 'wood-structure.glb', 'wood-support.glb', 'wall-half.glb', 'banner.glb'],
-    fogColor: 0x08060a, skyTop: 0x180e1a,
-  },
-  factory: {
-    base: 'assets/3d/kenney_factory-kit_3.0/Models/GLB format/',
-    floor: 'floor.glb',
-    obstacles: ['box-large.glb', 'box-long.glb', 'box-small.glb', 'box-wide.glb', 'machine.glb', 'machine-bed.glb', 'machine-fortified.glb', 'pipe-glass-large-long.glb', 'pipe-glass-large-bend.glb'],
-    fogColor: 0x0a0c10, skyTop: 0x1c2028,
-  },
-};
-const COMBAT_3D_FLOOR_MARGIN = 34; // extra cells of floor sprawling past the battle footprint on every side — kept comfortably beyond the fog's far distance so its edge is never visible
+// COMBAT_3D_THEMES lives in js/combat3d-structures.js (shared with the dev harness).
 // One held prop per weapon archetype (same weapon_type tags as WEAPON_BOLT_COLOR/
 // WEAPON_SFX_FILES) so a combatant's token actually shows what they're carrying instead of
 // only flashing a weapon icon briefly on a hit.
@@ -5420,11 +5484,10 @@ const COMBAT_3D_BUILDINGS = [
 // stair-gated level changes, wall/ceiling-blocked LoS, shooting down through
 // open ledges) before being embedded here — see the // vc* helpers.
 // ══════════════════════════════════════════════════════════════════════════
-const STRUCT_KIT = 'assets/3d/kenney_building-kit/Models/GLB format/'; // universal shell pieces (floors/walls/stairs) used across all themes
-// Walls/windows are EDGE pieces sitting on a cell boundary (r = which of the 4 edges), not
-// full-cell blocks — that's why the Kenney wall assets are thin panels. A building STOREY is
-// STAIR_RISE grid-levels tall (each level is half a tile, giving fine terrain control); a
-// staircase climbs a whole storey, a terrain slope climbs a single half-tile level.
+// Structural pieces render through js/combat3d-structures.js (exact-sized parametric
+// geometry — no GLB fitting). Walls/windows/railings are EDGE pieces (r = which of the 4
+// edges). A building STOREY is STAIR_RISE grid-levels tall (each level is half a tile);
+// stairs climb a whole storey, slopes a single half-tile level, terrain is solid ground.
 const VC_DIR4 = [ [0,-1], [1,0], [0,1], [-1,0] ]; // r: 0 N, 1 E, 2 S, 3 W
 const VC_STAIR_RISE = 2;       // one storey = 2 levels
 const VC_LEVEL_H_CELLS = 0.5;  // each level is half a tile, for 3D distance/AD
@@ -5432,39 +5495,29 @@ function vcKey(x,y,z){ return x+','+y+','+z; }
 function vcIsProp(role){ return role && role.startsWith('prop'); }
 function vcEdgeKey(x,y,z,nx,ny){ return (x<nx||(x===nx&&y<=ny)) ? `${x},${y}|${nx},${ny}|${z}` : `${nx},${ny}|${x},${y}|${z}`; }
 
-// Which model renders a piece, resolved against the active theme. Building SHELL pieces
-// (walls/windows/stairs/upper floors) are one universal kit so structures always look
-// coherent; ground floor, slopes and props vary by theme.
-function structPieceModel(theme, p) {
-  const t = COMBAT_3D_THEMES[theme] || COMBAT_3D_THEMES.arena;
-  if (p.m === 'floor')  return p.z > 0 ? (STRUCT_KIT + 'floor.glb') : (t.base + t.floor);
-  if (p.m === 'wall')   return STRUCT_KIT + 'wall.glb';
-  if (p.m === 'window') return STRUCT_KIT + 'wall-window-square.glb';
-  if (p.m === 'stairs') return STRUCT_KIT + 'stairs-open.glb';
-  if (p.m === 'slope')  return t.slope || 'assets/3d/kenney_prototype-kit/Models/GLB format/shape-slope.glb';
-  if (vcIsProp(p.m)) { const pool = (t.obstacles || ['column.glb']); return t.base + pool[Math.floor(cellHash(p.x, p.y) * 999) % pool.length]; }
-  return STRUCT_KIT + 'floor.glb';
-}
-
 // Derive fast gameplay lookups from a piece list (run once when a battle loads).
 function vcDeriveGrid(structure) {
-  const floor = new Set(), floorCells = new Set(), prop = new Set(), cover = new Set();
+  const floor = new Set(), floorCells = new Set(), prop = new Set(), cover = new Set(), solid = new Set();
   const stairsAt = new Map(), slopeAt = new Map(), edgeMove = new Set(), edgeLoS = new Set();
   for (const p of (structure.pieces || [])) {
     const k = vcKey(p.x, p.y, p.z);
     if (p.m === 'floor') { floor.add(k); floorCells.add(k); }
+    else if (p.m === 'terrain') { // solid raised ground: stand on top, interior blocks shots + standing
+      floor.add(k); floorCells.add(k);
+      for (let zz = 0; zz < p.z; zz++) solid.add(vcKey(p.x, p.y, zz));
+    }
     else if (p.m === 'stairs') { floor.add(k); stairsAt.set(k, { d: VC_DIR4[(p.r||0)%4], rise: VC_STAIR_RISE }); }
     else if (p.m === 'slope')  { floor.add(k); slopeAt.set(k,  { d: VC_DIR4[(p.r||0)%4], rise: 1 }); }
-    else if (p.m === 'wall' || p.m === 'window') {
+    else if (p.m === 'wall' || p.m === 'window' || p.m === 'railing') {
       const [dx,dy] = VC_DIR4[(p.r||0)%4]; const ek = vcEdgeKey(p.x,p.y,p.z,p.x+dx,p.y+dy);
-      edgeMove.add(ek); if (p.m === 'wall') edgeLoS.add(ek);
+      edgeMove.add(ek); if (p.m === 'wall') edgeLoS.add(ek); // windows & railings are see-through
     }
     else if (vcIsProp(p.m)) { prop.add(k); cover.add(k); }
   }
-  const standable = (x,y,z) => floor.has(vcKey(x,y,z)) && !prop.has(vcKey(x,y,z));
+  const standable = (x,y,z) => floor.has(vcKey(x,y,z)) && !prop.has(vcKey(x,y,z)) && !solid.has(vcKey(x,y,z));
   const edgeBlocksMove = (x,y,z,nx,ny) => edgeMove.has(vcEdgeKey(x,y,z,nx,ny));
   const edgeBlocksLoS  = (x,y,z,nx,ny) => edgeLoS.has(vcEdgeKey(x,y,z,nx,ny));
-  return { floor, floorCells, prop, cover, stairsAt, slopeAt, edgeMove, edgeLoS, standable, edgeBlocksMove, edgeBlocksLoS, levels: structure.levels || 1 };
+  return { floor, floorCells, prop, cover, solid, stairsAt, slopeAt, edgeMove, edgeLoS, standable, edgeBlocksMove, edgeBlocksLoS, levels: structure.levels || 1 };
 }
 const VC_DIRS8 = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
 function vcNeighbors(grid, x, y, z) {
@@ -5522,6 +5575,7 @@ function vcLineOfSight(grid, a, b) {
       pcx=cx; pcy=cy;
     }
     if ((cx===a.x&&cy===a.y&&cz===a.z)||(cx===b.x&&cy===b.y&&cz===b.z)) continue;
+    if (grid.solid.has(vcKey(cx,cy,cz))) return false; // inside a terrain block
     if (grid.floorCells.has(vcKey(cx,cy,cz)) && (pz-cz) < VC_FLOOR_SLAB) return false;
   }
   return true;
@@ -5530,96 +5584,19 @@ function vcDist(a, b) { return Math.hypot(a.x-b.x, a.y-b.y, (a.z-b.z)*VC_LEVEL_H
 function vcCover(grid, attacker, target) {
   const sx = Math.sign(target.x-attacker.x), sy = Math.sign(target.y-attacker.y);
   if (grid.prop.has(vcKey(target.x-sx, target.y-sy, target.z))) return true;
+  if (grid.solid.has(vcKey(target.x-sx, target.y-sy, target.z))) return true; // hunkered against a hillside
   if (sx!==0 && grid.edgeBlocksMove(target.x,target.y,target.z,target.x-sx,target.y)) return true;
   if (sy!==0 && grid.edgeBlocksMove(target.x,target.y,target.z,target.x,target.y-sy)) return true;
   return false;
 }
 
-// ── Multi-story battlefield generators — emit combat_state.structure.pieces. Every
-// on-foot preset now has a ground floor, scattered cover, and one-or-more buildings/
-// platforms you can climb via stairs and fight across two levels. ────────────────────
-// Adds perimeter EDGE walls around a rectangular room at level z. Each perimeter cell gets a
-// wall on the edge that faces OUT of the room (so the panels line the boundary, not bisect
-// cells). One edge on each wall run is left open as a doorway; some become see-through windows.
-function genRoomWalls(pieces, x0, y0, x1, y1, z, doorEdge) {
-  // doorEdge: pick one boundary cell+edge to leave open. Encoded as {x,y,r}.
-  const put = (x,y,r) => {
-    if (doorEdge && doorEdge.x===x && doorEdge.y===y && doorEdge.r===r) return; // doorway gap
-    pieces.push({ m: (((x+y+r)%3)===0 ? 'window' : 'wall'), x, y, z, r });
-  };
-  for (let x=x0;x<x1;x++){ put(x, y0, 0); put(x, y1-1, 2); }   // north row / south row edges
-  for (let y=y0;y<y1;y++){ put(x0, y, 3); put(x1-1, y, 1); }   // west col / east col edges
-}
-function genBuilding(pieces, x0, y0, bw, bh, opts) {
-  const x1 = x0+bw, y1 = y0+bh;
-  for (let x=x0;x<x1;x++) for (let y=y0;y<y1;y++) pieces.push({ m:'floor', x, y, z:0 });
-  const doorEdge = { x: x0 + 1 + Math.floor(Math.random()*Math.max(1,bw-2)), y: y1-1, r: 2 }; // a south-facing doorway
-  genRoomWalls(pieces, x0, y0, x1, y1, 0, doorEdge);
-  if (opts.twoStory){
-    // A full storey up (z = STAIR_RISE). The upper floor covers the footprint minus an open
-    // ledge over the stair's landing so the stairwell reads as open. Stairs (rise a storey)
-    // sit at an interior cell facing into the room; you emerge on the upper floor beside them.
-    const uz = VC_STAIR_RISE;
-    const sx = x0+1, sy = y1-2, sr = 0;               // stairs at back-left, ascending north
-    const [dx,dy] = VC_DIR4[sr], lx = sx+dx, ly = sy+dy; // landing cell on the upper floor
-    for (let x=x0;x<x1;x++) for (let y=y0;y<y1;y++){
-      if (x===sx && y===sy) continue;                 // keep the stair shaft head clear (no ceiling over it)
-      pieces.push({ m:'floor', x, y, z:uz });
-    }
-    genRoomWalls(pieces, x0, y0, x1, y1, uz, { x: lx, y: ly, r: (sr+2)%4 }); // an opening by the landing
-    pieces.push({ m:'stairs', x:sx, y:sy, z:0, r:sr });
-  }
-}
-function generateStructure(theme3d, w, h) {
-  const pieces = [];
-  for (let x=0;x<w;x++) for (let y=0;y<h;y++) pieces.push({ m:'floor', x, y, z:0 });
-  const cx = w/2, cy = h/2, clearR = Math.min(w,h)*0.16;
-  const twoStory = theme3d !== 'forest';
-  const buildingCount = theme3d === 'forest' ? 1 : (2 + Math.floor(Math.random()*2));
-  const placed = [];
-  let tries = 0;
-  while (placed.length < buildingCount && tries < 60){
-    tries++;
-    const bw = 4 + Math.floor(Math.random()*3), bh = 4 + Math.floor(Math.random()*3);
-    const x0 = 1 + Math.floor(Math.random()*Math.max(1, w-bw-2)), y0 = 1 + Math.floor(Math.random()*Math.max(1, h-bh-2));
-    const x1 = x0+bw, y1 = y0+bh;
-    if (Math.hypot((x0+x1)/2-cx, (y0+y1)/2-cy) < clearR) continue;
-    if (placed.some(b => x0-2 < b.x1 && x1+2 > b.x0 && y0-2 < b.y1 && y1+2 > b.y0)) continue;
-    placed.push({ x0, y0, x1, y1 });
-    genBuilding(pieces, x0, y0, bw, bh, { twoStory });
-  }
-  const occupied = new Set(pieces.filter(p => p.z===0 && (p.m==='prop'||p.m==='slope'||p.m==='stairs')).map(p=>vcKey(p.x,p.y,0)));
-  const inBuilding = (x,y) => placed.some(b => x>=b.x0 && x<b.x1 && y>=b.y0 && y<b.y1);
-  // A couple of raised terrain mounds (a floor patch one HALF-tile up, reached by slopes on
-  // each approach) for cover + height variation out in the open.
-  const moundCount = theme3d === 'forest' ? 3 : 1;
-  for (let n=0;n<moundCount;n++){
-    const mx = 2 + Math.floor(Math.random()*Math.max(1,w-5)), my = 2 + Math.floor(Math.random()*Math.max(1,h-5));
-    if (Math.hypot(mx+0.5-cx, my+0.5-cy) < clearR || inBuilding(mx,my)) continue;
-    let okm = true; for (let x=mx;x<mx+2;x++) for (let y=my;y<my+2;y++) if (occupied.has(vcKey(x,y,0))||inBuilding(x,y)) okm=false;
-    if (!okm) continue;
-    for (let x=mx;x<mx+2;x++) for (let y=my;y<my+2;y++){ pieces.push({ m:'floor', x, y, z:1 }); occupied.add(vcKey(x,y,0)); }
-    pieces.push({ m:'slope', x:mx, y:my+2, z:0, r:0 });     // slope up from the south
-    pieces.push({ m:'slope', x:mx+1, y:my-1, z:0, r:2 });   // and from the north
-  }
-  // Scatter loose ground cover (props) in the open.
-  const propCount = Math.round(w*h*0.045);
-  for (let n=0;n<propCount;n++){
-    const x = Math.floor(Math.random()*w), y = Math.floor(Math.random()*h), k = vcKey(x,y,0);
-    if (occupied.has(k) || inBuilding(x,y) || Math.hypot(x-cx,y-cy) < clearR) continue;
-    occupied.add(k); pieces.push({ m:'prop', x, y, z:0 });
-  }
-  const levels = pieces.reduce((m,p)=>Math.max(m,p.z+1), 1);
-  return { levels, pieces };
-}
+// Battlefield layouts + room helpers (scAddBuilding etc.) live in js/combat3d-structures.js.
 
 let scene3D = null, camera3D = null, renderer3D = null, controls3D = null, world3D = null;
 let hover3D = null, raf3D = null, cell3D = 2, built3DKey = null, dustParticles3D = null;
 let floorH3D = 3;            // world height of one story, derived from the wall model's bbox at build time
 let combatGrid3D = null;     // vcDeriveGrid() result for the active battle (movement/LoS lookups)
 let floorPick3D = [];        // floor/stairs meshes carrying userData.cell {x,y,z} — click-raycast targets so a click resolves to a cell AND its level
-const STAIR_ROT_OFFSET = Math.PI; // stairs-open.glb ascends toward its local -Z; align that with role r's ascent direction
-const SLOPE_ROT_OFFSET = 0;       // shape-slope.glb ascent direction alignment (tune if slopes face the wrong way)
 
 // A battle's structure — st.structure for new multi-story battles, or a flat one synthesized
 // from the legacy obstacles list so battles saved before schema-v30 still render/play.
@@ -5688,23 +5665,7 @@ function grid3DToWorld(gx, gy) { return new THREE.Vector3(gx * cell3D, 0, gy * c
 function world3DToGrid(x, z) { return { gx: Math.round(x / cell3D), gy: Math.round(z / cell3D) }; }
 function cellKey3D(gx, gy) { return gx + ',' + gy; }
 
-// A LineSegments grid built from scratch at the exact cell spacing, rather than a
-// THREE.GridHelper (which only supports a single square size/division count — no good
-// for an arbitrary w×h battlefield without non-uniformly scaling it out of alignment
-// with the actual floor tiles).
-function createGridLines3D(x0, x1, y0, y1, cell, color) {
-  const pts = [];
-  const zMin = (y0 - 0.5) * cell, zMax = (y1 - 0.5) * cell;
-  for (let gx = x0; gx <= x1; gx++) { const wx = (gx - 0.5) * cell; pts.push(wx, 0, zMin, wx, 0, zMax); }
-  const xMin = (x0 - 0.5) * cell, xMax = (x1 - 0.5) * cell;
-  for (let gy = y0; gy <= y1; gy++) { const wz = (gy - 0.5) * cell; pts.push(xMin, 0, wz, xMax, 0, wz); }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.3 });
-  const grid = new THREE.LineSegments(geo, mat);
-  grid.position.y = 0.02;
-  return grid;
-}
+// Grid lines now come from scGridLines() in js/combat3d-structures.js.
 
 function init3D() {
   if (renderer3D) return;
@@ -5729,11 +5690,14 @@ function init3D() {
   controls3D.minDistance = 4;
   controls3D.maxDistance = 110;
 
-  const hemi = new THREE.HemisphereLight(0x8fb4ff, 0x1a1a22, 0.9);
+  // Daylight rig matched to the dev harness (tuned there by screenshot iteration):
+  // near-neutral sky fill so palette/prop colors stay true, warm low-ish sun for
+  // long readable shadows. Shadow frustum is re-fit to the battlefield per battle.
+  const hemi = new THREE.HemisphereLight(0xe9eef7, 0x57503f, 0.5);
   scene3D.add(hemi);
-  const ambient = new THREE.AmbientLight(0xffffff, 0.35); // fills in shadow-side detail the hemisphere/sun alone leave too dark
+  const ambient = new THREE.AmbientLight(0xffffff, 0.22);
   scene3D.add(ambient);
-  const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+  const sun = new THREE.DirectionalLight(0xfff4e0, 1.5);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.left = -30; sun.shadow.camera.right = 30;
@@ -5947,37 +5911,37 @@ async function build3DEnvironment(st) {
   activeFx3D = []; activeTweens3D = []; activeBursts3D = [];
 
   const themeKey = st.theme3d || (COMBAT_MAPS.outside[st.map] || {}).theme3d || 'arena';
-  const theme = COMBAT_3D_THEMES[themeKey] || COMBAT_3D_THEMES.arena;
-  // Daylight fog so the painted sky reads (dark theme fog would swallow the mountains).
-  scene3D.fog.color.setHex(0xbcd4ea);
-  scene3D.fog.near = 40; scene3D.fog.far = 140;
+  // Fixed world scale: one cell = 2 units, one half-tile level = 1 unit. All structural
+  // geometry is generated to these exact sizes (js/combat3d-structures.js) so nothing
+  // can clip or z-fight, and the checkerboard floor doubles as the tactical grid.
+  cell3D = 2;
+  floorH3D = cell3D * VC_LEVEL_H_CELLS;
+  scApplyFog(scene3D, st.w, st.h, cell3D);
 
   const structure = combatStructure(st);
   combatGrid3D = vcDeriveGrid(structure);
   floorPick3D = [];
 
-  // Cell size from the theme's ground-floor model. One LEVEL is half a tile tall (so a
-  // building storey, VC_STAIR_RISE=2 levels, is a full tile) — this gives fine terrain
-  // control while keeping storeys tall enough to stand in.
-  const groundSrc = await cloneModel3D(theme.base + theme.floor);
-  cell3D = Math.max(centerAndBox3D(groundSrc).size.x, centerAndBox3D(groundSrc).size.z) || 2;
-  floorH3D = cell3D * VC_LEVEL_H_CELLS;
-
-  // A cheap far-out ground plane so the world doesn't end at the battlefield edge — a big
-  // instanced ground extends past the structure and fades into the fog.
-  const groundMeshes = []; groundSrc.traverse(o => { if (o.isMesh) groundMeshes.push(o); });
-  if (groundMeshes[0]) {
-    const gm = groundMeshes[0];
-    const x0 = -COMBAT_3D_FLOOR_MARGIN, x1 = st.w + COMBAT_3D_FLOOR_MARGIN, y0 = -COMBAT_3D_FLOOR_MARGIN, y1 = st.h + COMBAT_3D_FLOOR_MARGIN;
-    const cols = x1 - x0, rows = y1 - y0;
-    const inst = new THREE.InstancedMesh(gm.geometry, gm.material, cols * rows);
-    inst.receiveShadow = true;
-    let i = 0; const m = new THREE.Matrix4();
-    for (let gy = y0; gy < y1; gy++) for (let gx = x0; gx < x1; gx++) { const p = grid3DToWorld(gx, gy); m.makeTranslation(p.x, -0.04, p.z); inst.setMatrixAt(i++, m); }
-    inst.instanceMatrix.needsUpdate = true;
-    world3D.add(inst);
-    world3D.add(createGridLines3D(x0, x1, y0, y1, cell3D, 0x40c8ff));
+  // Refit the sun + shadow frustum to this battlefield (a fixed ±30 box cut shadows
+  // off past half the map). Low-ish warm sun → long readable shadows.
+  const cxW = (st.w - 1) * cell3D / 2, czW = (st.h - 1) * cell3D / 2;
+  const span = Math.max(st.w, st.h) * cell3D / 2 + 10;
+  const sun = scene3D.userData.sun;
+  if (sun) {
+    sun.position.set(cxW + 42, 30, czW + 24);
+    sun.target.position.set(cxW, 0, czW);
+    sun.shadow.camera.left = -span; sun.shadow.camera.right = span;
+    sun.shadow.camera.top = span; sun.shadow.camera.bottom = -span;
+    sun.shadow.camera.updateProjectionMatrix();
   }
+
+  // Themed surround plane + battlefield grid, then the whole structure in one
+  // synchronous pass (exact geometry, instanced floors, click-pick tiles).
+  world3D.add(scBuildSurround(themeKey, st.w, st.h, cell3D));
+  world3D.add(scGridLines(0, st.w, 0, st.h, cell3D, scPalette(themeKey).grid, 0.3));
+  const built = buildStructureGroup(structure, themeKey, cell3D, floorH3D, {});
+  world3D.add(built.group);
+  floorPick3D = built.picks;
 
   const hoverGeo = new THREE.PlaneGeometry(cell3D * 0.92, cell3D * 0.92);
   const hoverMat = new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false });
@@ -5986,135 +5950,17 @@ async function build3DEnvironment(st) {
   hover3D.visible = false;
   world3D.add(hover3D);
 
-  // Render each structure piece at its cell + level. Floors also become the click-raycast
-  // targets (floorPick3D) so movement can resolve which cell AND level was clicked.
-  for (const p of structure.pieces) {
-    try { await render3DPiece(theme, p); }
-    catch (err) { console.warn('3D piece failed to load', p, err); }
+  // Props are the only GLB-loaded pieces (decor/cover — loose fit is fine there).
+  for (const p of built.props) {
+    scPlacePropGLB(world3D, themeKey, p, cell3D, floorH3D).catch(err => console.warn('3D prop failed to load', p, err));
   }
 
   dustParticles3D = createDustParticles3D(st);
 }
 
-// Places one structure piece (floor/wall/window/stairs/prop) into the world at its grid cell
-// and story height. Floors/stairs get a flat pick-plane on top so a click there resolves to
-// that exact cell + level for movement.
-async function render3DPiece(theme, p) {
-  const pos0 = grid3DToWorld(p.x, p.y);
-  // The ground floor (z=0) is already drawn by the big instanced ground plane, so its
-  // hundreds of cells don't each need their own model+draw-call — we only add the invisible
-  // click-pick tile so movement can still target those cells.
-  if (p.m === 'floor' && p.z === 0) {
-    const pick = new THREE.Mesh(new THREE.PlaneGeometry(cell3D, cell3D), new THREE.MeshBasicMaterial({ visible: false }));
-    pick.rotation.x = -Math.PI / 2;
-    pick.position.set(pos0.x, 0.02, pos0.z);
-    pick.userData.cell = { x: p.x, y: p.y, z: 0 };
-    world3D.add(pick); floorPick3D.push(pick);
-    return;
-  }
-  place3DPiece(world3D, theme, p, cell3D, floorH3D, floorPick3D);
-}
-// Shared piece placement (used by both the combat renderer and the map editor). Walls/windows
-// are laid on the cell EDGE given by r; stairs span a full storey; slopes span one half-tile
-// level. Returns nothing; pushes a click-pick tile for standable pieces into `picks`.
-async function place3DPiece(parent, theme, p, cell, floorH, picks) {
-  const obj = await cloneModel3D(structPieceModel(theme, p));
-  const { size, box } = centerAndBox3D(obj);
-  const pos = { x: p.x * cell, z: p.y * cell }; // world x/z from the passed cell size (may be editor's or combat's)
-  const baseY = p.z * floorH;
-  const [dx, dy] = VC_DIR4[(p.r || 0) % 4];
-  if (p.m === 'floor') {
-    const s = cell / (Math.max(size.x, size.z) || 1);
-    obj.scale.setScalar(s); obj.position.set(pos.x, baseY - box.min.y * s, pos.z);
-  } else if (p.m === 'wall' || p.m === 'window') {
-    // Sit the thin panel on the cell boundary in direction r, running along that edge.
-    const s = cell / (Math.max(size.x, size.z) || 1);
-    obj.scale.setScalar(s);
-    obj.position.set(pos.x + dx * cell * 0.5, baseY - box.min.y * s, pos.z + dy * cell * 0.5);
-    obj.rotation.y = ((p.r || 0) % 2 === 0) ? Math.PI / 2 : 0; // N/S edges run E-W, E/W edges run N-S
-  } else if (p.m === 'stairs') {
-    // Rise a full storey (VC_STAIR_RISE levels = one tile) from base cell toward the landing.
-    const sXZ = cell / (Math.max(size.x, size.z) || 1);
-    const sY = (VC_STAIR_RISE * floorH) / (size.y || 1);
-    obj.scale.set(sXZ, sY, sXZ);
-    obj.position.set(pos.x + dx * cell * 0.5, baseY - box.min.y * sY, pos.z + dy * cell * 0.5);
-    obj.rotation.y = (p.r || 0) * -Math.PI / 2 + STAIR_ROT_OFFSET;
-  } else if (p.m === 'slope') {
-    // Rise a single half-tile level.
-    const sXZ = cell / (Math.max(size.x, size.z) || 1);
-    const sY = floorH / (size.y || 1);
-    obj.scale.set(sXZ, sY, sXZ);
-    obj.position.set(pos.x, baseY - box.min.y * sY, pos.z);
-    obj.rotation.y = (p.r || 0) * -Math.PI / 2 + SLOPE_ROT_OFFSET;
-  } else { // prop
-    const s = Math.min(1.6, (cell * 0.8) / (Math.max(size.x, size.z) || 1));
-    obj.scale.setScalar(s); obj.position.set(pos.x, baseY - box.min.y * s, pos.z);
-    obj.rotation.y = cellHash(p.x, p.y + 0.5) * Math.PI * 2;
-  }
-  parent.add(obj);
-  if (picks && (p.m === 'floor' || p.m === 'stairs' || p.m === 'slope')) {
-    const pick = new THREE.Mesh(new THREE.PlaneGeometry(cell, cell), new THREE.MeshBasicMaterial({ visible: false }));
-    pick.rotation.x = -Math.PI / 2;
-    pick.position.set(pos.x, baseY + 0.02, pos.z);
-    pick.userData.cell = { x: p.x, y: p.y, z: p.z };
-    parent.add(pick); picks.push(pick);
-  }
-}
-
 // A soft radial-gradient dot, generated once at runtime (no image asset needed) and reused
 // for every dust mote.
-// Procedural daytime sky panorama (blue gradient + sun glow + clouds + a layered mountain
-// range at the horizon), drawn on a canvas so it needs no image asset. Equirect-mapped onto
-// the sky sphere. Cached and shared by combat + editor.
-let skyTexture3D = null;
-function getSkyTexture3D() {
-  if (skyTexture3D) return skyTexture3D;
-  const W = 2048, H = 1024, c = document.createElement('canvas'); c.width = W; c.height = H;
-  const g = c.getContext('2d');
-  const horizonY = H * 0.55;
-  // sky gradient (zenith deep blue → pale near horizon)
-  const sky = g.createLinearGradient(0, 0, 0, horizonY);
-  sky.addColorStop(0, '#2f6fc0'); sky.addColorStop(0.6, '#6ea6dd'); sky.addColorStop(1, '#cfe6f5');
-  g.fillStyle = sky; g.fillRect(0, 0, W, horizonY);
-  // ground haze below the horizon
-  const gr = g.createLinearGradient(0, horizonY, 0, H);
-  gr.addColorStop(0, '#cdd9c4'); gr.addColorStop(1, '#8fa07e');
-  g.fillStyle = gr; g.fillRect(0, horizonY, W, H - horizonY);
-  // sun glow
-  const sunX = W * 0.72, sunY = horizonY * 0.4;
-  const sun = g.createRadialGradient(sunX, sunY, 0, sunX, sunY, 260);
-  sun.addColorStop(0, 'rgba(255,250,235,0.95)'); sun.addColorStop(0.4, 'rgba(255,244,210,0.4)'); sun.addColorStop(1, 'rgba(255,244,210,0)');
-  g.fillStyle = sun; g.fillRect(0, 0, W, horizonY);
-  // soft clouds
-  g.globalAlpha = 0.5;
-  for (let i = 0; i < 26; i++) {
-    const cxp = Math.random() * W, cyp = Math.random() * horizonY * 0.8, r = 30 + Math.random() * 90;
-    const cl = g.createRadialGradient(cxp, cyp, 0, cxp, cyp, r);
-    cl.addColorStop(0, 'rgba(255,255,255,0.9)'); cl.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = cl; g.beginPath(); g.ellipse(cxp, cyp, r * 1.6, r, 0, 0, Math.PI * 2); g.fill();
-  }
-  g.globalAlpha = 1;
-  // layered mountain ridges near the horizon (far/hazy → near/darker). Each ridge is a
-  // random-walk silhouette of peaks filled down to the bottom of the canvas.
-  const layers = [
-    { col: '#8aa7c4', amp: 90,  base: horizonY - 30, step: 100 },
-    { col: '#6d89a8', amp: 140, base: horizonY + 10, step: 78 },
-    { col: '#566f8c', amp: 200, base: horizonY + 60, step: 60 },
-  ];
-  for (const L of layers) {
-    g.fillStyle = L.col; g.beginPath(); g.moveTo(0, H); g.lineTo(0, L.base);
-    for (let x = 0; x <= W; x += L.step) {
-      const peak = L.base - Math.random() * L.amp;       // jagged peak
-      const mid = L.base - Math.random() * L.amp * 0.4;  // a saddle
-      g.lineTo(x, peak); g.lineTo(x + L.step * 0.5, mid);
-    }
-    g.lineTo(W, L.base); g.lineTo(W, H); g.closePath(); g.fill();
-  }
-  skyTexture3D = new THREE.CanvasTexture(c);
-  skyTexture3D.colorSpace = THREE.sRGBEncoding; skyTexture3D.encoding = THREE.sRGBEncoding;
-  return skyTexture3D;
-}
-
+// getSkyTexture3D() lives in js/combat3d-structures.js (shared with harness + editor).
 let dustTexture3D = null;
 function getDustTexture3D() {
   if (dustTexture3D) return dustTexture3D;

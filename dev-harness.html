@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Battlefield Visual Harness — Starbound Chronicles</title>
+<!-- Dev-only page: renders every hand-crafted battlefield through the exact
+     same shared structure renderer campaign.html uses, with no login needed,
+     so visual issues can be caught by eye (or screenshot) before shipping. -->
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="js/combat3d-structures.js"></script>
+<style>
+  body { margin:0; background:#0a0f18; font-family:system-ui,sans-serif; overflow:hidden; }
+  #bar { position:fixed; top:10px; left:10px; z-index:5; display:flex; gap:6px; }
+  #bar button { padding:6px 14px; border-radius:6px; border:1px solid #35507a; background:#101a2c; color:#cfe0ff; cursor:pointer; font-size:13px; }
+  #bar button.on { background:#1c3a66; border-color:#4dc0ff; color:#fff; }
+  #stat { position:fixed; bottom:10px; left:10px; color:#8fa8cc; font-size:12px; z-index:5; }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+<div id="stat"></div>
+<script>
+const THEMES = ['arena','forest','town','dungeon','factory'];
+let renderer, scene, camera, controls, world;
+const CELL = 2, FLOOR_H = 1;
+
+function init() {
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.body.appendChild(renderer.domElement);
+
+  scene = new THREE.Scene();
+  scApplyFog(scene, 26, 18, CELL);
+
+  camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 900);
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.maxPolarAngle = Math.PI * 0.49;
+
+  scene.add(new THREE.HemisphereLight(0xe9eef7, 0x57503f, 0.5)); // near-neutral sky fill so greens stay green
+  scene.add(new THREE.AmbientLight(0xffffff, 0.22));
+  const sun = new THREE.DirectionalLight(0xfff4e0, 1.5);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.0015;
+  scene.add(sun); scene.add(sun.target);
+  scene.userData.sun = sun;
+
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(400, 32, 20),
+    new THREE.MeshBasicMaterial({ map: getSkyTexture3D(), side: THREE.BackSide, depthWrite: false, fog: false })
+  );
+  scene.add(sky);
+
+  world = new THREE.Group();
+  scene.add(world);
+
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+  tick();
+}
+function tick() { requestAnimationFrame(tick); controls.update(); renderer.render(scene, camera); }
+
+async function show(themeKey) {
+  document.querySelectorAll('#bar button').forEach(b => b.classList.toggle('on', b.dataset.t === themeKey));
+  while (world.children.length) world.remove(world.children[0]);
+  const W = 26, H = 18;
+  const structure = buildHandcraftedMap(themeKey, W, H);
+  const { group, picks, props } = buildStructureGroup(structure, themeKey, CELL, FLOOR_H, {});
+  world.add(group);
+  world.add(scBuildSurround(themeKey, W, H, CELL));
+  world.add(scGridLines(0, W, 0, H, CELL, scPalette(themeKey).grid, 0.3));
+  const sky2 = scene; // fog stays daylight
+  // sun framing over the battlefield
+  const cx = (W - 1) * CELL / 2, cz = (H - 1) * CELL / 2, span = Math.max(W, H) * CELL / 2 + 10;
+  const sun = scene.userData.sun;
+  sun.position.set(cx + 42, 30, cz + 24);
+  sun.target.position.set(cx, 0, cz);
+  sun.shadow.camera.left = -span; sun.shadow.camera.right = span;
+  sun.shadow.camera.top = span; sun.shadow.camera.bottom = -span;
+  sun.shadow.camera.updateProjectionMatrix();
+  camera.position.set(cx, H * CELL * 0.85, cz + H * CELL * 1.05);
+  controls.target.set(cx, 0, cz);
+  controls.update();
+  let loaded = 0, failed = 0;
+  await Promise.all(props.map(p => scPlacePropGLB(world, themeKey, p, CELL, FLOOR_H).then(() => loaded++).catch(e => { failed++; console.warn('prop failed', p, e); })));
+  document.getElementById('stat').textContent =
+    `${themeKey} — ${structure.pieces.length} pieces · ${structure.levels} levels · props ${loaded} ok / ${failed} failed`;
+  window.__ready = true;
+}
+
+const bar = document.getElementById('bar');
+THEMES.forEach(t => {
+  const b = document.createElement('button');
+  b.textContent = t; b.dataset.t = t;
+  b.onclick = () => { window.__ready = false; show(t); };
+  bar.appendChild(b);
+});
+init();
+show(new URLSearchParams(location.search).get('theme') || 'arena');
+</script>
+</body>
+</html>
