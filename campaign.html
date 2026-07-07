@@ -93,6 +93,44 @@
 .combat-cheat-tag { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
 .combat-cheat-chip { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:12px; color:var(--text-dim); }
 .combat-cheat-chip strong { color:#d0e4ff; }
+
+/* ── Active-turn action dock (portrait + stats + action tiles), Baldur's Gate-style ── */
+.bg-dock { display:flex; align-items:stretch; gap:14px; width:100%; }
+.bg-portrait-wrap { position:relative; flex-shrink:0; width:64px; height:64px; }
+.bg-portrait {
+  width:64px; height:64px; border-radius:10px; object-fit:cover; display:block;
+  border:2px solid var(--border2); background:var(--surface2);
+  box-shadow:0 0 0 2px rgba(255,210,58,.35);
+}
+.bg-portrait-fallback {
+  width:64px; height:64px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+  font-size:24px; font-weight:800; color:#fff; border:2px solid var(--border2);
+  box-shadow:0 0 0 2px rgba(255,210,58,.35);
+}
+.bg-portrait-hp { position:absolute; left:2px; right:2px; bottom:-6px; height:6px; border-radius:3px; background:rgba(0,0,0,.6); border:1px solid rgba(255,255,255,.15); overflow:hidden; }
+.bg-portrait-hp-fill { height:100%; background:#4acc7a; transition:width .3s ease; }
+.bg-stats { display:flex; flex-direction:column; gap:5px; justify-content:center; min-width:150px; }
+.bg-name { font-size:14px; font-weight:800; color:#e0ecff; letter-spacing:.02em; }
+.bg-stat-row { display:flex; gap:8px; flex-wrap:wrap; }
+.bg-stat { font-size:11px; color:var(--text-dim); background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:3px 8px; white-space:nowrap; }
+.bg-stat strong { color:#d0e4ff; }
+.bg-stat.bg-stat-move strong { color:#7dffb8; }
+.bg-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1; justify-content:center; }
+.bg-action-tile {
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  width:56px; height:52px; border-radius:8px; border:1px solid var(--border2); background:var(--surface2);
+  color:var(--text-dim); cursor:pointer; transition:all .12s; font-size:19px;
+}
+.bg-action-tile span { font-size:9.5px; font-weight:700; letter-spacing:.02em; text-transform:uppercase; color:var(--text-faint); }
+.bg-action-tile:hover:not(:disabled) { border-color:var(--accent); color:#fff; background:var(--surface3); transform:translateY(-2px); }
+.bg-action-tile:disabled { opacity:.35; cursor:not-allowed; }
+.bg-end { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.bg-info-btn { font-size:13px; padding:6px 11px; border-radius:50%; }
+.bg-end-turn {
+  font-size:12px; font-weight:700; padding:10px 18px; border-radius:8px;
+  background:linear-gradient(135deg, #3a2a10, #1a1006); border:1px solid #ffd23a; color:#ffe9a8;
+}
+.bg-end-turn:hover { box-shadow:0 0 12px rgba(255,210,58,.4); }
 .combat-shield-ctl { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
 .combat-shield-ctl input { width:56px; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:5px 7px; font-size:12px; }
 
@@ -780,6 +818,14 @@
       <div class="form-group">
         <label class="form-label">Battlefield</label>
         <div id="combat-map-picker" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px;"></div>
+      </div>
+      <div class="form-group" id="combat-density-group">
+        <label class="form-label">Prop Density</label>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn-ghost combat-density-btn" data-density="0.6" onclick="selectCombatDensity(0.6)" style="flex:1; padding:8px;">Sparse</button>
+          <button type="button" class="btn-ghost combat-density-btn active" data-density="1" onclick="selectCombatDensity(1)" style="flex:1; padding:8px;">Normal</button>
+          <button type="button" class="btn-ghost combat-density-btn" data-density="1.6" onclick="selectCombatDensity(1.6)" style="flex:1; padding:8px;">Dense</button>
+        </div>
       </div>
       <p style="font-size:11px; color:var(--text-faint); margin:0;">Every combatant currently in the Initiative tracker becomes a token, clustered at the centre — drag them into position once the battle opens. Add enemies to Initiative first if you haven't. On-foot battlefields are randomly scattered with terrain fresh each time.</p>
       <div class="form-error" id="combat-error"></div>
@@ -4112,7 +4158,7 @@ const COMBAT_MAPS = {
   // battlefield when on-foot combat now runs in the Three.js viewer instead of
   // the flat 2D tileset — purely a visual pick, doesn't change w/h/density/obstacles.
   outside: {
-    open:     { label:'Open Plain',   w:26, h:18, biome:'grass',  density:0,    theme3d:'forest' },
+    open:     { label:'Open Plain',   w:26, h:18, biome:'grass',  density:0.035, theme3d:'forest' },
     canyon:   { label:'Rocky Canyon', w:26, h:18, biome:'rocky',  density:0.16, theme3d:'dungeon' },
     ruins:    { label:'Ruins',        w:26, h:18, biome:'rocky',  density:0.11, theme3d:'town' },
     desert:   { label:'Desert Wastes',w:26, h:18, biome:'desert', density:0.06, theme3d:'arena' },
@@ -4199,10 +4245,44 @@ function generateObstacles(w, h, density) {
     const x = Math.floor(Math.random() * w), y = Math.floor(Math.random() * h);
     const key = x + ',' + y;
     if (seen.has(key) || Math.hypot(x - cx, y - cy) < clearR) continue;
+    // Thin out tight clusters — a prop sitting directly against another reads as "asset
+    // spam" clutter rather than a deliberately placed obstacle, especially once density
+    // climbs above ~0.1. Skip most (not all) candidates that are already touching an
+    // existing pick so scattered terrain reads as individual features, not a solid clump.
+    const crowded = seen.has((x-1)+','+y) || seen.has((x+1)+','+y) || seen.has(x+','+(y-1)) || seen.has(x+','+(y+1));
+    if (crowded && Math.random() < 0.75) continue;
     seen.add(key);
     obstacles.push([x, y]);
   }
   return obstacles;
+}
+
+// Building-style clustered generation for the Town theme: scattering small independent
+// props at Town's density read as street clutter, not a town — this places a handful of
+// rectangular building footprints (2-4 cells per side) with a guaranteed street gap
+// between them instead. Returns the same flat blocked-cell list every other obstacle
+// consumer already expects (distanceAD cover checks, movement blocking, 3D per-cell
+// fallback rendering) PLUS the raw footprint rectangles, so the 3D renderer can place one
+// whole building model per footprint instead of tiling small props across it.
+function generateClusteredObstacles(w, h, density) {
+  if (!density) return { obstacles: [], buildings: [] };
+  const buildings = [];
+  const obstacles = [];
+  const cx = w / 2, cy = h / 2, clearR = Math.min(w, h) * 0.16;
+  const targetCells = Math.round(w * h * density);
+  let placedCells = 0, tries = 0;
+  while (placedCells < targetCells && tries < 300) {
+    tries++;
+    const bw = 2 + Math.floor(Math.random() * 3), bh = 2 + Math.floor(Math.random() * 3);
+    const x0 = Math.floor(Math.random() * Math.max(1, w - bw)), y0 = Math.floor(Math.random() * Math.max(1, h - bh));
+    const x1 = x0 + bw, y1 = y0 + bh;
+    if (Math.hypot((x0 + x1) / 2 - cx, (y0 + y1) / 2 - cy) < clearR) continue;
+    const overlaps = buildings.some(b => x0 - 1 < b.x1 && x1 + 1 > b.x0 && y0 - 1 < b.y1 && y1 + 1 > b.y0);
+    if (overlaps) continue;
+    buildings.push({ x0, y0, x1, y1 });
+    for (let gy = y0; gy < y1; gy++) for (let gx = x0; gx < x1; gx++) { obstacles.push([gx, gy]); placedCells++; }
+  }
+  return { obstacles, buildings };
 }
 
 // The camera is boundless, but obstacles used to only ever exist inside the original w x h
@@ -4227,6 +4307,8 @@ function generateExtendedObstacles(w, h, density, existingObstacles) {
     if (x >= 0 && x < w && y >= 0 && y < h) continue; // stays outside the original footprint
     const key = x + ',' + y;
     if (seen.has(key)) continue;
+    const crowded = seen.has((x-1)+','+y) || seen.has((x+1)+','+y) || seen.has(x+','+(y-1)) || seen.has(x+','+(y+1));
+    if (crowded && Math.random() < 0.75) continue;
     seen.add(key);
     obstacles.push([x, y]);
   }
@@ -4235,11 +4317,13 @@ function generateExtendedObstacles(w, h, density, existingObstacles) {
 
 function combatState() { return campaign?.combat_state || { active:false }; }
 
-let selectedCombatType = 'outside', selectedCombatMap = 'open';
+let selectedCombatType = 'outside', selectedCombatMap = 'open', selectedCombatDensity = 1;
 function openStartCombat() {
   if (!isGM) return;
-  selectedCombatType = 'outside'; selectedCombatMap = 'open';
+  selectedCombatType = 'outside'; selectedCombatMap = 'open'; selectedCombatDensity = 1;
   document.querySelectorAll('.combat-type-btn').forEach(b => b.classList.toggle('active', b.dataset.ctype === 'outside'));
+  document.querySelectorAll('.combat-density-btn').forEach(b => b.classList.toggle('active', b.dataset.density === '1'));
+  document.getElementById('combat-density-group').style.display = '';
   renderMapPicker();
   showError('combat-error','');
   openModal('modal-start-combat');
@@ -4247,7 +4331,13 @@ function openStartCombat() {
 function selectCombatType(t) {
   selectedCombatType = t; selectedCombatMap = 'open';
   document.querySelectorAll('.combat-type-btn').forEach(b => b.classList.toggle('active', b.dataset.ctype === t));
+  // Density only applies to on-foot's procedural scatter — space maps use fixed, hand-placed layouts.
+  document.getElementById('combat-density-group').style.display = t === 'outside' ? '' : 'none';
   renderMapPicker();
+}
+function selectCombatDensity(mult) {
+  selectedCombatDensity = mult;
+  document.querySelectorAll('.combat-density-btn').forEach(b => b.classList.toggle('active', +b.dataset.density === mult));
 }
 function renderMapPicker() {
   const maps = COMBAT_MAPS[selectedCombatType];
@@ -4263,14 +4353,26 @@ async function startCombat() {
   if (!isGM) return;
   const preset = COMBAT_MAPS[selectedCombatType][selectedCombatMap];
   // Space maps use their fixed hand-placed layout; outside maps get a fresh random scatter
-  // every time, so the same "Rocky Canyon" pick never looks identical twice. Either way,
-  // an extended ring of hazards gets added beyond the original footprint for the boundless
-  // camera (see generateExtendedObstacles).
-  const coreObstacles = selectedCombatType === 'space' ? preset.obstacles : generateObstacles(preset.w, preset.h, preset.density);
-  const obstacles = [...coreObstacles, ...generateExtendedObstacles(preset.w, preset.h, preset.density, coreObstacles)];
+  // every time (scaled by the GM's chosen Prop Density), so the same "Rocky Canyon" pick
+  // never looks identical twice. Either way, an extended ring of hazards gets added beyond
+  // the original footprint for the boundless camera (see generateExtendedObstacles). Town
+  // gets a different generator entirely — rectangular building footprints with street gaps,
+  // not scattered single-cell props, so the 3D renderer can place whole building models.
+  const effDensity = selectedCombatType === 'outside' ? (preset.density || 0) * selectedCombatDensity : preset.density;
+  let coreObstacles, buildings = null;
+  if (selectedCombatType === 'space') {
+    coreObstacles = preset.obstacles;
+  } else if (preset.theme3d === 'town') {
+    const gen = generateClusteredObstacles(preset.w, preset.h, effDensity);
+    coreObstacles = gen.obstacles; buildings = gen.buildings;
+  } else {
+    coreObstacles = generateObstacles(preset.w, preset.h, effDensity);
+  }
+  const obstacles = [...coreObstacles, ...generateExtendedObstacles(preset.w, preset.h, effDensity, coreObstacles)];
   const state = {
     active: true, type: selectedCombatType, map: selectedCombatMap,
     w: preset.w, h: preset.h, obstacles, biome: preset.biome || null, activeTurn: 0,
+    buildings: buildings || undefined,
   };
   // Cluster every current combatant near the centre so the GM can drag them out.
   const cx = Math.floor(preset.w / 2), cy = Math.floor(preset.h / 2);
@@ -4377,23 +4479,43 @@ async function renderCheatSheet(c) {
 
   const targets = combatants.filter(x => x.id !== c.id);
   const targetOptions = targets.map(t => `<option value="${t.id}">${esc(t.combatant)}</option>`).join('');
-  const actionsHtml = canAct ? `
-    <div class="combat-cheat-chip" style="display:flex; align-items:center; gap:6px;">
-      <select class="form-select" id="combat-target-sel" style="font-size:11px; padding:4px 8px; width:auto;">${targetOptions || '<option value="">No targets</option>'}</select>
-      <button class="btn-secondary" style="font-size:11px; padding:5px 10px;" ${turnActionState.coreActionUsed || !targets.length || !currentTurnWeapon ? 'disabled' : ''} onclick="resolveAttack('${c.id}')">⚔ Attack</button>
-      <button class="btn-ghost" style="font-size:11px; padding:5px 10px;" ${turnActionState.coreActionUsed ? 'disabled' : ''} onclick="performDash('${c.id}')">🏃 Dash</button>
-      ${c.character_id ? `<button class="btn-ghost" style="font-size:11px; padding:5px 10px;" ${turnActionState.coreActionUsed ? 'disabled' : ''} onclick="openSwitchWeapon('${c.id}')">🔄 Switch</button>` : ''}
-    </div>` : '';
+
+  // Portrait: the combatant's actual character art when linked to one (same helper the 3D
+  // tokens use), otherwise a colored monogram tile matching the same NPC/player convention.
+  const portraitPath = c.characters?.species ? characterPortraitPath(c.characters.species, c.characters.appearance, c.characters.custom_portrait_url) : null;
+  const tileColor = c.token_color || (c.is_npc ? '#c84040' : '#3a78d4');
+  const portraitHtml = portraitPath
+    ? `<img class="bg-portrait" src="${portraitPath}" alt="" onerror="this.outerHTML='<div class=&quot;bg-portrait-fallback&quot; style=&quot;background:${tileColor}&quot;>${esc((c.combatant || '?')[0].toUpperCase())}</div>'">`
+    : `<div class="bg-portrait-fallback" style="background:${tileColor};">${esc((c.combatant || '?')[0].toUpperCase())}</div>`;
+  const hpPct = c.hp_max ? Math.max(0, Math.min(1, (c.hp_current ?? 0) / c.hp_max)) * 100 : 100;
+
+  const actionTilesHtml = canAct ? `
+    <select class="form-select" id="combat-target-sel" style="font-size:11px; padding:6px 8px; width:auto; max-width:130px;" title="Attack target">${targetOptions || '<option value="">No targets</option>'}</select>
+    <button class="bg-action-tile" title="Attack" ${turnActionState.coreActionUsed || !targets.length || !currentTurnWeapon ? 'disabled' : ''} onclick="resolveAttack('${c.id}')">⚔<span>Attack</span></button>
+    <button class="bg-action-tile" title="Dash (extra movement)" ${turnActionState.coreActionUsed ? 'disabled' : ''} onclick="performDash('${c.id}')">🏃<span>Dash</span></button>
+    ${c.character_id ? `<button class="bg-action-tile" title="Switch weapon" ${turnActionState.coreActionUsed ? 'disabled' : ''} onclick="openSwitchWeapon('${c.id}')">🔄<span>Switch</span></button>` : ''}` : '';
 
   cheat.innerHTML = `
-    <div><div class="combat-cheat-tag">Active Turn</div><div class="combat-cheat-name">${esc(c.combatant)}</div></div>
-    <div class="combat-cheat-chip">Move: <strong>${turnActionState.remainingMove}/${mv} squares</strong> left</div>
-    <div class="combat-cheat-chip">Base AD: <strong>${c.base_ad ?? 8}</strong></div>
-    <div class="combat-cheat-chip">To-hit: d20 ${(c.fight_mod??0)>=0?'+':''}${c.fight_mod??0} FIGHT</div>
-    ${weaponHtml}
-    ${actionsHtml}
-    <button class="btn-ghost" title="How does a turn work?" onclick="openTurnHelp()" style="font-size:12px; padding:5px 10px; border-radius:50%; margin-left:${(isGM||canAct)?'8px':'auto'};">ⓘ</button>
-    ${(isGM || canAct) ? `<button class="btn-secondary" style="font-size:11px; padding:5px 12px;" onclick="confirmEndTurn()">End Turn ▸</button>` : ''}`;
+    <div class="bg-dock">
+      <div class="bg-portrait-wrap">
+        ${portraitHtml}
+        <div class="bg-portrait-hp"><div class="bg-portrait-hp-fill" style="width:${hpPct}%; background:${hpPct>50?'#4acc7a':hpPct>25?'#d4af37':'#cc4444'};"></div></div>
+      </div>
+      <div class="bg-stats">
+        <div class="bg-name">${esc(c.combatant)}</div>
+        <div class="bg-stat-row">
+          <span class="bg-stat bg-stat-move" title="Squares of movement left this turn">🥾 <strong>${turnActionState.remainingMove}/${mv}</strong></span>
+          <span class="bg-stat" title="Base AD (armor difficulty to be hit)">🛡 AD <strong>${c.base_ad ?? 8}</strong></span>
+          <span class="bg-stat" title="To-hit modifier">🎯 d20${(c.fight_mod??0)>=0?'+':''}${c.fight_mod??0}</span>
+        </div>
+        ${weaponHtml}
+      </div>
+      <div class="bg-actions">${actionTilesHtml}</div>
+      <div class="bg-end">
+        <button class="btn-ghost bg-info-btn" title="How does a turn work?" onclick="openTurnHelp()">ⓘ</button>
+        ${(isGM || canAct) ? `<button class="bg-end-turn" onclick="confirmEndTurn()">End Turn ▸</button>` : ''}
+      </div>
+    </div>`;
 }
 
 function openTurnHelp() { openModal('modal-turn-help'); }
@@ -4446,7 +4568,8 @@ async function resolveAttack(attackerId) {
     if (tc) { targetArmor = tc.armor ?? 0; targetHpCurrent = tc.hp_current ?? 0; targetHpMax = tc.hp_max ?? targetHpMax; }
   }
 
-  const totalAD = (target.base_ad ?? 8) + distanceAD(meters) + (hasCover ? COVER_AD : 0);
+  const baseAD = target.base_ad ?? 8, rangeAD = distanceAD(meters), coverAD = hasCover ? COVER_AD : 0;
+  const totalAD = baseAD + rangeAD + coverAD;
   const roll = Math.floor(Math.random()*20) + 1;
   const toHitTotal = roll + (attacker.fight_mod ?? 0) + (weapon.accuracy_mod ?? 0);
   const hit = toHitTotal >= totalAD;
@@ -4468,7 +4591,7 @@ async function resolveAttack(attackerId) {
   const combatFx = {
     attackerX: attacker.grid_x, attackerY: attacker.grid_y,
     targetX: target.grid_x, targetY: target.grid_y, weaponType: weapon.weapon_type,
-    roll, toHitTotal, totalAD, hit, hasCover,
+    roll, toHitTotal, totalAD, hit, hasCover, baseAD, rangeAD, coverAD,
     weaponIconPath: weapon.icon_path || null,
     dmgResult, armor: targetArmor, finalDmg: dmg,
   };
@@ -4584,6 +4707,31 @@ const COMBAT_3D_THEMES = {
   },
 };
 const COMBAT_3D_FLOOR_MARGIN = 22; // extra cells of floor sprawling past the battle footprint on every side
+// One held prop per weapon archetype (same weapon_type tags as WEAPON_BOLT_COLOR/
+// WEAPON_SFX_FILES) so a combatant's token actually shows what they're carrying instead of
+// only flashing a weapon icon briefly on a hit.
+const WEAPON_3D_PROP = {
+  pistol: 'assets/3d/kenney_blaster-kit_2.1/Models/GLB format/blaster-a.glb',
+  smg: 'assets/3d/kenney_blaster-kit_2.1/Models/GLB format/blaster-e.glb',
+  carbine: 'assets/3d/kenney_blaster-kit_2.1/Models/GLB format/blaster-g.glb',
+  rifle: 'assets/3d/kenney_blaster-kit_2.1/Models/GLB format/blaster-h.glb',
+  shotgun: 'assets/3d/kenney_blaster-kit_2.1/Models/GLB format/blaster-k.glb',
+  sniper: 'assets/3d/kenney_blaster-kit_2.1/Models/GLB format/blaster-m.glb',
+  heavy: 'assets/3d/kenney_blaster-kit_2.1/Models/GLB format/blaster-q.glb',
+  melee: 'assets/3d/kenney_mini-arena/Models/GLB format/weapon-sword.glb',
+};
+// Whole pre-built structures (not modular wall-by-wall assembly) used to fill each Town
+// building footprint from generateClusteredObstacles — one of these per footprint, scaled
+// non-uniformly to fit, instead of tiling small street props across the whole block.
+const COMBAT_3D_BUILDINGS = [
+  'assets/3d/kenney_modular-buildings/Models/GLB format/building-sample-house-a.glb',
+  'assets/3d/kenney_modular-buildings/Models/GLB format/building-sample-house-b.glb',
+  'assets/3d/kenney_modular-buildings/Models/GLB format/building-sample-house-c.glb',
+  'assets/3d/kenney_modular-buildings/Models/GLB format/building-sample-tower-a.glb',
+  'assets/3d/kenney_modular-buildings/Models/GLB format/building-sample-tower-b.glb',
+  'assets/3d/kenney_modular-buildings/Models/GLB format/building-sample-tower-c.glb',
+  'assets/3d/kenney_modular-buildings/Models/GLB format/building-sample-tower-d.glb',
+];
 
 let scene3D = null, camera3D = null, renderer3D = null, controls3D = null, world3D = null;
 let hover3D = null, raf3D = null, cell3D = 2, built3DKey = null;
@@ -4780,6 +4928,7 @@ async function move3DToken(tok, gx, gy) {
   if (isActiveToken) { turnActionState.remainingMove -= moveCells; renderCheatSheet(tok); }
   const entry = token3DIndex.get(tok.id);
   if (entry) animate3DMove(entry, gx, gy);
+  updateMoveRangeHighlight();
 }
 function animate3DMove(entry, gx, gy) {
   entry.gx = gx; entry.gy = gy;
@@ -4798,6 +4947,40 @@ function select3DToken(id) {
   token3DIndex.forEach((entry, tid) => {
     entry.ring.scale.setScalar(tid === id ? 1.35 : 1);
   });
+  updateMoveRangeHighlight();
+}
+
+// A translucent tile per cell the selected token could still walk to this turn — "how far
+// can they currently move" made as visually obvious as a chess/tactics game's move-range
+// highlight, instead of only the small text readout in the action bar. Only shows for the
+// combatant whose turn it actually is (not just whoever's selected) and only to whoever's
+// allowed to move them, and shrinks live as remainingMove is spent.
+let moveRangeGroup = null;
+function updateMoveRangeHighlight() {
+  if (moveRangeGroup) { world3D.remove(moveRangeGroup); moveRangeGroup = null; }
+  const active = combatants[activeTurn % (combatants.length || 1)];
+  if (!active || selected3DId !== active.id || active.grid_x == null) return;
+  if (!isGM && active.character_id !== myCharacterId) return;
+  const reach = turnActionState.remainingMove;
+  if (reach <= 0) return;
+  const st = combatState();
+  moveRangeGroup = new THREE.Group();
+  const geo = new THREE.PlaneGeometry(cell3D * 0.88, cell3D * 0.88);
+  for (let dy = -reach; dy <= reach; dy++) {
+    for (let dx = -reach; dx <= reach; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      if (Math.abs(dx) + Math.abs(dy) > reach) continue;
+      const gx = active.grid_x + dx, gy = active.grid_y + dy;
+      if ((st.obstacles || []).some(o => o[0] === gx && o[1] === gy)) continue;
+      const mat = new THREE.MeshBasicMaterial({ color: 0x4dff9e, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false });
+      const tile = new THREE.Mesh(geo, mat);
+      tile.rotation.x = -Math.PI / 2;
+      const pos = grid3DToWorld(gx, gy);
+      tile.position.set(pos.x, 0.028, pos.z);
+      moveRangeGroup.add(tile);
+    }
+  }
+  world3D.add(moveRangeGroup);
 }
 
 // Builds (or rebuilds, if the battlefield fingerprint changed) the floor/grid/obstacles,
@@ -4829,7 +5012,7 @@ async function build3DCombatMap(st) {
 
 async function build3DEnvironment(st) {
   while (world3D.children.length) world3D.remove(world3D.children[0]);
-  token3DIndex.clear(); selected3DId = null;
+  token3DIndex.clear(); selected3DId = null; moveRangeGroup = null; lastAutoSelected3DTurnId = null;
   document.getElementById('combat-3d-fx-layer').innerHTML = '';
   activeFx3D = []; activeTweens3D = []; activeBursts3D = [];
 
@@ -4869,13 +5052,36 @@ async function build3DEnvironment(st) {
   hover3D.visible = false;
   world3D.add(hover3D);
 
-  // Obstacles are drawn EXACTLY at the real, shared combat_state.obstacles cells (same
-  // data every client's 2D map also reads) — deterministic per-cell prop pick via the
-  // existing cellHash() so the same cell always renders the same prop, but no invented
-  // decorative obstacles beyond what's actually blocking movement.
+  // Town footprints get ONE whole building model each (scaled non-uniformly to fit,
+  // rotation snapped to 90° so the non-uniform scale doesn't shear it visually) instead of
+  // tiling small street props across the block — this is the actual fix for "asset spam":
+  // a real building silhouette reads as a town, a dozen barrels scattered in a grid doesn't.
+  const buildingCells = new Set();
+  for (const b of (st.buildings || [])) {
+    const pick = COMBAT_3D_BUILDINGS[Math.floor(cellHash(b.x0, b.y0) * 999) % COMBAT_3D_BUILDINGS.length];
+    try {
+      const obj = await cloneModel3D(pick);
+      const { size } = centerAndBox3D(obj);
+      const footW = (b.x1 - b.x0) * cell3D, footD = (b.y1 - b.y0) * cell3D;
+      const scaleX = footW / (size.x || 1), scaleZ = footD / (size.z || 1);
+      obj.scale.set(scaleX, (scaleX + scaleZ) / 2, scaleZ);
+      const pos = grid3DToWorld((b.x0 + b.x1 - 1) / 2, (b.y0 + b.y1 - 1) / 2);
+      obj.position.set(pos.x, 0, pos.z);
+      obj.rotation.y = Math.floor(cellHash(b.x0, b.y1) * 4) * (Math.PI / 2);
+      world3D.add(obj);
+      for (let gy = b.y0; gy < b.y1; gy++) for (let gx = b.x0; gx < b.x1; gx++) buildingCells.add(gx + ',' + gy);
+    } catch (err) { console.warn('3D building failed to load', pick, err); }
+  }
+
+  // Everything else — obstacle cells NOT already covered by a building footprint (the
+  // extended sprawl ring beyond the core battlefield, or any non-Town theme) — draws real
+  // per-cell prop art exactly at the shared combat_state.obstacles cells (same data every
+  // client's math also reads), deterministic per cell via cellHash() so the same cell
+  // always renders the same prop.
   const pool = theme.obstacles.map(o => ({ base: theme.base, name: o }));
   if (theme.obstaclesExtra) theme.obstaclesExtra.items.forEach(o => pool.push({ base: theme.obstaclesExtra.base, name: o }));
   for (const [ox, oy] of (st.obstacles || [])) {
+    if (buildingCells.has(ox + ',' + oy)) continue;
     const pick = pool[Math.floor(cellHash(ox, oy) * 999) % pool.length];
     try {
       const obj = await cloneModel3D(pick.base + pick.name);
@@ -4910,7 +5116,18 @@ async function sync3DTokens(st) {
     const isActive = active && active.id === id;
     entry.ring.material.color.setHex(id === selected3DId ? 0xffd23a : isActive ? 0xffd23a : entry.baseColor);
   });
+
+  // Auto-select whoever's turn it is (if you're actually allowed to move them) the moment
+  // the turn changes, so the movement-range highlight below appears without an extra click
+  // — but only on a genuine turn change, not every routine sync, so it doesn't fight a GM
+  // who's mid-repositioning some OTHER token when an unrelated realtime update lands.
+  if (active && active.id !== lastAutoSelected3DTurnId) {
+    lastAutoSelected3DTurnId = active.id;
+    if (isGM || active.character_id === myCharacterId) { select3DToken(active.id); return; }
+  }
+  updateMoveRangeHighlight();
 }
+let lastAutoSelected3DTurnId = null;
 
 async function create3DToken(c) {
   const pos = grid3DToWorld(c.grid_x, c.grid_y);
@@ -4944,6 +5161,30 @@ async function create3DToken(c) {
   ring.position.y = 0.025;
   group.add(ring);
 
+  // Held weapon prop — actually shown on the token at all times (not just flashed briefly
+  // on a hit), so a combatant visibly carries what they're equipped with. Anchored at a
+  // fixed hip-height offset that also doubles as the muzzle point attack FX fires from.
+  let weaponType = null, muzzleOffset = new THREE.Vector3(cell3D * 0.35, cell3D * 0.42, cell3D * 0.1);
+  if (c.character_id) {
+    try {
+      const { data: w } = await db.from('character_inventory').select('weapon_type')
+        .eq('character_id', c.character_id).eq('is_equipped', true).eq('item_type', 'weapon').limit(1).maybeSingle();
+      weaponType = w?.weapon_type || null;
+    } catch (err) { /* no equipped weapon on record — token just won't hold a prop */ }
+  }
+  const propPath = WEAPON_3D_PROP[weaponType];
+  if (propPath) {
+    try {
+      const prop = await cloneModel3D(propPath);
+      const { size } = centerAndBox3D(prop);
+      const scale = (cell3D * 0.4) / (Math.max(size.x, size.y, size.z) || 1);
+      prop.scale.setScalar(scale);
+      prop.position.copy(muzzleOffset);
+      prop.rotation.y = Math.PI / 4;
+      group.add(prop);
+    } catch (err) { console.warn('token weapon prop failed to load', propPath, err); }
+  }
+
   world3D.add(group);
 
   const label = document.createElement('div');
@@ -4951,9 +5192,15 @@ async function create3DToken(c) {
   label.innerHTML = `<div class="name3d"></div><div class="hp3d-track"><div class="hp3d-fill"></div></div>`;
   document.getElementById('combat-3d-fx-layer').appendChild(label);
 
-  const entry = { group, plane, ring, label, hpFill: label.querySelector('.hp3d-fill'), gx: c.grid_x, gy: c.grid_y, baseColor: baseColorHex };
+  const entry = { group, plane, ring, label, hpFill: label.querySelector('.hp3d-fill'), gx: c.grid_x, gy: c.grid_y, baseColor: baseColorHex, muzzleOffset };
   token3DIndex.set(c.id, entry);
   return entry;
+}
+// Finds the token whose current grid cell matches — used by the attack FX to find the
+// attacker's muzzle position, since the combat_fx payload only carries grid coordinates.
+function find3DTokenAt(gx, gy) {
+  for (const entry of token3DIndex.values()) if (entry.gx === gx && entry.gy === gy) return entry;
+  return null;
 }
 function updateHpBar3D(entry, c) {
   const pct = c.hp_max ? Math.max(0, Math.min(1, (c.hp_current ?? 0) / c.hp_max)) * 100 : 100;
@@ -5015,7 +5262,7 @@ function spawnBurst3D(pos, color, big) {
   mesh.scale.setScalar(0.15);
   world3D.add(mesh);
   const t0 = performance.now(); const dur = 480; const peak = big ? 1.6 : 1.0;
-  activeBursts3D.push({ mesh, t0, dur, peak });
+  activeBursts3D.push({ mesh, t0, dur, peak, baseScale: 0.15, maxOpacity: 0.9 });
   setTimeout(() => world3D.remove(mesh), dur + 30);
 }
 function spawnFxChip3D(worldPos, className, html, life, yOffsetCells) {
@@ -5044,30 +5291,42 @@ function spinDiceChip3D(entry, finalValue, duration, intervalMs) {
   });
 }
 
-async function playAttackFx3D({ attackerX, attackerY, targetX, targetY, weaponType, roll, toHitTotal, totalAD, hit, hasCover, weaponIconPath, dmgResult, armor, finalDmg }) {
+async function playAttackFx3D({ attackerX, attackerY, targetX, targetY, weaponType, roll, toHitTotal, totalAD, hit, hasCover, baseAD, rangeAD, coverAD, weaponIconPath, dmgResult, armor, finalDmg }) {
   init3D();
+  const attackerEntry = find3DTokenAt(attackerX, attackerY);
   const a = grid3DToWorld(attackerX, attackerY), t = grid3DToWorld(targetX, targetY);
+  // Fire from the attacker's actual held weapon position when we can find their token,
+  // not the middle of their body — makes the shot read as coming from the gun itself.
+  const muzzle = attackerEntry ? a.clone().add(attackerEntry.muzzleOffset) : a.clone().setY(cell3D * 0.45);
   const color = WEAPON_BOLT_COLOR[weaponType] || '#40c8ff';
   const weaponIcon = weaponIconPath ? renderStoredIcon(weaponIconPath, 28) : null;
 
-  const beam = spawnBeamMesh3D(a, t, color);
-  tweenScale3D(beam, 'z', 0, beam.userData.fullLength, 380);
-  const adChip = spawnFxChip3D(t, '', 'AD 0', 0, 1.4);
-  tickChipNumber3D(adChip, 'AD ', totalAD, 420);
-  await combatSleep(450);
-  adChip.el.textContent = `AD ${totalAD}${hasCover ? ' 🪨 cover' : ''} to beat`;
+  // 1. AD reveal — builds up out loud, term by term (base, then +range, then +cover),
+  // instead of a single number just ticking up, so it's unmistakable that the AD is being
+  // actively measured and added rather than just appearing.
+  const beam = spawnBeamMesh3D(muzzle, t, color);
+  tweenScale3D(beam, 'z', 0, beam.userData.fullLength, 900);
+  const adChip = spawnFxChip3D(t, 'ad-big', `Base AD ${baseAD}`, 0, 1.6);
+  await combatSleep(420);
+  if (rangeAD) { adChip.el.textContent = `Base AD ${baseAD}  +${rangeAD} range`; await combatSleep(420); }
+  if (coverAD) { adChip.el.textContent = `${adChip.el.textContent}  +${coverAD} 🪨 cover`; await combatSleep(420); }
+  adChip.el.classList.add('ad-total-reveal');
+  adChip.el.textContent = `${totalAD} AD TO BEAT`;
+  await combatSleep(550);
 
+  // 2. The roll — resolved before the weapon fires, so the shot reads as a consequence
+  // of the roll instead of a random effect that happens to be followed by a number.
   const d20 = document.createElement('div');
   d20.className = 'fx-d20-3d spinning';
   document.getElementById('combat-3d-fx-layer').appendChild(d20);
-  const d20Entry = { el: d20, pos: t.clone(), yOffset: cell3D * 2.3 };
+  const d20Entry = { el: d20, pos: t.clone(), yOffset: cell3D * 2.6 };
   activeFx3D.push(d20Entry);
   await combatSleep(350);
   await spinDiceChip3D(d20Entry, roll, 900, 70);
   await combatSleep(350);
   d20.classList.remove('spinning');
   d20.classList.add(hit ? 'hit' : 'miss');
-  adChip.el.className = 'fx-chip-3d ' + (hit ? 'hit' : 'miss');
+  adChip.el.className = 'fx-chip-3d ad-big ' + (hit ? 'hit' : 'miss');
   await combatSleep(300);
   d20.remove(); activeFx3D = activeFx3D.filter(e => e !== d20Entry);
   adChip.el.remove(); activeFx3D = activeFx3D.filter(e => e !== adChip);
@@ -5075,11 +5334,18 @@ async function playAttackFx3D({ attackerX, attackerY, targetX, targetY, weaponTy
   spawnFxChip3D(t, hit ? 'hit' : 'miss', `${toHitTotal} vs AD ${totalAD} — ${hit ? 'HIT' : 'MISS'}`, 1100, 1.4);
   await combatSleep(250);
 
-  playWeaponSfx(weaponType);
+  // 3. Fire — a hit gets the full-intensity muzzle flash + weapon's own fire sound and a
+  // bright bolt; a miss gets a visibly weaker discharge (dim flash, a dud/misfire sound
+  // instead of the normal shot) and the bolt goes wide, so hit vs. miss is obvious even
+  // with the sound off.
   world3D.remove(beam);
-  const boltEnd = hit ? t : missBoltEndpoint3D(a, t);
-  const bolt = spawnBeamMesh3D(a, boltEnd, color);
+  const boltEnd = hit ? t : missBoltEndpoint3D(muzzle, t);
+  if (attackerEntry) animateWeaponRecoil3D(attackerEntry);
+  spawnMuzzleFlash3D(muzzle, color, hit);
+  if (hit) playWeaponSfx(weaponType); else playSfxFile(IMPACT_SFX_FILES.miss, 0.55);
+  const bolt = spawnBeamMesh3D(muzzle, boltEnd, color);
   bolt.material.blending = THREE.AdditiveBlending;
+  bolt.material.opacity = hit ? 0.9 : 0.5;
   await tweenScale3D(bolt, 'z', 0, bolt.userData.fullLength, 220);
   world3D.remove(bolt);
 
@@ -5097,6 +5363,36 @@ async function playAttackFx3D({ attackerX, attackerY, targetX, targetY, weaponTy
   await combatSleep(600);
 }
 
+// A quick backward kick + snap-back on the attacker's weapon prop, timed with the shot —
+// on a hit it's a firm recoil; on a miss it's the same kick but paired with the dimmer
+// muzzle flash below, reading as a wilder/less controlled shot.
+function animateWeaponRecoil3D(entry) {
+  const prop = entry.group.children.find(c => c !== entry.plane && c !== entry.ring);
+  if (!prop) return;
+  const start = prop.position.clone();
+  const kicked = start.clone().addScaledVector(new THREE.Vector3(0, 0, -1), cell3D * 0.12);
+  const t0 = performance.now(); const dur = 260;
+  (function step() {
+    const t = Math.min(1, (performance.now() - t0) / dur);
+    const e = t < 0.3 ? t / 0.3 : 1 - (t - 0.3) / 0.7;
+    prop.position.lerpVectors(start, kicked, Math.max(0, e));
+    if (t < 1) requestAnimationFrame(step); else prop.position.copy(start);
+  })();
+}
+// Bright full flash on a hit; a noticeably dimmer, smaller flash on a miss — visible even
+// with the sound off, so a whiffed shot never looks identical to a landed one.
+function spawnMuzzleFlash3D(pos, color, hit) {
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: hit ? 1 : 0.4, blending: THREE.AdditiveBlending });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 10), mat);
+  mesh.position.copy(pos);
+  const baseScale = hit ? 0.32 : 0.14;
+  mesh.scale.setScalar(baseScale);
+  world3D.add(mesh);
+  const t0 = performance.now(); const dur = hit ? 160 : 110;
+  activeBursts3D.push({ mesh, t0, dur, peak: hit ? 0.5 : 0.15, baseScale, maxOpacity: hit ? 1 : 0.4 });
+  setTimeout(() => world3D.remove(mesh), dur + 30);
+}
+
 function tick3D() {
   const st = combatState();
   if (!renderer3D || shipViewMode !== 'combat' || !st.active || st.type === 'space') { raf3D = null; return; }
@@ -5111,8 +5407,8 @@ function tick3D() {
   });
   activeBursts3D = activeBursts3D.filter(b => {
     const t = Math.min(1, (now - b.t0) / b.dur);
-    b.mesh.scale.setScalar(0.15 + b.peak * t);
-    b.mesh.material.opacity = 0.9 * (1 - t);
+    b.mesh.scale.setScalar((b.baseScale ?? 0.15) + b.peak * t);
+    b.mesh.material.opacity = (b.maxOpacity ?? 0.9) * (1 - t);
     return t < 1;
   });
 

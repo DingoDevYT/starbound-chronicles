@@ -1012,6 +1012,21 @@
 .fx-float-3d { animation: fx-float-3d-up 1s ease-out forwards; color: #ff8a8a; font-size: 15px; }
 @keyframes fx-float-3d-up { from { opacity: 1; transform: translate(-50%,-50%); } to { opacity: 0; transform: translate(-50%, calc(-50% - 40px)); } }
 
+/* AD build-up chip — bigger and bolder than a normal fx chip, with a bright pulse the
+   instant the running total locks in, so the AD math reads as "being measured" rather
+   than a number that just quietly appears. */
+.fx-chip-3d.ad-big {
+  font-size: 15px; padding: 7px 16px; border-color: #40c8ff; color: #bfe8ff;
+  box-shadow: 0 0 10px rgba(64,200,255,.4);
+  transition: color .15s ease, border-color .15s ease;
+}
+.fx-chip-3d.ad-big.ad-total-reveal { animation: fx-ad-total-pulse .5s ease-out; }
+@keyframes fx-ad-total-pulse {
+  0%   { transform: translate(-50%,-50%) scale(1); }
+  35%  { transform: translate(-50%,-50%) scale(1.45); box-shadow: 0 0 24px rgba(255,210,58,.9); border-color: #ffd23a; color: #ffe9a8; }
+  100% { transform: translate(-50%,-50%) scale(1); }
+}
+
 .fx-d20-3d {
   position: absolute; transform: translate(-50%, -50%);
   width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
