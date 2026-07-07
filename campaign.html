@@ -6090,15 +6090,28 @@ async function create3DToken(c) {
   const group = new THREE.Group();
   group.position.set(pos.x, (c.grid_z || 0) * floorH3D, pos.z);
 
+  const baseColorHex = c.is_npc ? 0xc84040 : (c.token_color ? parseInt(c.token_color.replace('#', ''), 16) : 0x5a98f4);
+
+  // Grounding base — a short team-coloured puck that visibly sits ON the surface, so the
+  // billboarded portrait above it reads as a figure standing on a base (a tabletop-style
+  // token) instead of a flat photo floating in mid-air. The portrait rests on the puck top.
+  const puckH = cell3D * 0.12, puckTop = puckH;
+  const puck = new THREE.Mesh(
+    new THREE.CylinderGeometry(cell3D * 0.34, cell3D * 0.4, puckH, 28),
+    new THREE.MeshStandardMaterial({ color: baseColorHex, roughness: 0.55, metalness: 0.15 })
+  );
+  puck.position.y = puckH / 2; puck.castShadow = true; puck.receiveShadow = true;
+  group.add(puck);
+
   let plane;
   const portraitPath = resolveCombatantPortraitPath(c);
   if (portraitPath) {
     try {
       const tex = await loadTexture3D(portraitPath);
-      const h = cell3D * 0.95;
-      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.35, side: THREE.DoubleSide });
-      plane = new THREE.Mesh(new THREE.PlaneGeometry(h, h), mat);
-      plane.position.y = h / 2;
+      const pw = cell3D * 0.82, ph = cell3D * 0.92;
+      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide });
+      plane = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), mat);
+      plane.position.y = puckTop + ph / 2;       // bottom edge rests on the puck (a standee on its base)
     } catch (err) {
       console.warn('token portrait failed to load, using placeholder', portraitPath, err);
     }
@@ -6106,15 +6119,14 @@ async function create3DToken(c) {
   if (!plane) {
     const mat = new THREE.MeshStandardMaterial({ color: c.is_npc ? 0xc84040 : 0x3a78d4 });
     plane = new THREE.Mesh(new THREE.BoxGeometry(cell3D * 0.5, cell3D * 0.9, cell3D * 0.5), mat);
-    plane.position.y = cell3D * 0.45;
+    plane.position.y = puckTop + cell3D * 0.45;   // sits on the puck
   }
   group.add(plane);
 
-  const baseColorHex = c.is_npc ? 0xc84040 : (c.token_color ? parseInt(c.token_color.replace('#', ''), 16) : 0x5a98f4);
-  const ringMat = new THREE.MeshBasicMaterial({ color: baseColorHex, transparent: true, opacity: 0.75, side: THREE.DoubleSide });
-  const ring = new THREE.Mesh(new THREE.RingGeometry(cell3D * 0.32, cell3D * 0.4, 24), ringMat);
+  const ringMat = new THREE.MeshBasicMaterial({ color: baseColorHex, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(cell3D * 0.42, cell3D * 0.5, 28), ringMat);
   ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.025;
+  ring.position.y = puckH + 0.01;                 // selection halo on top of the puck
   group.add(ring);
 
   // Held weapon prop — actually shown on the token at all times (not just flashed briefly
@@ -6130,6 +6142,7 @@ async function create3DToken(c) {
   } else {
     weaponType = c.weapon_type || null; // a bare NPC's weapon lives directly on the row (e.g. added from the Bestiary)
   }
+  let weaponProp = null;
   const propPath = WEAPON_3D_PROP[weaponType];
   if (propPath) {
     try {
@@ -6140,6 +6153,7 @@ async function create3DToken(c) {
       prop.position.copy(muzzleOffset);
       prop.rotation.y = Math.PI / 4;
       group.add(prop);
+      weaponProp = prop;
     } catch (err) { console.warn('token weapon prop failed to load', propPath, err); }
   }
 
@@ -6150,7 +6164,7 @@ async function create3DToken(c) {
   label.innerHTML = `<div class="name3d"></div><div class="hp3d-track"><div class="hp3d-fill"></div></div>`;
   document.getElementById('combat-3d-fx-layer').appendChild(label);
 
-  const entry = { group, plane, ring, label, hpFill: label.querySelector('.hp3d-fill'), gx: c.grid_x, gy: c.grid_y, gz: c.grid_z || 0, baseColor: baseColorHex, muzzleOffset };
+  const entry = { group, plane, ring, label, weaponProp, hpFill: label.querySelector('.hp3d-fill'), gx: c.grid_x, gy: c.grid_y, gz: c.grid_z || 0, baseColor: baseColorHex, muzzleOffset };
   token3DIndex.set(c.id, entry);
   return entry;
 }
@@ -6337,7 +6351,7 @@ async function playAttackFx3D({ attackerX, attackerY, attackerZ, targetX, target
 // on a hit it's a firm recoil; on a miss it's the same kick but paired with the dimmer
 // muzzle flash below, reading as a wilder/less controlled shot.
 function animateWeaponRecoil3D(entry) {
-  const prop = entry.group.children.find(c => c !== entry.plane && c !== entry.ring);
+  const prop = entry.weaponProp;
   if (!prop) return;
   const start = prop.position.clone();
   const kicked = start.clone().addScaledVector(new THREE.Vector3(0, 0, -1), cell3D * 0.12);
