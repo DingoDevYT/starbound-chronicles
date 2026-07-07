@@ -26,7 +26,39 @@ const SC_STOREY = 2;                              // one storey = 2 half-tile le
 
 // ── Theme model kits (props + per-theme GLB pools). Shared here so the harness
 // can render the same prop sets campaign.html uses. ──────────────────────────
+const SC_NATURE_BASE = 'assets/3d/kenney_nature-kit/Models/GLTF format/';
 const COMBAT_3D_THEMES = {
+  // ── Primary themes (match the on-foot battlefield presets) ──
+  plain: {
+    base: SC_NATURE_BASE,
+    obstacles: [
+      'tree_pineTallA.glb', 'tree_pineTallB.glb', 'tree_pineRoundA.glb', 'tree_default.glb', 'tree_oak.glb', 'tree_fat.glb',
+      'tree_pineSmallA.glb', 'tree_pineSmallB.glb', 'tree_thin.glb', 'tree_small.glb', 'tree_tall.glb',
+      'rock_largeA.glb', 'rock_smallA.glb', 'log.glb', 'log_stack.glb', 'stump_round.glb',
+      'mushroom_redGroup.glb', 'flower_purpleA.glb', 'grass_leafsLarge.glb',
+    ],
+  },
+  canyon: {
+    base: SC_NATURE_BASE,
+    obstacles: [
+      'rock_largeA.glb', 'rock_largeB.glb', 'rock_tallA.glb', 'rock_tallB.glb', 'rock_tallC.glb',
+      'rock_smallA.glb', 'rock_smallB.glb', 'stump_old.glb', 'log.glb', 'tree_thin.glb',
+    ],
+  },
+  ruins: {
+    base: 'assets/3d/kenney_mini-dungeon/Models/GLB format/',
+    obstacles: ['column.glb', 'rocks.glb', 'stones.glb', 'wood-structure.glb', 'wood-support.glb', 'barrel.glb', 'wall-half.glb'],
+    obstaclesExtra: { base: SC_NATURE_BASE, items: ['rock_smallA.glb', 'rock_smallB.glb', 'grass_leafsLarge.glb'] },
+  },
+  desert: {
+    base: SC_NATURE_BASE,
+    obstacles: ['rock_largeA.glb', 'rock_smallA.glb', 'rock_tallC.glb', 'rock_smallB.glb', 'stump_round.glb', 'log_stack.glb'],
+  },
+  facility: {
+    base: 'assets/3d/kenney_factory-kit_3.0/Models/GLB format/',
+    obstacles: ['box-large.glb', 'box-long.glb', 'box-small.glb', 'box-wide.glb', 'machine.glb', 'machine-bed.glb', 'machine-fortified.glb', 'pipe-glass-large-long.glb', 'pipe-glass-large-bend.glb'],
+  },
+  // ── Legacy keys (older saved custom maps still reference these) ──
   arena: {
     base: 'assets/3d/kenney_mini-arena/Models/GLB format/',
     floor: 'floor.glb',
@@ -76,6 +108,34 @@ const COMBAT_3D_THEMES = {
 // ── Per-theme color palettes (sRGB hex, converted to linear at material time
 // so the renderer's sRGB output pipeline shows them true). ───────────────────
 const SC_PALETTES = {
+  // ── Primary theme identities — matched to the battlefield presets' actual settings
+  // (Rocky Canyon is orange rock, Desert Wastes is sand, etc.), not asset-kit names. ──
+  plain: {
+    ground: 0x5d8a4a, floorA: 0x6f9e58, floorB: 0x669454, deckA: 0x8a6a45, deckB: 0x7c5e3c,
+    wall: 0x6b5137, glass: 0xcfe8ff, railing: 0x6d5439, stairs: 0x8a6a45, slope: 0x639252,
+    terrain: 0x5c8b49, post: 0x54402b, grid: 0x1d2f18, rough: 0.92, metal: 0.0,
+  },
+  canyon: {
+    ground: 0xb4713a, floorA: 0xcf9052, floorB: 0xc28147, deckA: 0xc99a66, deckB: 0xbd8d59,
+    wall: 0xb97f4e, glass: 0xaed9f5, railing: 0x8a5a32, stairs: 0xb98a5a, slope: 0xd6924e,
+    terrain: 0xd6924e, post: 0x7c4f2b, grid: 0x40260f, rough: 0.9, metal: 0.0,
+  },
+  ruins: {
+    ground: 0x8b8577, floorA: 0xa39c8b, floorB: 0x968f7d, deckA: 0xa89f8d, deckB: 0x9d9482,
+    wall: 0x9a917d, glass: 0xa9c8e0, railing: 0x6f685a, stairs: 0x968d7a, slope: 0x998f7d,
+    terrain: 0x8f887a, post: 0x5f594c, grid: 0x2b2820, rough: 0.9, metal: 0.02,
+  },
+  desert: {
+    ground: 0xc9a25e, floorA: 0xdbb877, floorB: 0xd0ab69, deckA: 0xcaa76a, deckB: 0xbf9c5f,
+    wall: 0xc4a06a, glass: 0xaed9f5, railing: 0x8f7443, stairs: 0xbf9a5f, slope: 0xd9b06a,
+    terrain: 0xd9b06a, post: 0x7c6338, grid: 0x3d2f16, rough: 0.92, metal: 0.0,
+  },
+  facility: {
+    ground: 0x565e66, floorA: 0x707b84, floorB: 0x636e77, deckA: 0x8b959e, deckB: 0x7e8891,
+    wall: 0x4c565e, glass: 0x93c8e8, railing: 0xd9a53a, stairs: 0x7b858e, slope: 0x6b757e,
+    terrain: 0x646d75, post: 0x3f484f, grid: 0x14181c, rough: 0.55, metal: 0.3,
+  },
+  // ── Legacy keys (older saved custom maps + battles reference these) ──
   arena: {
     ground: 0x7d8a99, floorA: 0xaab5c2, floorB: 0x99a5b3, deckA: 0xb4bec9, deckB: 0xa6b1bd,
     wall: 0x67788c, glass: 0x8ec8ef, railing: 0x45525f, stairs: 0x8b97a5, slope: 0x93a0ae,
@@ -297,6 +357,48 @@ function buildStructureGroup(structure, themeKey, cell, floorH, opts) {
     }
   }
 
+  // ── Auto-supports: any elevated floor deck with nothing beneath it (no ground/terrain
+  // in its column and no wall on its cell at lower storeys) gets corner legs, and its
+  // exposed edges get a fascia skirt — so platforms read as BUILT structures instead of
+  // slabs hovering on air. Roofs over walled rooms are already supported and get none. ──
+  const supported = new Set(), floorAtKey = new Set();
+  for (const p of (structure.pieces || [])) {
+    if ((p.m === 'floor' || p.m === 'terrain' || p.m === 'stairs' || p.m === 'slope')) floorAtKey.add(p.x + ',' + p.y + ',' + p.z);
+    if ((p.m === 'floor' && p.z === 0) || p.m === 'terrain' || p.m === 'stairs' || p.m === 'slope') supported.add(p.x + ',' + p.y);
+    if (p.m === 'wall' || p.m === 'window') {
+      const [dx, dy] = SC_DIR4[(p.r || 0) % 4];
+      supported.add(p.x + ',' + p.y);
+      supported.add((p.x + dx) + ',' + (p.y + dy)); // a wall props up the decks on both sides of its edge
+    }
+  }
+  const legGeoCache = {};
+  for (const p of (structure.pieces || [])) {
+    if (p.m !== 'floor' || p.z <= 0 || supported.has(p.x + ',' + p.y)) continue;
+    const faded = p.z > fadeZ;
+    const legMat = scMaterial(themeKey, 'post', faded);
+    const wallT = cell * 0.07, legH = p.z * floorH - slab;
+    const legKey = legH.toFixed(3);
+    if (!legGeoCache[legKey]) legGeoCache[legKey] = new THREE.BoxGeometry(wallT * 1.1, legH, wallT * 1.1);
+    for (const [lx, lz] of [[-0.4, -0.4], [0.4, -0.4], [-0.4, 0.4], [0.4, 0.4]]) {
+      const leg = new THREE.Mesh(legGeoCache[legKey], legMat);
+      leg.position.set(p.x * cell + lx * cell, p.z * floorH - slab - legH / 2, p.y * cell + lz * cell);
+      if (!faded) { leg.castShadow = true; leg.receiveShadow = true; }
+      group.add(leg);
+    }
+    // fascia skirt on edges with no neighbouring deck at the same level
+    SC_DIR4.forEach(([dx, dy], r) => {
+      if (floorAtKey.has((p.x + dx) + ',' + (p.y + dy) + ',' + p.z)) return;
+      const band = new THREE.Mesh(
+        scCachedGeo(`fascia|${cell}`, () => new THREE.BoxGeometry(cell, cell * 0.14, cell * 0.05)),
+        scMaterial(themeKey, 'railing', faded)
+      );
+      band.rotation.y = (r % 2 === 1) ? Math.PI / 2 : 0;
+      band.position.set(p.x * cell + dx * cell * 0.48, p.z * floorH - slab - cell * 0.06, p.y * cell + dy * cell * 0.48);
+      if (!faded) { band.castShadow = true; band.receiveShadow = true; }
+      group.add(band);
+    });
+  }
+
   const addFloorInstances = (list, faded) => {
     if (!list.length) return;
     const geo = scCachedGeo(`floor|${cell}`, () => new THREE.BoxGeometry(cell, slab, cell));
@@ -331,7 +433,9 @@ function scBuildSurround(themeKey, w, h, cell) {
     new THREE.MeshStandardMaterial({ color: scColor(P.ground), roughness: 0.95, metalness: 0 })
   );
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.set((w - 1) * cell / 2, -slab - 0.02, (h - 1) * cell / 2);
+  // Just a hair below the floor tops — flush with the battlefield, so the map doesn't
+  // read as a raised tray hovering above the world.
+  mesh.position.set((w - 1) * cell / 2, -0.03, (h - 1) * cell / 2);
   mesh.receiveShadow = true;
   return mesh;
 }
@@ -384,7 +488,20 @@ function scLoadModel3D(path) {
 async function scCloneModel3D(path) {
   const src = await scLoadModel3D(path);
   const clone = src.clone(true);
-  clone.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  clone.traverse(o => {
+    if (!o.isMesh) return;
+    o.castShadow = true; o.receiveShadow = true;
+    // Some Kenney GLTF exports (notably the nature kit) ship with metalness=1, which
+    // renders BLACK under plain lights (a fully-metallic surface only shows reflections,
+    // and we have no environment map). Clamp it so the authored colors actually show.
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => {
+      if (m && m.metalness !== undefined && m.metalness > 0.4 && !m.userData.scFixed) {
+        // These exports also store sRGB color values where glTF expects linear, so on
+        // top of the metalness clamp, reinterpret the color — otherwise it washes out.
+        m.metalness = 0.1; m.color.convertSRGBToLinear(); m.userData.scFixed = true; m.needsUpdate = true;
+      }
+    });
+  });
   return clone;
 }
 function scPropModelPath(themeKey, p) {
@@ -401,7 +518,9 @@ async function scPlacePropGLB(parent, themeKey, p, cell, floorH) {
   const obj = await scCloneModel3D(path);
   const box = new THREE.Box3().setFromObject(obj);
   const size = new THREE.Vector3(); box.getSize(size);
-  let s = Math.min(1.6 * (cell / 2), (cell * 0.85) / (Math.max(size.x, size.z) || 1));
+  // Fit the footprint to the cell, but let tall/thin models (trees, columns) keep more
+  // height so they don't shrink into lollipops on big battlefields.
+  let s = Math.min(2.4 * (cell / 2), (cell * 0.92) / (Math.max(size.x, size.z) || 1));
   if (p.s) s *= p.s;
   obj.scale.setScalar(s);
   obj.position.set(p.x * cell, p.z * floorH - box.min.y * s, p.y * cell);
@@ -523,124 +642,177 @@ function scRailPerimeter(pieces, cells, z, skipEdges) {
   }
 }
 
-// — Training Arena: central raised dais, mirrored watchtowers, pillar cover. —
-function scMapArena(pieces, w, h) {
-  const cx = w >> 1, cy = h >> 1;
-  const dx0 = cx - 3, dy0 = cy - 2;
-  scAddFloorRect(pieces, dx0, dy0, dx0 + 6, dy0 + 4, 1, 'terrain'); // half-tile dais
-  pieces.push({ m: 'slope', x: dx0 - 1, y: cy - 1, z: 0, r: 1 }, { m: 'slope', x: dx0 - 1, y: cy, z: 0, r: 1 });
-  pieces.push({ m: 'slope', x: dx0 + 6, y: cy - 1, z: 0, r: 3 }, { m: 'slope', x: dx0 + 6, y: cy, z: 0, r: 3 });
-  for (let x = dx0; x < dx0 + 6; x++) {
-    pieces.push({ m: 'railing', x, y: dy0, z: 1, r: 0 }, { m: 'railing', x, y: dy0 + 3, z: 1, r: 2 });
-  }
-  scAddBuilding(pieces, 3, 2, 3, 3, { door: { x: 4, y: 4, r: 2 } });
-  scAddBuilding(pieces, w - 6, h - 5, 3, 3, { door: { x: w - 5, y: h - 5, r: 0 } });
-  // pillars + weapon racks, mirrored
-  pieces.push({ m: 'prop', x: cx - 6, y: 3, z: 0, v: 1 }, { m: 'prop', x: cx + 5, y: 3, z: 0, v: 1 });
-  pieces.push({ m: 'prop', x: cx - 6, y: h - 4, z: 0, v: 1 }, { m: 'prop', x: cx + 5, y: h - 4, z: 0, v: 1 });
-  pieces.push({ m: 'prop', x: 2, y: cy, z: 0, v: 5 }, { m: 'prop', x: w - 3, y: cy, z: 0, v: 5 });
-  pieces.push({ m: 'prop', x: cx, y: 2, z: 0, v: 0 }, { m: 'prop', x: cx, y: h - 3, z: 0, v: 0 });
-}
-// — Forest: tiered hills, a wooden watch platform, dense treelines. —
-function scMapForest(pieces, w, h) {
-  const cx = w >> 1, cy = h >> 1;
-  const hx = 5, hy = cy - 2;
-  scAddFloorRect(pieces, hx, hy, hx + 3, hy + 3, 1, 'terrain'); // west hill (half-tile)
-  pieces.push({ m: 'slope', x: hx + 1, y: hy + 3, z: 0, r: 0 }, { m: 'slope', x: hx + 1, y: hy - 1, z: 0, r: 2 });
-  pieces.push({ m: 'slope', x: hx - 1, y: hy + 1, z: 0, r: 1 }, { m: 'slope', x: hx + 3, y: hy + 1, z: 0, r: 3 });
-  const ex0 = w - 10, ey0 = cy - 3;
-  scAddFloorRect(pieces, ex0, ey0, ex0 + 4, ey0 + 4, 1, 'terrain'); // east hill, two tiers
-  scAddFloorRect(pieces, ex0 + 1, ey0 + 1, ex0 + 3, ey0 + 3, 2, 'terrain');
-  pieces.push({ m: 'slope', x: ex0 + 1, y: ey0 + 4, z: 0, r: 0 }, { m: 'slope', x: ex0 + 2, y: ey0 - 1, z: 0, r: 2 });
-  pieces.push({ m: 'slope', x: ex0 + 1, y: ey0 + 3, z: 1, r: 0 }); // upper tier ramp
-  // wooden watch platform (one storey up) with stairs + railed edges
-  const px0 = w - 6, py0 = 2;
-  scAddFloorRect(pieces, px0, py0, px0 + 2, py0 + 2, SC_STOREY);
-  for (let x = px0; x < px0 + 2; x++) for (let y = py0; y < py0 + 2; y++) pieces.push({ m: 'post', x, y, z: SC_STOREY });
-  pieces.push({ m: 'stairs', x: px0, y: py0 + 2, z: 0, r: 0 });
-  scAddWallsAround(pieces, px0, py0, px0 + 2, py0 + 2, SC_STOREY, { role: 'railing', doors: [{ x: px0, y: py0 + 1, r: 2 }] });
-  // treelines along the borders + scattered interior trees (deterministic)
-  for (let x = 0; x < w; x++) {
-    if (scHash(x, 1.1) > 0.4) pieces.push({ m: 'prop', x, y: 0, z: 0 });
-    if (scHash(x, 2.2) > 0.4) pieces.push({ m: 'prop', x, y: h - 1, z: 0 });
-  }
-  for (let y = 1; y < h - 1; y++) {
-    if (scHash(3.3, y) > 0.5) pieces.push({ m: 'prop', x: 0, y, z: 0 });
-    if (scHash(4.4, y) > 0.5) pieces.push({ m: 'prop', x: w - 1, y, z: 0 });
-  }
-  for (let i = 0; i < 26; i++) {
-    const x = 2 + Math.floor(scHash(i, 7.7) * (w - 4)), y = 2 + Math.floor(scHash(i, 8.8) * (h - 4));
-    if (Math.hypot(x - cx, y - cy) < 4) continue;                                 // keep a clearing
-    if (x >= hx - 1 && x < hx + 4 && y >= hy - 1 && y < hy + 4) continue;         // west hill
-    if (x >= ex0 - 1 && x < ex0 + 5 && y >= ey0 - 1 && y < ey0 + 5) continue;     // east hill
-    if (x >= px0 - 1 && x < px0 + 2 && y >= py0 && y < py0 + 3) continue;         // platform
+// ── Hand-crafted 48x48 battlefield layouts, one per preset identity. All coordinates
+// are derived from w/h so custom sizes still work; designs assume roughly 40x40+.
+// Every layout keeps a clear spawn plaza at the centre and is validated by the Node
+// map tests (stair/slope landings standable, no unreachable pockets).
+
+// Deterministic scatter helper — places props from the theme pool, avoiding a set of
+// "keep clear" rects and the centre plaza.
+function scScatterProps(pieces, w, h, count, seed, clearRects, clearR) {
+  const cx = w / 2, cy = h / 2;
+  let placed = 0, i = 0;
+  while (placed < count && i < count * 8) {
+    i++;
+    const x = 1 + Math.floor(scHash(i, seed) * (w - 2));
+    const y = 1 + Math.floor(scHash(i, seed + 0.7) * (h - 2));
+    if (Math.hypot(x - cx, y - cy) < (clearR || 5)) continue;
+    if (clearRects.some(rc => x >= rc[0] - 1 && x < rc[2] + 1 && y >= rc[1] - 1 && y < rc[3] + 1)) continue;
     pieces.push({ m: 'prop', x, y, z: 0 });
+    placed++;
   }
 }
-// — Town: a main street, enterable buildings, two accessible rooftops. —
-function scMapTown(pieces, w, h) {
-  scAddBuilding(pieces, 4, 2, 7, 5, { door: { x: 7, y: 6, r: 2 } });                     // A: 2-storey, roof access
-  scAddBuilding(pieces, 15, 2, 6, 4, { door: { x: 17, y: 5, r: 2 }, stairs: false });    // B: locked roof (skyline)
-  scAddBuilding(pieces, 6, 12, 7, 4, { door: { x: 9, y: 12, r: 0 }, stairs: false });    // C
-  scAddBuilding(pieces, 15, 12, 5, 4, { door: { x: 16, y: 12, r: 0 } });                 // D: 2-storey, roof access
-  // street furniture — v indexes the town prop pool (bench 4, light 5, dumpsters 0/1, trucks 11/12, trees 8/9)
-  pieces.push({ m: 'prop', x: 12, y: 3, z: 0, v: 0 }, { m: 'prop', x: 13, y: 3, z: 0, v: 1 });   // alley dumpsters
-  pieces.push({ m: 'prop', x: 4, y: 8, z: 0, v: 5 }, { m: 'prop', x: 13, y: 10, z: 0, v: 5 }, { m: 'prop', x: 21, y: 8, z: 0, v: 5 });
-  pieces.push({ m: 'prop', x: 13, y: 8, z: 0, v: 4 }, { m: 'prop', x: 3, y: 10, z: 0, v: 4 });
-  pieces.push({ m: 'prop', x: 22, y: 9, z: 0, v: 11, s: 2, r: 1 });                              // parked truck
-  pieces.push({ m: 'prop', x: 2, y: 15, z: 0, v: 9 }, { m: 'prop', x: 23, y: 15, z: 0, v: 9 }, { m: 'prop', x: 2, y: 3, z: 0, v: 8 });
-  pieces.push({ m: 'prop', x: 12, y: 14, z: 0, v: 6 }, { m: 'prop', x: 21, y: 11, z: 0, v: 7 }); // pallets
+// A stepped mesa: stacked terrain tiers (each inset by 1) with slope switchback access.
+// tiers = number of half-tile steps. Returns the footprint rect for keep-clear lists.
+function scAddMesa(pieces, x0, y0, tw, th, tiers) {
+  for (let t = 1; t <= tiers; t++) {
+    const inset = t - 1;
+    const ax0 = x0 + inset, ay0 = y0 + inset, ax1 = x0 + tw - inset, ay1 = y0 + th - inset;
+    if (ax1 - ax0 < 1 || ay1 - ay0 < 1) break;
+    scAddFloorRect(pieces, ax0, ay0, ax1, ay1, t, 'terrain');
+    // slope up to this tier from the south, staggered eastward per tier (a switchback)
+    const sx = Math.min(ax0 + 1 + inset, ax1 - 1);
+    pieces.push({ m: 'slope', x: sx, y: ay1, z: t - 1, r: 0 });
+  }
+  return [x0, y0, x0 + tw, y0 + th];
 }
-// — Dungeon: a walled great hall + side chambers joined by corridors. —
-function scMapDungeon(pieces, w, h) {
-  scAddWallsAround(pieces, 0, 0, w, h, 0, { windowEvery: 0 });                    // outer shell
-  scAddWallsAround(pieces, 8, 5, 18, 13, 0, {                                     // great hall
-    windowEvery: 0,
-    doors: [{ x: 8, y: 8, r: 3 }, { x: 17, y: 9, r: 1 }, { x: 12, y: 5, r: 0 }, { x: 13, y: 12, r: 2 }],
-  });
-  scAddFloorRect(pieces, 15, 8, 17, 10, 1, 'terrain');                            // raised dais
-  pieces.push({ m: 'slope', x: 14, y: 8, z: 0, r: 1 }, { m: 'slope', x: 14, y: 9, z: 0, r: 1 });
-  scAddWallsAround(pieces, 2, 2, 7, 7, 0, { windowEvery: 0, doors: [{ x: 6, y: 4, r: 1 }] });      // west chamber
-  scAddWallsAround(pieces, 19, 2, 24, 7, 0, { windowEvery: 0, doors: [{ x: 19, y: 4, r: 3 }] });   // east chamber
-  scAddWallsAround(pieces, 3, 11, 9, 16, 0, { windowEvery: 0, doors: [{ x: 6, y: 11, r: 0 }] });   // SW chamber
-  scAddWallsAround(pieces, 17, 11, 23, 16, 0, { windowEvery: 0, doors: [{ x: 20, y: 11, r: 0 }] });// SE chamber
-  // pillars in the hall + loot props in chambers (column 0, barrel 1, chest 2, banner 8)
-  pieces.push({ m: 'prop', x: 10, y: 7, z: 0, v: 0 }, { m: 'prop', x: 10, y: 10, z: 0, v: 0 });
-  pieces.push({ m: 'prop', x: 13, y: 7, z: 0, v: 0 }, { m: 'prop', x: 13, y: 10, z: 0, v: 0 });
-  pieces.push({ m: 'prop', x: 3, y: 3, z: 0, v: 2 }, { m: 'prop', x: 22, y: 3, z: 0, v: 2 });
-  pieces.push({ m: 'prop', x: 4, y: 14, z: 0, v: 1 }, { m: 'prop', x: 21, y: 14, z: 0, v: 1 }, { m: 'prop', x: 5, y: 5, z: 0, v: 1 });
-  pieces.push({ m: 'prop', x: 12, y: 6, z: 0, v: 8 }, { m: 'prop', x: 14, y: 12, z: 0, v: 8 });
+
+// — Open Plain: rolling green hills, tree copses, one wooden overwatch platform. —
+function scMapPlain(pieces, w, h) {
+  const clear = [];
+  clear.push(scAddMesa(pieces, Math.round(w * 0.14), Math.round(h * 0.22), 6, 5, 1));
+  clear.push(scAddMesa(pieces, Math.round(w * 0.62), Math.round(h * 0.58), 7, 5, 2));
+  clear.push(scAddMesa(pieces, Math.round(w * 0.32), Math.round(h * 0.72), 5, 4, 1));
+  clear.push(scAddMesa(pieces, Math.round(w * 0.72), Math.round(h * 0.16), 5, 4, 1));
+  // wooden overwatch platform (auto-legs make it a real trestle)
+  const px0 = Math.round(w * 0.42), py0 = Math.round(h * 0.12);
+  scAddFloorRect(pieces, px0, py0, px0 + 3, py0 + 2, SC_STOREY);
+  pieces.push({ m: 'stairs', x: px0 + 1, y: py0 + 2, z: 0, r: 0 });
+  scAddWallsAround(pieces, px0, py0, px0 + 3, py0 + 2, SC_STOREY, { role: 'railing', doors: [{ x: px0 + 1, y: py0 + 1, r: 2 }] });
+  clear.push([px0, py0, px0 + 3, py0 + 3]);
+  scScatterProps(pieces, w, h, Math.round(w * h * 0.028), 3.1, clear);
 }
-// — Factory: an elevated catwalk loop with railings, a windowed control room,
-//   machines and crate cover on the floor below. —
-function scMapFactory(pieces, w, h) {
-  const cells = new Set();
-  for (let x = 4; x <= 21; x++) { cells.add(x + ',3'); cells.add(x + ',14'); }
-  for (let y = 4; y <= 13; y++) { cells.add('4,' + y); cells.add('21,' + y); }
+// — Rocky Canyon: big orange stepped mesas, a boulder-strewn canyon floor, and
+//   waist-high rock ridges that make cover lanes (see over, duck behind). —
+function scMapCanyon(pieces, w, h) {
+  const clear = [];
+  clear.push(scAddMesa(pieces, Math.round(w * 0.08), Math.round(h * 0.16), 11, 9, 3));
+  clear.push(scAddMesa(pieces, Math.round(w * 0.62), Math.round(h * 0.52), 10, 8, 2));
+  clear.push(scAddMesa(pieces, Math.round(w * 0.14), Math.round(h * 0.68), 7, 5, 1));
+  clear.push(scAddMesa(pieces, Math.round(w * 0.7), Math.round(h * 0.12), 6, 5, 1));
+  // low rock ridges (1-wide waist-high terrain runs) — cover lanes across the open floor
+  const ry1 = Math.round(h * 0.42), rx1 = Math.round(w * 0.34);
+  for (let x = rx1; x < rx1 + 6; x++) pieces.push({ m: 'terrain', x, y: ry1, z: 1 });
+  const ry2 = Math.round(h * 0.6), rx2 = Math.round(w * 0.46);
+  for (let x = rx2; x < rx2 + 5; x++) pieces.push({ m: 'terrain', x, y: ry2, z: 1 });
+  const rx3 = Math.round(w * 0.55), ry3 = Math.round(h * 0.24);
+  for (let y = ry3; y < ry3 + 5; y++) pieces.push({ m: 'terrain', x: rx3, y, z: 1 });
+  clear.push([rx1, ry1, rx1 + 6, ry1 + 1], [rx2, ry2, rx2 + 5, ry2 + 1], [rx3, ry3, rx3 + 1, ry3 + 5]);
+  scScatterProps(pieces, w, h, Math.round(w * h * 0.024), 7.7, clear);
+}
+// — Ruins: broken building shells (gap-toothed walls), a collapsed plaza dais,
+//   toppled columns, one still-climbable 2-storey shell. —
+function scMapRuins(pieces, w, h) {
+  const clear = [];
+  // broken shell helper: perimeter walls with deterministic gaps, some windows
+  const brokenShell = (x0, y0, bw, bh, seed) => {
+    scAddFloorRect(pieces, x0, y0, x0 + bw, y0 + bh, 0);
+    let i = 0;
+    const put = (x, y, r) => { i++; if (scHash(i, seed) < 0.3) return; pieces.push({ m: scHash(i, seed + 0.4) < 0.22 ? 'window' : 'wall', x, y, z: 0, r }); };
+    for (let x = x0; x < x0 + bw; x++) { put(x, y0, 0); put(x, y0 + bh - 1, 2); }
+    for (let y = y0; y < y0 + bh; y++) { put(x0, y, 3); put(x0 + bw - 1, y, 1); }
+    clear.push([x0, y0, x0 + bw, y0 + bh]);
+  };
+  brokenShell(Math.round(w * 0.12), Math.round(h * 0.14), 8, 6, 11.3);
+  brokenShell(Math.round(w * 0.66), Math.round(h * 0.2), 7, 6, 17.9);
+  brokenShell(Math.round(w * 0.16), Math.round(h * 0.62), 7, 6, 23.1);
+  brokenShell(Math.round(w * 0.55), Math.round(h * 0.7), 9, 5, 29.7);
+  // one intact 2-storey watch ruin with roof access
+  const ix0 = Math.round(w * 0.42), iy0 = Math.round(h * 0.36);
+  scAddBuilding(pieces, ix0, iy0, 5, 4, { door: { x: ix0 + 2, y: iy0 + 3, r: 2 } });
+  clear.push([ix0, iy0, ix0 + 5, iy0 + 4]);
+  // collapsed plaza dais south of centre
+  const dx0 = Math.round(w * 0.46), dy0 = Math.round(h * 0.6);
+  scAddFloorRect(pieces, dx0, dy0, dx0 + 3, dy0 + 3, 1, 'terrain');
+  pieces.push({ m: 'slope', x: dx0 + 1, y: dy0 + 3, z: 0, r: 0 }, { m: 'slope', x: dx0 + 1, y: dy0 - 1, z: 0, r: 2 });
+  clear.push([dx0, dy0, dx0 + 3, dy0 + 3]);
+  scScatterProps(pieces, w, h, Math.round(w * h * 0.022), 31.7, clear);
+}
+// — Desert Wastes: broad low dunes with slope faces, a ruined outpost, rock spills. —
+function scMapDesert(pieces, w, h) {
+  const clear = [];
+  const dune = (x0, y0, dw, dh, twoTier) => {
+    scAddFloorRect(pieces, x0, y0, x0 + dw, y0 + dh, 1, 'terrain');
+    pieces.push({ m: 'slope', x: x0 + 1, y: y0 + dh, z: 0, r: 0 });
+    pieces.push({ m: 'slope', x: x0 + dw - 2, y: y0 - 1, z: 0, r: 2 });
+    pieces.push({ m: 'slope', x: x0 - 1, y: y0 + (dh >> 1), z: 0, r: 1 });
+    if (twoTier && dw >= 5 && dh >= 4) {
+      scAddFloorRect(pieces, x0 + 2, y0 + 1, x0 + dw - 2, y0 + dh - 1, 2, 'terrain');
+      pieces.push({ m: 'slope', x: x0 + 2, y: y0 + dh - 1, z: 1, r: 0 });
+    }
+    clear.push([x0, y0, x0 + dw, y0 + dh]);
+  };
+  dune(Math.round(w * 0.12), Math.round(h * 0.2), 7, 4, false);
+  dune(Math.round(w * 0.6), Math.round(h * 0.6), 8, 5, true);
+  dune(Math.round(w * 0.2), Math.round(h * 0.66), 6, 4, false);
+  dune(Math.round(w * 0.68), Math.round(h * 0.14), 6, 4, false);
+  // ruined outpost with roof access — the only hard structure for miles
+  const bx0 = Math.round(w * 0.44), by0 = Math.round(h * 0.18);
+  scAddBuilding(pieces, bx0, by0, 6, 5, { door: { x: bx0 + 3, y: by0 + 4, r: 2 }, windowEvery: 2 });
+  clear.push([bx0, by0, bx0 + 6, by0 + 5]);
+  // a freestanding windbreak wall
+  const wx = Math.round(w * 0.3), wy = Math.round(h * 0.46);
+  for (let x = wx; x < wx + 4; x++) pieces.push({ m: 'wall', x, y: wy, z: 0, r: 0 });
+  scScatterProps(pieces, w, h, Math.round(w * h * 0.014), 41.3, clear);
+}
+// — Industrial Facility: a catwalk network over machine rows, windowed control
+//   room, hazard railings everywhere. —
+function scMapFacility(pieces, w, h) {
+  const cells = new Set(), skip = new Set();
+  const yN = Math.round(h * 0.2), yS = Math.round(h * 0.76), xW = Math.round(w * 0.14), xE = Math.round(w * 0.84), xM = Math.round(w * 0.5);
+  for (let x = xW; x <= xE; x++) { cells.add(x + ',' + yN); cells.add(x + ',' + yS); }
+  for (let y = yN; y <= yS; y++) { cells.add(xW + ',' + y); cells.add(xE + ',' + y); cells.add(xM + ',' + y); }
   for (const key of cells) {
     const [x, y] = key.split(',').map(Number);
     pieces.push({ m: 'floor', x, y, z: SC_STOREY });
-    if ((x + y) % 3 === 0) pieces.push({ m: 'post', x, y, z: SC_STOREY });
   }
-  pieces.push({ m: 'stairs', x: 3, y: 3, z: 0, r: 1 });   // landing (4,3)
-  pieces.push({ m: 'stairs', x: 22, y: 14, z: 0, r: 3 }); // landing (21,14)
-  pieces.push({ m: 'stairs', x: 12, y: 15, z: 0, r: 0 }); // landing (12,14)
-  scRailPerimeter(pieces, cells, SC_STOREY, new Set(['4,3,3', '21,14,1', '12,14,2']));
-  scAddWallsAround(pieces, 10, 8, 16, 12, 0, { windowEvery: 2, doors: [{ x: 10, y: 9, r: 3 }] }); // control room
-  // machines + crates (machine 4/5/6, boxes 0-3, pipes 7/8)
-  pieces.push({ m: 'prop', x: 7, y: 6, z: 0, v: 4 }, { m: 'prop', x: 18, y: 6, z: 0, v: 6 }, { m: 'prop', x: 19, y: 11, z: 0, v: 5 });
-  pieces.push({ m: 'prop', x: 6, y: 9, z: 0, v: 7 }, { m: 'prop', x: 23, y: 8, z: 0, v: 8 });
-  pieces.push({ m: 'prop', x: 9, y: 5, z: 0, v: 0 }, { m: 'prop', x: 16, y: 6, z: 0, v: 3 });
-  pieces.push({ m: 'prop', x: 5, y: 12, z: 0, v: 2 }, { m: 'prop', x: 20, y: 5, z: 0, v: 1 });
-  pieces.push({ m: 'prop', x: 8, y: 13, z: 0, v: 1 }, { m: 'prop', x: 17, y: 13, z: 0, v: 0 });
+  // stair access at four corners + both middle-run ends
+  const stairs = [
+    { x: xW - 1, y: yN, r: 1 }, { x: xE + 1, y: yS, r: 3 },
+    { x: xE + 1, y: yN, r: 3 }, { x: xW - 1, y: yS, r: 1 },
+    { x: xM, y: yN - 1, r: 2 }, { x: xM, y: yS + 1, r: 0 },
+  ];
+  for (const s of stairs) {
+    pieces.push({ m: 'stairs', x: s.x, y: s.y, z: 0, r: s.r });
+    const [dx, dy] = SC_DIR4[s.r];
+    skip.add((s.x + dx) + ',' + (s.y + dy) + ',' + ((s.r + 2) % 4));
+  }
+  scRailPerimeter(pieces, cells, SC_STOREY, skip);
+  // windowed control room mid-west + solid storage mid-east
+  const cx0 = Math.round(w * 0.26), cy0 = Math.round(h * 0.42);
+  scAddWallsAround(pieces, cx0, cy0, cx0 + 7, cy0 + 5, 0, { windowEvery: 2, doors: [{ x: cx0, y: cy0 + 2, r: 3 }] });
+  const sx0 = Math.round(w * 0.62), sy0 = Math.round(h * 0.4);
+  scAddWallsAround(pieces, sx0, sy0, sx0 + 5, sy0 + 4, 0, { windowEvery: 0, doors: [{ x: sx0 + 4, y: sy0 + 1, r: 1 }] });
+  const clear = [[cx0, cy0, cx0 + 7, cy0 + 5], [sx0, sy0, sx0 + 5, sy0 + 4], [xW - 2, yN - 2, xE + 2, yN + 1], [xW - 2, yS, xE + 2, yS + 2]];
+  // machine rows between the runs
+  const rowY1 = Math.round(h * 0.32), rowY2 = Math.round(h * 0.62);
+  for (let x = Math.round(w * 0.2); x < Math.round(w * 0.8); x += 4) {
+    pieces.push({ m: 'prop', x, y: rowY1, z: 0, v: 4 + (x % 3) });
+    pieces.push({ m: 'prop', x: x + 2, y: rowY2, z: 0, v: (x % 4) });
+  }
+  scScatterProps(pieces, w, h, Math.round(w * h * 0.01), 53.9, clear);
 }
 
-const SC_HANDCRAFTED = { arena: scMapArena, forest: scMapForest, town: scMapTown, dungeon: scMapDungeon, factory: scMapFactory };
+const SC_HANDCRAFTED = {
+  plain: scMapPlain, canyon: scMapCanyon, ruins: scMapRuins, desert: scMapDesert, facility: scMapFacility,
+  // legacy theme keys from older battles/maps route to the closest new layout
+  forest: scMapPlain, arena: scMapCanyon, town: scMapRuins, dungeon: scMapRuins, factory: scMapFacility,
+};
 function buildHandcraftedMap(themeKey, w, h) {
-  w = w || 26; h = h || 18;
+  w = w || 48; h = h || 48;
   const pieces = [];
   for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) pieces.push({ m: 'floor', x, y, z: 0 });
-  (SC_HANDCRAFTED[themeKey] || scMapArena)(pieces, w, h);
+  (SC_HANDCRAFTED[themeKey] || scMapPlain)(pieces, w, h);
   // Clamp to bounds + dedupe (layouts may re-add ground floor under buildings).
   const seen = new Set(), out = [];
   for (const p of pieces) {

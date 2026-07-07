@@ -22,7 +22,7 @@
 <div id="bar"></div>
 <div id="stat"></div>
 <script>
-const THEMES = ['arena','forest','town','dungeon','factory'];
+const THEMES = ['plain','canyon','ruins','desert','facility'];
 let renderer, scene, camera, controls, world;
 const CELL = 2, FLOOR_H = 1;
 
@@ -36,7 +36,7 @@ function init() {
   document.body.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
-  scApplyFog(scene, 26, 18, CELL);
+  scApplyFog(scene, 48, 48, CELL);
 
   camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 900);
   controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -73,7 +73,7 @@ function tick() { requestAnimationFrame(tick); controls.update(); renderer.rende
 async function show(themeKey) {
   document.querySelectorAll('#bar button').forEach(b => b.classList.toggle('on', b.dataset.t === themeKey));
   while (world.children.length) world.remove(world.children[0]);
-  const W = 26, H = 18;
+  const W = 48, H = 48;
   const structure = buildHandcraftedMap(themeKey, W, H);
   const { group, picks, props } = buildStructureGroup(structure, themeKey, CELL, FLOOR_H, {});
   world.add(group);

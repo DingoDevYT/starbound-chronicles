@@ -817,12 +817,12 @@
       <div id="map-editor-canvas-view" style="display:none;">
         <div style="display:grid; grid-template-columns:2fr auto auto 1.2fr; gap:10px; align-items:end; margin-bottom:8px;">
           <div class="form-group" style="margin:0;"><label class="form-label">Name</label><input class="form-input" id="mapeditor-name-inp" placeholder="e.g. Landing Pad Ambush"></div>
-          <div class="form-group" style="margin:0;"><label class="form-label">Width</label><input class="form-input" id="mapeditor-w-inp" type="number" min="8" max="60" value="26" style="width:70px;"></div>
-          <div class="form-group" style="margin:0;"><label class="form-label">Height</label><input class="form-input" id="mapeditor-h-inp" type="number" min="8" max="40" value="18" style="width:70px;"></div>
+          <div class="form-group" style="margin:0;"><label class="form-label">Width</label><input class="form-input" id="mapeditor-w-inp" type="number" min="8" max="64" value="48" style="width:70px;"></div>
+          <div class="form-group" style="margin:0;"><label class="form-label">Height</label><input class="form-input" id="mapeditor-h-inp" type="number" min="8" max="64" value="48" style="width:70px;"></div>
           <div class="form-group" style="margin:0;"><label class="form-label">Theme</label>
             <div style="display:flex; gap:6px;">
               <select class="form-select" id="mapeditor-theme-inp" onchange="applyEditorTheme(this.value)">
-                <option value="arena">Training Arena</option><option value="forest">Forest</option><option value="town">Town</option><option value="dungeon">Dungeon</option><option value="factory">Factory</option>
+                <option value="plain">Open Plain</option><option value="canyon">Rocky Canyon</option><option value="ruins">Ruins</option><option value="desert">Desert</option><option value="facility">Industrial Facility</option>
               </select>
               <button class="btn-ghost" onclick="resizeEditorGrid()" style="font-size:11px;padding:5px 9px; white-space:nowrap;" title="Apply new width/height (clears the map)">↻ Resize</button>
             </div>
@@ -1307,7 +1307,15 @@ function preloadImages() {
     .on('postgres_changes', { event:'*',      schema:'public', table:'campaign_cargo',    filter:`campaign_id=eq.${campaignId}` }, loadCargo)
     .on('postgres_changes', { event:'*',      schema:'public', table:'ship_log',          filter:`campaign_id=eq.${campaignId}` }, loadLog)
     .on('postgres_changes', { event:'INSERT', schema:'public', table:'dice_rolls',        filter:`campaign_id=eq.${campaignId}` },
-      p => { loadDiceHistory(); if (p.new.combat_fx) playAttackFx(p.new.combat_fx).catch(err => console.error('attack FX failed to play:', err)); })
+      p => {
+        loadDiceHistory();
+        if (!p.new.combat_fx) return;
+        // Skip our own echo — the attacker's client already played this animation
+        // locally the moment the attack resolved (see resolveAttack).
+        const sig = JSON.stringify(p.new.combat_fx);
+        if (sig === lastLocalFxSig) { lastLocalFxSig = null; return; }
+        playAttackFx(p.new.combat_fx).catch(err => console.error('attack FX failed to play:', err));
+      })
     .on('postgres_changes', { event:'*',      schema:'public', table:'mining_sessions',   filter:`campaign_id=eq.${campaignId}` }, loadMiningSessions)
     .subscribe();
 })();
@@ -4364,7 +4372,7 @@ async function fetchCustomMaps() {
 }
 function getCustomMaps() { return customMapsCache; } // used by renderMapPicker()/getMapPreset() — always pre-loaded by openStartCombat()
 let mapEditorEditingId = null;
-let editorPieces = [], editorW = 26, editorH = 18, editorTheme = 'arena';
+let editorPieces = [], editorW = 48, editorH = 48, editorTheme = 'plain';
 let editorLevel = 0, editorMaxLevels = 1, editorBrush = 'floor', editorRot = 0;
 let editorRenderer = null, editorScene = null, editorCamera = null, editorControls = null, editorWorld = null, editorRaf = null;
 let editorCell = 2, editorFloorH = 3, editorPlacePlane = null;
@@ -4520,9 +4528,9 @@ function openMapEditorCanvas(id) {
   const cm = id ? customMapsCache.find(m => m.id === id) : null;
   document.getElementById('map-editor-title').textContent = cm ? `Edit ${cm.label}` : 'New Battlefield';
   document.getElementById('mapeditor-name-inp').value = cm?.label || '';
-  editorTheme = cm?.theme3d || 'arena';
+  editorTheme = cm?.theme3d || 'plain';
   document.getElementById('mapeditor-theme-inp').value = editorTheme;
-  editorW = cm?.w || 26; editorH = cm?.h || 18;
+  editorW = cm?.w || 48; editorH = cm?.h || 48;
   document.getElementById('mapeditor-w-inp').value = editorW;
   document.getElementById('mapeditor-h-inp').value = editorH;
   editorLevel = 0; editorRot = 0; editorBrush = 'floor';
@@ -4586,8 +4594,8 @@ function applyEditorTheme(theme) {
 }
 // Apply the width/height inputs — resizing clears the map back to a fresh ground floor.
 function resizeEditorGrid() {
-  const w = Math.max(8, Math.min(60, parseInt(document.getElementById('mapeditor-w-inp').value, 10) || editorW));
-  const h = Math.max(8, Math.min(40, parseInt(document.getElementById('mapeditor-h-inp').value, 10) || editorH));
+  const w = Math.max(8, Math.min(64, parseInt(document.getElementById('mapeditor-w-inp').value, 10) || editorW));
+  const h = Math.max(8, Math.min(64, parseInt(document.getElementById('mapeditor-h-inp').value, 10) || editorH));
   if (editorPieces.length > 1 && !confirm('Resizing clears the battlefield and lays a fresh ground floor. Continue?')) {
     document.getElementById('mapeditor-w-inp').value = editorW;
     document.getElementById('mapeditor-h-inp').value = editorH;
@@ -4848,11 +4856,13 @@ const COMBAT_MAPS = {
   // battlefield when on-foot combat now runs in the Three.js viewer instead of
   // the flat 2D tileset — purely a visual pick, doesn't change w/h/density/obstacles.
   outside: {
-    open:     { label:'Open Plain',   w:26, h:18, biome:'grass',  density:0.035, theme3d:'forest' },
-    canyon:   { label:'Rocky Canyon', w:26, h:18, biome:'rocky',  density:0.16, theme3d:'dungeon' },
-    ruins:    { label:'Ruins',        w:26, h:18, biome:'rocky',  density:0.11, theme3d:'town' },
-    desert:   { label:'Desert Wastes',w:26, h:18, biome:'desert', density:0.06, theme3d:'arena' },
-    facility: { label:'Industrial Facility', w:26, h:18, biome:'rocky', density:0.14, theme3d:'factory' },
+    // theme3d now names the battlefield IDENTITY (palette + hand-crafted layout in
+    // js/combat3d-structures.js) — Rocky Canyon really is orange rock mesas, etc.
+    open:     { label:'Open Plain',   w:48, h:48, biome:'grass',  density:0.035, theme3d:'plain' },
+    canyon:   { label:'Rocky Canyon', w:48, h:48, biome:'rocky',  density:0.16, theme3d:'canyon' },
+    ruins:    { label:'Ruins',        w:48, h:48, biome:'rocky',  density:0.11, theme3d:'ruins' },
+    desert:   { label:'Desert Wastes',w:48, h:48, biome:'desert', density:0.06, theme3d:'desert' },
+    facility: { label:'Industrial Facility', w:48, h:48, biome:'rocky', density:0.14, theme3d:'facility' },
   },
 };
 
@@ -5209,8 +5219,10 @@ function onCombatTargetChange(combatantId) {
   const btn = document.querySelector('#combat-cheatsheet .bg-action-tile[data-role="attack"]');
   const sel = document.getElementById('combat-target-sel');
   if (!c || !btn || !sel) return;
+  // The button stays clickable — resolveAttack() gives a visible toast for every
+  // blocked case (range, LoS, used action) instead of a mystery-disabled button.
   const outOfRange = meleeOutOfRange(c, currentTurnWeapon, sel.value);
-  btn.disabled = turnActionState.coreActionUsed || !sel.value || !currentTurnWeapon || outOfRange;
+  btn.disabled = !sel.value;
   btn.title = outOfRange ? `Out of melee range (max ${MELEE_RANGE_CELLS} tiles)` : 'Attack';
 }
 
@@ -5269,7 +5281,7 @@ async function renderCheatSheet(c) {
   const meleeBlocked = canAct && meleeOutOfRange(c, currentTurnWeapon, defaultTargetId);
   const actionTilesHtml = canAct ? `
     <select class="form-select" id="combat-target-sel" style="font-size:11px; padding:6px 8px; width:auto; max-width:130px;" title="Attack target" onchange="onCombatTargetChange('${c.id}')">${targetOptions || '<option value="">No targets</option>'}</select>
-    <button class="bg-action-tile" data-role="attack" title="${meleeBlocked ? `Out of melee range (max ${MELEE_RANGE_CELLS} tiles)` : 'Attack'}" ${turnActionState.coreActionUsed || !targets.length || !currentTurnWeapon || meleeBlocked ? 'disabled' : ''} onclick="resolveAttack('${c.id}')">⚔<span>Attack</span></button>
+    <button class="bg-action-tile" data-role="attack" title="${meleeBlocked ? `Out of melee range (max ${MELEE_RANGE_CELLS} tiles)` : 'Attack'}" ${!targets.length ? 'disabled' : ''} onclick="resolveAttack('${c.id}')">⚔<span>Attack</span></button>
     <button class="bg-action-tile" title="Dash (extra movement)" ${turnActionState.coreActionUsed ? 'disabled' : ''} onclick="performDash('${c.id}')">🏃<span>Dash</span></button>
     ${c.character_id ? `<button class="bg-action-tile" title="Switch weapon" ${turnActionState.coreActionUsed ? 'disabled' : ''} onclick="openSwitchWeapon('${c.id}')">🔄<span>Switch</span></button>` : ''}` : '';
 
@@ -5321,14 +5333,17 @@ function endTurnAnyway() {
 // neighbour cell toward the attacker) determine Total AD, then roll to-hit and damage —
 // see rules.html §4.1 for the underlying formulas this mirrors.
 async function resolveAttack(attackerId) {
+  try {
   const attacker = combatants.find(x => x.id === attackerId);
   const targetSel = document.getElementById('combat-target-sel');
   const target = combatants.find(x => x.id === targetSel?.value);
-  if (!attacker || !target) return;
-  if (turnActionState.coreActionUsed) return;
-  if (attacker.grid_x == null || target.grid_x == null) return alert('Both combatants need a position on the map first — drag them onto the grid.');
+  if (!attacker) return combatToast('No active combatant.', 'err');
+  if (!target) return combatToast('Pick a target first.', 'warn');
+  if (turnActionState.coreActionUsed) return combatToast('Core action already used this turn — End Turn to continue.', 'warn');
+  if (attacker.grid_x == null || target.grid_x == null) return combatToast('Both combatants need a position on the map first — drag them onto the grid.', 'warn');
   const weapon = currentTurnWeapon;
-  if (!weapon) return alert('No weapon equipped — use Switch to equip one first.');
+  if (!weapon) return combatToast('No weapon equipped — use Switch to equip one first.', 'warn');
+  if (meleeOutOfRange(attacker, weapon, target.id)) return combatToast(`Out of melee range — get within ${MELEE_RANGE_CELLS} tiles or switch weapons.`, 'warn');
 
   const st = combatState();
   const aCell = { x: attacker.grid_x, y: attacker.grid_y, z: attacker.grid_z || 0 };
@@ -5337,10 +5352,8 @@ async function resolveAttack(attackerId) {
   // between them, or a ceiling if they're on different floors with no opening). Space combat
   // has no structure grid — skip the LoS gate there.
   if (st.type !== 'space' && combatGrid3D && !vcLineOfSight(combatGrid3D, aCell, tCell)) {
-    return alert('No line of sight to that target — a wall or floor is in the way. Reposition, or pick a target you can actually see.');
+    return combatToast('🚫 No line of sight — a wall or terrain is in the way. Reposition or pick another target.', 'warn');
   }
-
-  turnActionState.coreActionUsed = true;
 
   // 3D distance (levels included) drives the range component of AD; cover uses the 3D grid
   // when there is one, falling back to the flat obstacle heuristic for space combat.
@@ -5384,7 +5397,19 @@ async function resolveAttack(attackerId) {
     dmgResult, armor: targetArmor, finalDmg: dmg,
   };
 
-  await db.from('dice_rolls').insert({ campaign_id: campaignId, user_id: currentUser.id, expression: summary, result: dmg, breakdown: [], combat_fx: combatFx });
+  const { error: insErr } = await db.from('dice_rolls').insert({ campaign_id: campaignId, user_id: currentUser.id, expression: summary, result: dmg, breakdown: [], combat_fx: combatFx });
+  if (insErr) return combatToast('Attack failed to save: ' + insErr.message, 'err');
+
+  // Only consume the Core action once the attack has actually been recorded —
+  // a failure above leaves the turn intact instead of silently burning it.
+  turnActionState.coreActionUsed = true;
+
+  // Play the FX locally RIGHT NOW instead of waiting for our own realtime echo (which
+  // can lag or, if realtime is down, never come — leaving attacks looking like nothing
+  // happened). The echo is deduped in the dice_rolls INSERT handler via this signature;
+  // other viewers still get the animation through realtime as before.
+  lastLocalFxSig = JSON.stringify(combatFx);
+  playAttackFx(combatFx).catch(err => console.error('attack FX failed to play:', err));
 
   if (hit && dmg > 0) {
     const newHp = Math.max(0, targetHpCurrent - dmg);
@@ -5395,10 +5420,15 @@ async function resolveAttack(attackerId) {
 
   drawCombatMap();
   renderCheatSheet(attacker);
+  } catch (err) {
+    console.error('resolveAttack failed:', err);
+    combatToast('Attack failed: ' + err.message, 'err');
+  }
 }
+let lastLocalFxSig = null; // signature of the attack FX we already played locally (dedupe the realtime echo)
 
 async function performDash(combatantId) {
-  if (turnActionState.combatantId !== combatantId || turnActionState.coreActionUsed) return;
+  if (turnActionState.combatantId !== combatantId || turnActionState.coreActionUsed) return combatToast('Core action already used this turn.', 'warn');
   const c = combatants.find(x => x.id === combatantId);
   if (!c) return;
   turnActionState.coreActionUsed = true;
@@ -5509,8 +5539,15 @@ function vcDeriveGrid(structure) {
     else if (p.m === 'stairs') { floor.add(k); stairsAt.set(k, { d: VC_DIR4[(p.r||0)%4], rise: VC_STAIR_RISE }); }
     else if (p.m === 'slope')  { floor.add(k); slopeAt.set(k,  { d: VC_DIR4[(p.r||0)%4], rise: 1 }); }
     else if (p.m === 'wall' || p.m === 'window' || p.m === 'railing') {
-      const [dx,dy] = VC_DIR4[(p.r||0)%4]; const ek = vcEdgeKey(p.x,p.y,p.z,p.x+dx,p.y+dy);
-      edgeMove.add(ek); if (p.m === 'wall') edgeLoS.add(ek); // windows & railings are see-through
+      const [dx,dy] = VC_DIR4[(p.r||0)%4];
+      // Walls/windows are a full STOREY tall — they block their own level band AND the one
+      // above (each level is half a storey), so eye-height shots and terrace-level movement
+      // respect them. Railings are low: own level only, movement only.
+      const bands = (p.m === 'railing') ? [p.z] : [p.z, p.z + 1];
+      for (const bz of bands) {
+        const ek = vcEdgeKey(p.x,p.y,bz,p.x+dx,p.y+dy);
+        edgeMove.add(ek); if (p.m === 'wall') edgeLoS.add(ek); // windows & railings are see-through
+      }
     }
     else if (vcIsProp(p.m)) { prop.add(k); cover.add(k); }
   }
@@ -5562,19 +5599,22 @@ function vcReachable(grid, start, budget) {
 // Sampled 3D march LoS — crossing a walled EDGE blocks it (windows are see-through), and an
 // intact floor slab acts as a ceiling for cross-storey shots. Endpoints' own cells ignored.
 const VC_FLOOR_SLAB = 0.15;
+const VC_EYE_LEVELS = 1.5; // standing eye height in LEVELS (half-tiles): sees OVER waist-high terrain, blocked by storey walls
 function vcLineOfSight(grid, a, b) {
   if (a.x===b.x && a.y===b.y && a.z===b.z) return true;
-  const ax=a.x+0.5, ay=a.y+0.5, az=a.z+0.5, bx=b.x+0.5, by=b.y+0.5, bz=b.z+0.5;
+  const ax=a.x+0.5, ay=a.y+0.5, az=a.z+VC_EYE_LEVELS, bx=b.x+0.5, by=b.y+0.5, bz=b.z+VC_EYE_LEVELS;
   const len = Math.hypot(bx-ax, by-ay, bz-az), steps = Math.max(2, Math.ceil(len/0.08));
   let pcx=a.x, pcy=a.y;
   for (let i=1;i<steps;i++){
     const t=i/steps, px=ax+(bx-ax)*t, py=ay+(by-ay)*t, pz=az+(bz-az)*t;
     const cx=Math.floor(px), cy=Math.floor(py), cz=Math.floor(pz);
-    if ((cx!==pcx || cy!==pcy)) {
-      if (cz===a.z && ((cx===pcx)!==(cy===pcy)) && grid.edgeBlocksLoS(pcx,pcy,cz,cx,cy)) return false;
+    // crossing a walled edge blocks LoS at whatever level band the ray passes through
+    if (cx!==pcx || cy!==pcy) {
+      if (((cx===pcx)!==(cy===pcy)) && grid.edgeBlocksLoS(pcx,pcy,cz,cx,cy)) return false;
       pcx=cx; pcy=cy;
     }
-    if ((cx===a.x&&cy===a.y&&cz===a.z)||(cx===b.x&&cy===b.y&&cz===b.z)) continue;
+    const inA = cx===a.x&&cy===a.y, inB = cx===b.x&&cy===b.y;
+    if ((inA && cz>=a.z && cz<=a.z+1)||(inB && cz>=b.z && cz<=b.z+1)) continue; // own body column
     if (grid.solid.has(vcKey(cx,cy,cz))) return false; // inside a terrain block
     if (grid.floorCells.has(vcKey(cx,cy,cz)) && (pz-cz) < VC_FLOOR_SLAB) return false;
   }
@@ -5643,7 +5683,19 @@ function loadModel3D(path) {
 async function cloneModel3D(path) {
   const src = await loadModel3D(path);
   const clone = src.clone(true);
-  clone.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  clone.traverse(o => {
+    if (!o.isMesh) return;
+    o.castShadow = true; o.receiveShadow = true;
+    // Same metalness clamp as scCloneModel3D — metalness=1 GLTF exports render black
+    // under plain lights (no environment map), hiding the model's actual colors.
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => {
+      if (m && m.metalness !== undefined && m.metalness > 0.4 && !m.userData.scFixed) {
+        // These exports also store sRGB color values where glTF expects linear, so on
+        // top of the metalness clamp, reinterpret the color — otherwise it washes out.
+        m.metalness = 0.1; m.color.convertSRGBToLinear(); m.userData.scFixed = true; m.needsUpdate = true;
+      }
+    });
+  });
   return clone;
 }
 function loadTexture3D(path) {
@@ -6412,6 +6464,25 @@ function combatCellToScreen(gx, gy, yOffsetCells) {
   return combatBufToScreen(cbOffX + gx*cbCell + cbCell/2, cbOffY + (gy + (yOffsetCells||0))*cbCell + cbCell/2);
 }
 function combatSleep(ms) { return new Promise(res => setTimeout(res, ms)); }
+
+// Non-blocking notice pinned over the combat view — replaces every blocking alert()
+// in the combat flow (a browser alert freezes the whole page mid-battle) and gives
+// visible feedback for actions that used to fail silently.
+function combatToast(msg, tone) {
+  let host = document.getElementById('combat-toast-host');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'combat-toast-host';
+    host.style.cssText = 'position:fixed; bottom:86px; left:50%; transform:translateX(-50%); z-index:300; display:flex; flex-direction:column; gap:6px; align-items:center; pointer-events:none;';
+    document.body.appendChild(host);
+  }
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText = `padding:9px 16px; border-radius:8px; font-size:12.5px; font-weight:600; color:#fff; box-shadow:0 4px 18px rgba(0,0,0,.45); opacity:0; transition:opacity .18s, transform .18s; transform:translateY(6px); background:${tone==='err' ? '#b03535' : tone==='warn' ? '#8a6d1f' : '#1c3a66'}; border:1px solid ${tone==='err' ? '#e06060' : tone==='warn' ? '#d4af37' : '#4dc0ff'};`;
+  host.appendChild(el);
+  requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'translateY(0)'; });
+  setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateY(6px)'; setTimeout(() => el.remove(), 250); }, 2800);
+}
 function spawnFxEl(className, gx, gy, html, life, yOffsetCells) {
   const layer = document.getElementById('combat-fx-layer');
   if (!layer) return null;
