@@ -21,7 +21,7 @@
 <div id="bar"></div>
 <div id="stat">loading…</div>
 <script>
-let renderer, scene, camera, controls, env, curSize = 'medium', curVar = 1, shipGroup = null;
+let renderer, scene, camera, controls, env, curSize = 'medium', curVar = 1, shipGroup = null, curView = 'exterior', interiorLights = null, interiorGroup = null;
 function init() {
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -40,12 +40,31 @@ function init() {
   let last = performance.now();
   (function tick() { requestAnimationFrame(tick); const now = performance.now(); const dt = Math.min(0.05, (now - last) / 1000); last = now; controls.update(); env.update(dt); renderer.render(scene, camera); })();
 }
+function clearShip() {
+  if (shipGroup) { scene.remove(shipGroup); shipGroup = null; }
+  if (interiorGroup) { scene.remove(interiorGroup); interiorGroup = null; }
+  if (interiorLights) { scene.remove(interiorLights); interiorLights = null; }
+}
 async function show(size, variant) {
   curSize = size; curVar = variant ?? curVar;
   document.querySelectorAll('#bar button[data-size]').forEach(b => b.classList.toggle('on', b.dataset.size === size));
   document.querySelectorAll('#bar button[data-var]').forEach(b => b.classList.toggle('on', +b.dataset.var === curVar));
-  if (shipGroup) scene.remove(shipGroup);
+  document.querySelectorAll('#bar button[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === curView));
+  clearShip();
   window.__ready = false;
+  if (curView === 'interior') {
+    // BOARD SHIP: the walkable deck (rooms + stations), looked into from above.
+    const built = buildShipInterior(size, { wingTier: curVar, thrusterTier: curVar, reactorTier: curVar, gunCount: 1 + curVar, gunTier: curVar });
+    interiorGroup = built.group; scene.add(interiorGroup);
+    interiorLights = new THREE.Group(); addShipLighting(interiorLights, built); scene.add(interiorLights);
+    env.bindShip(built, interiorGroup);
+    const o = built.outline;
+    camera.position.set(o.cx - o.maxHalf * 0.4, o.length * 0.9, o.zStern + o.length * 0.5);
+    controls.target.set(o.cx, 0, o.zMid); controls.update();
+    document.getElementById('stat').textContent = `${size} · INTERIOR · ${built.picks.length} deck tiles · mode ${env.mode}`;
+    window.__ready = true; window.__ship = built;
+    return;
+  }
   try {
     shipGroup = await loadRealShip(size, curVar);
   } catch (err) {
@@ -60,10 +79,12 @@ async function show(size, variant) {
   document.getElementById('stat').textContent = `${size} · variant ${curVar} · len ${L.toFixed(1)} · mode ${env.mode}`;
   window.__ready = true; window.__ship = shipGroup;
 }
+function setView(v) { curView = v; show(curSize, curVar); }
 function setMode(m) { env.setMode(m); document.querySelectorAll('#bar button[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m)); }
 const bar = document.getElementById('bar');
 ['small','medium','large','capital'].forEach(s => { const b = document.createElement('button'); b.textContent = s; b.dataset.size = s; b.onclick = () => show(s); bar.appendChild(b); });
 [1,2,3,4].forEach(v => { const b = document.createElement('button'); b.textContent = 'clr ' + v; b.dataset.var = v; b.onclick = () => show(curSize, v); bar.appendChild(b); });
+[['exterior','🚀 exterior'],['interior','🛸 board']].forEach(([v,l]) => { const b = document.createElement('button'); b.textContent = l; b.dataset.view = v; b.onclick = () => setView(v); bar.appendChild(b); });
 ['travel','dock','planet'].forEach(m => { const b = document.createElement('button'); b.textContent = m; b.dataset.mode = m; b.onclick = () => setMode(m); bar.appendChild(b); });
 init(); show('medium', 1).then(() => setMode('travel'));
 </script>

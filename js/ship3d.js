@@ -20,17 +20,20 @@
 const SHIP_MAJADROID = 'assets/3d/LowPoly-Spaceships-By-Majadroid/';
 const SHIP_REAL_MODEL = { small: 1, medium: 2, large: 3, capital: 4 };
 const SHIP_REAL_TARGET_LEN = 26; // world units the model is scaled to (nose→tail)
-let _shipObjLoader = null, _shipTexLoader = null;
-const _shipTexCache = {};
-function shipRealTexture(variant) {
+// The pack's textures are literal photos of a red car (with a tiny swatch grid) —
+// they map onto the hull as an ugly streaky mess. Ignore them and paint the ships
+// with clean solid metallic hull colours; the "colour variant" picks the tint.
+const SHIP_REAL_COLORS = [0x6f7d95, 0xa8443a, 0x3f7d70, 0x6a5a9e]; // steel · crimson · teal · plum
+let _shipObjLoader = null;
+const _shipHullMat = {};
+function shipHullMaterial(variant) {
   const v = Math.min(4, Math.max(1, variant || 1));
-  if (!_shipTexCache[v]) {
-    if (!_shipTexLoader) _shipTexLoader = new THREE.TextureLoader();
-    const t = _shipTexLoader.load(SHIP_MAJADROID + 'tex0' + v + '-512.png');
-    t.flipY = false; t.encoding = THREE.sRGBEncoding;
-    _shipTexCache[v] = t;
+  if (!_shipHullMat[v]) {
+    _shipHullMat[v] = new THREE.MeshStandardMaterial({
+      color: scColor(SHIP_REAL_COLORS[v - 1]), roughness: 0.5, metalness: 0.55,
+    });
   }
-  return _shipTexCache[v];
+  return _shipHullMat[v];
 }
 // Loads the real ship for a hull size. Returns a Promise<Group> with the model
 // centred at origin, nose pointing -Z, scaled to SHIP_REAL_TARGET_LEN, and
@@ -39,12 +42,12 @@ function loadRealShip(size, variant) {
   if (!_shipObjLoader) _shipObjLoader = new THREE.OBJLoader();
   const shipN = SHIP_REAL_MODEL[size] || 2;
   const path = SHIP_MAJADROID + 'obj-files/obj-ships/material-01/m1-ship' + shipN + '.obj';
-  const tex = shipRealTexture(variant);
+  const hullMat = shipHullMaterial(variant);
   return new Promise((resolve, reject) => {
     _shipObjLoader.load(path, obj => {
       const kill = [];
       obj.traverse(o => {
-        if (o.isMesh) { o.material = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, metalness: 0.25 }); o.castShadow = true; o.receiveShadow = true; }
+        if (o.isMesh) { o.material = hullMat; o.castShadow = true; o.receiveShadow = true; }
         else if (o.isLine) kill.push(o); // stray line elements render as giant white wireframes
       });
       kill.forEach(o => o.parent && o.parent.remove(o));
@@ -594,22 +597,25 @@ function shipBuildExterior(o, comps, group, dynamic) {
   }
 }
 
-// ── Orchestrator ─────────────────────────────────────────────────────────────
-function buildShip3D(size, comps) {
-  comps = comps || {};
+// ── Orchestrator. opts.interior === true → the walkable DECK only (hull walls +
+// deck + rooms + stations, no exterior wings/thrusters/guns) for the "board ship"
+// view; otherwise the full parametric exterior (used as a fallback/legacy). ───
+function buildShip3D(size, comps, opts) {
+  comps = comps || {}; opts = opts || {};
   const o = shipHullOutline(size);
   const floor = shipRasterize(o);
   const zones = shipZones(floor, o, size);
   const group = new THREE.Group(), picks = [], dynamic = {};
-  group.add(shipBuildBody(o));
+  if (!opts.interior) group.add(shipBuildBody(o)); // solid belly is only for the exterior look
   group.add(shipBuildWalls(o));
   shipBuildDeck(floor, o, group, picks);
   shipBuildPartitions(zones, group);
   shipBuildStations(zones, comps, group, dynamic);
-  shipBuildExterior(o, comps, group, dynamic);
+  if (!opts.interior) shipBuildExterior(o, comps, group, dynamic);
   const grid = { floor, roomAt: zones.roomAt, standable: (x, y) => floor.has(x + ',' + y) };
   return { group, picks, grid, outline: o, zones, dynamic, size };
 }
+function buildShipInterior(size, comps) { return buildShip3D(size, comps, { interior: true }); }
 
 // Interior lighting: one soft light per room + ambient fill.
 function addShipLighting(scene, built) {
