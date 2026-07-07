@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Asset Harness — Majadroid ships</title>
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+<style>body{margin:0;background:#080b14;overflow:hidden;} #stat{position:fixed;bottom:8px;left:8px;color:#8fa8cc;font:12px system-ui;}</style>
+</head>
+<body>
+<div id="stat">loading…</div>
+<script>
+const SHIP_BASE = 'assets/3d/LowPoly-Spaceships-By-Majadroid/obj-files/';
+let renderer, scene, camera, controls;
+function init(){
+  renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(innerWidth,innerHeight);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  document.body.appendChild(renderer.domElement);
+  scene = new THREE.Scene(); scene.background = new THREE.Color(0x0a1018);
+  camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 2000);
+  controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
+  scene.add(new THREE.HemisphereLight(0xbcd6ff, 0x20242e, 1.0));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(30,50,20); scene.add(sun);
+  const sun2 = new THREE.DirectionalLight(0x88aaff, 0.6); sun2.position.set(-30,10,-20); scene.add(sun2);
+  addEventListener('resize', ()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+  (function tick(){requestAnimationFrame(tick);controls.update();renderer.render(scene,camera);})();
+}
+const texLoader = new THREE.TextureLoader();
+const texCache = {};
+function shipTex(mat){ // mat 1..4 → tex0N-512.png
+  const p = SHIP_BASE.replace('obj-files/','') + 'tex0'+mat+'-512.png';
+  if(!texCache[p]){ const t = texLoader.load(p); t.encoding = THREE.sRGBEncoding; t.flipY = false; texCache[p]=t; }
+  return texCache[p];
+}
+function loadOBJ(path, mat){
+  return new Promise((res,rej)=>{
+    new THREE.OBJLoader().load(path, obj=>{
+      const tex = shipTex(mat);
+      const kill = [];
+      obj.traverse(o=>{ if(o.isMesh){ o.material = new THREE.MeshStandardMaterial({ map: tex, roughness:0.6, metalness:0.25 }); o.castShadow=true; } else if(o.isLine){ kill.push(o); } });
+      kill.forEach(o=>o.parent && o.parent.remove(o)); // strip stray line elements (they render as huge white wireframes)
+      res(obj);
+    }, undefined, rej);
+  });
+}
+function frame(obj){ // center + scale to ~fit
+  const box = new THREE.Box3().setFromObject(obj); const size = new THREE.Vector3(); box.getSize(size);
+  const ctr = new THREE.Vector3(); box.getCenter(ctr);
+  obj.position.sub(ctr);
+  return size;
+}
+async function showShips(){
+  // 5 ships in a row
+  for(let i=1;i<=5;i++){
+    const obj = await loadOBJ(SHIP_BASE+`obj-ships/material-01/m1-ship${i}.obj`, 1);
+    frame(obj);
+    obj.position.x = (i-3)*16;
+    obj.rotation.y = Math.PI; // face camera
+    scene.add(obj);
+  }
+  camera.position.set(0, 18, 46); controls.target.set(0,0,0); controls.update();
+  document.getElementById('stat').textContent = '5 ships loaded';
+  window.__ready = true;
+}
+function partPath(n, mat){ return SHIP_BASE+`obj-components/material-01/m1-part${String(n).padStart(2,'0')}.obj`; }
+function bbox(o){ const b=new THREE.Box3().setFromObject(o); const s=new THREE.Vector3(),c=new THREE.Vector3(); b.getSize(s); b.getCenter(c); return {b,s,c}; }
+// Assemble a ship: body (centered) + engine at the rear + mirrored wings on the
+// flanks. Nose points -Z. Offsets are tuned relative to each part's bbox.
+async function assembleShip(bodyN, engineN, wingN, mat){
+  const ship = new THREE.Group();
+  const body = await loadOBJ(partPath(bodyN), mat); const bb = bbox(body);
+  body.position.sub(bb.c);                       // recenter body at origin
+  ship.add(body);
+  const bMinZ = bb.b.min.z - bb.c.z, bMaxZ = bb.b.max.z - bb.c.z, bMaxX = bb.b.max.x - bb.c.x;
+  // engine: sit at the tail (+z), slightly down
+  const eng = await loadOBJ(partPath(engineN), mat); const eb = bbox(eng);
+  eng.position.sub(eb.c);
+  eng.position.z += bMaxZ - eb.s.z * 0.35;
+  eng.position.y -= bb.s.y * 0.1;
+  ship.add(eng);
+  // wings: mirror the right wing to the left; mount at the mid flanks
+  const wingR = await loadOBJ(partPath(wingN), mat); const wb = bbox(wingR);
+  wingR.position.sub(wb.c);                        // wing root near x=0
+  wingR.position.x += bMaxX * 0.6;
+  wingR.position.z += (bMinZ + bMaxZ) * 0.5 + bb.s.z * 0.05;
+  wingR.position.y -= bb.s.y * 0.05;
+  const wingL = wingR.clone(); wingL.scale.x *= -1;
+  ship.add(wingR, wingL);
+  window.__wR = wingR; window.__wL = wingL; window.__eng = eng; window.__body = body;
+  return ship;
+}
+async function showAssembly(){
+  const ship = await assembleShip(2, 6, 11, 1);
+  ship.rotation.y = Math.PI; // face camera
+  scene.add(ship);
+  window.__ship = ship;
+  window.__ready = true;
+}
+init();
+const mode = new URLSearchParams(location.search).get('m') || 'ships';
+if(mode==='asm') showAssembly(); else showShips();
+</script>
+</body>
+</html>

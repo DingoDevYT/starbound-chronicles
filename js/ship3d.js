@@ -12,6 +12,73 @@
 //   update(dt), bindShip(built, shipGroup).
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ── Real ship models (Majadroid low-poly kit, CC0). The exterior shown flying/
+// landing is a real textured model chosen by hull size, tinted by a colour
+// variant (1..4 = the pack's four palette textures). Pre-assembled ships look
+// far better than trying to bolt the loose component parts together, so hull
+// upgrades swap to a bigger/fancier ship. ────────────────────────────────────
+const SHIP_MAJADROID = 'assets/3d/LowPoly-Spaceships-By-Majadroid/';
+const SHIP_REAL_MODEL = { small: 1, medium: 2, large: 3, capital: 4 };
+const SHIP_REAL_TARGET_LEN = 26; // world units the model is scaled to (nose→tail)
+let _shipObjLoader = null, _shipTexLoader = null;
+const _shipTexCache = {};
+function shipRealTexture(variant) {
+  const v = Math.min(4, Math.max(1, variant || 1));
+  if (!_shipTexCache[v]) {
+    if (!_shipTexLoader) _shipTexLoader = new THREE.TextureLoader();
+    const t = _shipTexLoader.load(SHIP_MAJADROID + 'tex0' + v + '-512.png');
+    t.flipY = false; t.encoding = THREE.sRGBEncoding;
+    _shipTexCache[v] = t;
+  }
+  return _shipTexCache[v];
+}
+// Loads the real ship for a hull size. Returns a Promise<Group> with the model
+// centred at origin, nose pointing -Z, scaled to SHIP_REAL_TARGET_LEN, and
+// userData.bellyY / .length set for the landing maths. Also spins up engine glow.
+function loadRealShip(size, variant) {
+  if (!_shipObjLoader) _shipObjLoader = new THREE.OBJLoader();
+  const shipN = SHIP_REAL_MODEL[size] || 2;
+  const path = SHIP_MAJADROID + 'obj-files/obj-ships/material-01/m1-ship' + shipN + '.obj';
+  const tex = shipRealTexture(variant);
+  return new Promise((resolve, reject) => {
+    _shipObjLoader.load(path, obj => {
+      const kill = [];
+      obj.traverse(o => {
+        if (o.isMesh) { o.material = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, metalness: 0.25 }); o.castShadow = true; o.receiveShadow = true; }
+        else if (o.isLine) kill.push(o); // stray line elements render as giant white wireframes
+      });
+      kill.forEach(o => o.parent && o.parent.remove(o));
+      // orient + centre + scale
+      let box = new THREE.Box3().setFromObject(obj);
+      const size3 = new THREE.Vector3(); box.getSize(size3);
+      const longAxisZ = size3.z >= size3.x;           // is the model longest along Z already?
+      if (!longAxisZ) obj.rotation.y = Math.PI / 2;    // rotate so length runs along Z
+      box = new THREE.Box3().setFromObject(obj);
+      box.getSize(size3);
+      const scale = SHIP_REAL_TARGET_LEN / (Math.max(size3.x, size3.z) || 1);
+      obj.scale.setScalar(scale);
+      box = new THREE.Box3().setFromObject(obj);
+      const ctr = new THREE.Vector3(); box.getCenter(ctr);
+      obj.position.sub(ctr);                            // centre at origin
+      const wrap = new THREE.Group();
+      wrap.add(obj);
+      box = new THREE.Box3().setFromObject(wrap);
+      wrap.userData.bellyY = box.min.y;
+      wrap.userData.length = box.max.z - box.min.z;
+      // engine glow: additive discs + point light at the tail
+      wrap.userData.engineGlow = [];
+      const gm = new THREE.MeshBasicMaterial({ map: shipGlowTexture(), color: 0x8fd6ff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+      for (const gx of [-box.max.x * 0.35, box.max.x * 0.35, 0]) {
+        const spr = new THREE.Sprite(gm.clone());
+        spr.scale.setScalar(2.4);
+        spr.position.set(gx, box.min.y * 0.2, box.max.z - 0.4);
+        wrap.add(spr); wrap.userData.engineGlow.push(spr);
+      }
+      resolve(wrap);
+    }, undefined, reject);
+  });
+}
+
 const SHIP_CELL = 2;
 const SHIP_HULL_H = 1.9;
 const SHIP_PART_H = 1.45;
@@ -683,26 +750,38 @@ function createShipEnvironment(scene) {
   const sites = {};
   function siteFor(mode) {
     if (!sites[mode]) {
-      // size + centre the site on the SHIP, so it always lands mid-pad
-      const o = env.built ? env.built.outline : { cx: 0, zMid: 0, length: 40 };
-      const padR = Math.max(20, o.length * 0.62);
+      // Size + centre the pad on the SHIP so it always lands mid-pad. A real
+      // (loaded) ship is centred at origin with a known length + belly height; a
+      // parametric build uses its outline. The pad TOP is set to meet the belly.
+      const isReal = !!env.realShip;
+      const cx = isReal ? 0 : (env.built ? env.built.outline.cx : 0);
+      const cz = isReal ? 0 : (env.built ? env.built.outline.zMid : 0);
+      const len = isReal ? env.realShip.userData.length : (env.built ? env.built.outline.length : 40);
+      const padR = Math.max(16, len * 0.66);
       sites[mode] = mode === 'planet' ? shipBuildPlanetSite(padR) : shipBuildDockSite(padR);
-      sites[mode].position.x = o.cx;
-      sites[mode].position.z = o.zMid;
-      sites[mode].position.y = SHIP_SITE_HIDDEN_Y;
+      sites[mode].position.set(cx, SHIP_SITE_HIDDEN_Y, cz);
+      if (isReal) { // pad top (planet 1.1 / dock 1.6 above the site) must meet the ship belly
+        const padTop = mode === 'planet' ? 1.1 : 1.6;
+        sites[mode].userData.landedY = env.realShip.userData.bellyY - padTop;
+      }
       scene.add(sites[mode]);
     }
     return sites[mode];
   }
 
   env.bindShip = function (built, shipGroup) {
-    env.built = built; env.shipGroup = shipGroup;
-    // ship changed size → rebuild sites next time so pads re-centre and re-scale
+    env.built = built; env.realShip = null; env.shipGroup = shipGroup;
     for (const k in sites) { scene.remove(sites[k]); delete sites[k]; }
     if (env.phase === 'sited') env.site = siteFor(env.mode);
-    // sky + star field centred on the ship too
     sky.position.set(built.outline.cx, 0, built.outline.zMid);
     stars.position.set(built.outline.cx, 0, built.outline.zMid);
+  };
+  // Bind a REAL loaded ship model (centred at origin) as the exterior.
+  env.bindRealShip = function (shipGroup) {
+    env.built = null; env.realShip = shipGroup; env.shipGroup = shipGroup;
+    for (const k in sites) { scene.remove(sites[k]); delete sites[k]; }
+    if (env.phase === 'sited') env.site = siteFor(env.mode);
+    sky.position.set(0, 0, 0); stars.position.set(0, 0, 0);
   };
 
   env.setMode = function (mode) {
@@ -775,6 +854,14 @@ function createShipEnvironment(scene) {
     }
     stars.geometry.attributes.position.needsUpdate = true;
 
+    // real ship: pulse the engine glow with the flight speed
+    if (env.realShip && env.realShip.userData.engineGlow) {
+      const burn = 0.25 + env.streak * 0.9;
+      for (const spr of env.realShip.userData.engineGlow) {
+        spr.material.opacity = 0.25 + burn * 0.6 * (1 + 0.12 * Math.sin(now * 24 + spr.position.x));
+        spr.scale.setScalar(1.6 + burn * 1.4);
+      }
+    }
     // ship VFX: flickering layered flames, glow, particle stream, holo + reactor pulse
     if (env.built && env.built.dynamic) {
       const d = env.built.dynamic;
