@@ -584,6 +584,7 @@
         <div style="display:flex; gap:8px;">
           <span class="round-badge" id="round-lbl">Round 0</span>
           <button class="btn-secondary" onclick="openAddCombatant()" style="font-size:11px; padding:5px 12px;">+ Combatant</button>
+          <button class="btn-ghost"     onclick="openBestiary()" style="font-size:11px; padding:5px 12px;">🐉 Bestiary</button>
           <button class="btn-ghost"     onclick="autoPopulateCrew()" style="font-size:11px; padding:5px 12px;">Add All Crew</button>
           <button class="btn-ghost"     onclick="nextTurn()"    style="font-size:11px; padding:5px 12px;">Next Turn</button>
           <button class="btn-ghost"     onclick="clearInit()"   style="font-size:11px; padding:5px 12px; color:#ff8888;">Clear All</button>
@@ -740,6 +741,108 @@
   </div>
 </div>
 
+<!-- BESTIARY — a reusable library of GM enemy templates, saved locally in this browser
+     (see getBestiary()/saveBestiaryList()) so no new Supabase table/RLS is needed. "Add to
+     Fight" inserts a real initiative_tracker row from the template, same shape saveCombatant()
+     already uses for a bare NPC, just with weapon/species columns filled in from schema-v28. -->
+<div class="modal-backdrop" id="modal-bestiary">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header"><span class="modal-title" id="bestiary-title">Bestiary</span><button class="modal-close" onclick="closeModal('modal-bestiary')">✕</button></div>
+    <div class="modal-body">
+      <div id="bestiary-list-view">
+        <p style="font-size:11px; color:var(--text-faint); margin:0 0 10px;">Saved enemy templates, kept in this browser. Add one straight into the Initiative tracker, or build a new one.</p>
+        <div id="bestiary-list" style="display:flex; flex-direction:column; gap:8px; max-height:360px; overflow-y:auto;"></div>
+        <button class="btn-secondary" onclick="openBestiaryEditor(null)" style="margin-top:10px; font-size:11px; padding:6px 14px;">➕ New Enemy</button>
+      </div>
+      <div id="bestiary-editor-view" style="display:none;">
+        <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="bestiary-name-inp" placeholder="e.g. Kragol Soldier"></div>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;">
+          <div class="form-group"><label class="form-label">Species (portrait)</label>
+            <select class="form-select" id="bestiary-species-inp" onchange="onBestiarySpeciesChange()"></select>
+          </div>
+          <div class="form-group"><label class="form-label">Gender</label><select class="form-select" id="bestiary-gender-inp" onchange="onBestiaryGenderChange()"></select></div>
+          <div class="form-group"><label class="form-label">Look</label><select class="form-select" id="bestiary-variant-inp"></select></div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px;">
+          <div class="form-group"><label class="form-label">HP</label><input class="form-input" id="bestiary-hp-inp" type="number"></div>
+          <div class="form-group"><label class="form-label">Base AD</label><input class="form-input" id="bestiary-ad-inp" type="number"></div>
+          <div class="form-group"><label class="form-label">FIGHT mod</label><input class="form-input" id="bestiary-fight-inp" type="number"></div>
+          <div class="form-group"><label class="form-label">Armor</label><input class="form-input" id="bestiary-armor-inp" type="number"></div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="form-group"><label class="form-label">Speed</label><input class="form-input" id="bestiary-speed-inp" type="number" placeholder="30"></div>
+          <div class="form-group"><label class="form-label">Token Color</label><input class="form-input" id="bestiary-color-inp" type="color" value="#c84040" style="height:36px; padding:2px;"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Weapon</label>
+          <div style="display:grid; grid-template-columns:1.3fr 1fr 1fr; gap:8px;">
+            <input class="form-input" id="bestiary-weaponname-inp" placeholder="Weapon name (blank = unarmed)">
+            <select class="form-select" id="bestiary-weapontype-inp">
+              <option value="">Unarmed</option>
+              <option value="melee">Melee</option>
+              <option value="pistol">Pistol</option>
+              <option value="smg">SMG</option>
+              <option value="carbine">Carbine</option>
+              <option value="rifle">Rifle</option>
+              <option value="shotgun">Shotgun</option>
+              <option value="sniper">Sniper</option>
+              <option value="heavy">Heavy</option>
+            </select>
+            <input class="form-input" id="bestiary-dice-inp" placeholder="Damage e.g. 1d8">
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">Accuracy Mod</label><input class="form-input" id="bestiary-acc-inp" type="number" value="0" style="max-width:120px;"></div>
+        <div class="form-error" id="bestiary-error"></div>
+      </div>
+    </div>
+    <div class="modal-footer" id="bestiary-list-footer"><button class="btn-ghost" onclick="closeModal('modal-bestiary')">Close</button></div>
+    <div class="modal-footer" id="bestiary-editor-footer" style="display:none;"><button class="btn-ghost" onclick="openBestiary()">◂ Back</button><button class="btn-primary" onclick="saveBestiaryEntry()" style="width:auto;padding:10px 24px;">Save Enemy</button></div>
+  </div>
+</div>
+
+<!-- MAP EDITOR — GM-authored on-foot battlefields, click-to-toggle obstacle cells on a
+     simple 2D grid. Saved locally (getCustomMaps()/saveCustomMapsList()), same "local files
+     on the webserver" spirit as the Bestiary — the actual battle still renders in the real
+     3D view using whatever obstacles/theme got saved here, unchanged from any other map. -->
+<div class="modal-backdrop" id="modal-map-editor">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header"><span class="modal-title" id="map-editor-title">Map Editor</span><button class="modal-close" onclick="closeModal('modal-map-editor')">✕</button></div>
+    <div class="modal-body">
+      <div id="map-editor-list-view">
+        <p style="font-size:11px; color:var(--text-faint); margin:0 0 10px;">Custom on-foot battlefields, kept in this browser. Pick one from the Battlefield list when starting combat.</p>
+        <div id="map-editor-list" style="display:flex; flex-direction:column; gap:8px; max-height:360px; overflow-y:auto;"></div>
+        <button class="btn-secondary" onclick="openMapEditorCanvas(null)" style="margin-top:10px; font-size:11px; padding:6px 14px;">➕ New Battlefield</button>
+      </div>
+      <div id="map-editor-canvas-view" style="display:none;">
+        <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:12px;">
+          <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="mapeditor-name-inp" placeholder="e.g. Landing Pad Ambush"></div>
+          <div class="form-group"><label class="form-label">Width</label><input class="form-input" id="mapeditor-w-inp" type="number" min="10" max="60" value="26"></div>
+          <div class="form-group"><label class="form-label">Height</label><input class="form-input" id="mapeditor-h-inp" type="number" min="8" max="40" value="18"></div>
+          <div class="form-group"><label class="form-label">Theme</label>
+            <select class="form-select" id="mapeditor-theme-inp">
+              <option value="arena">Training Arena</option>
+              <option value="forest">Forest</option>
+              <option value="town">Town</option>
+              <option value="dungeon">Dungeon</option>
+              <option value="factory">Factory</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:8px;">
+          <button class="btn-ghost" onclick="resizeMapEditorGrid()" style="font-size:11px; padding:5px 10px;">↻ Resize Grid</button>
+          <button class="btn-ghost" onclick="clearMapEditorGrid()" style="font-size:11px; padding:5px 10px;">🧹 Clear Obstacles</button>
+          <div class="combat-cheat-chip" style="margin-left:auto; align-self:center;">Click cells to toggle obstacles — <strong id="mapeditor-count">0</strong> placed</div>
+        </div>
+        <div style="border:1px solid var(--border2); border-radius:8px; overflow:auto; background:#04070e; max-height:360px;">
+          <canvas id="map-editor-canvas" style="display:block; cursor:pointer;"></canvas>
+        </div>
+        <div class="form-error" id="mapeditor-error"></div>
+      </div>
+    </div>
+    <div class="modal-footer" id="map-editor-list-footer"><button class="btn-ghost" onclick="closeModal('modal-map-editor')">Close</button></div>
+    <div class="modal-footer" id="map-editor-canvas-footer" style="display:none;"><button class="btn-ghost" onclick="openMapEditor()">◂ Back</button><button class="btn-primary" onclick="saveMapEditorEntry()" style="width:auto;padding:10px 24px;">Save Battlefield</button></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-add-quest">
   <div class="modal" style="max-width:480px;">
     <div class="modal-header"><span class="modal-title">Add Quest</span><button class="modal-close" onclick="closeModal('modal-add-quest')">✕</button></div>
@@ -818,7 +921,9 @@
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Battlefield</label>
+        <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">Battlefield
+          <button type="button" class="btn-ghost" id="combat-map-editor-link" onclick="openMapEditor()" style="font-size:10.5px; padding:3px 8px; display:none;">✏ Map Editor</button>
+        </label>
         <div id="combat-map-picker" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px;"></div>
       </div>
       <div class="form-group" id="combat-density-group">
@@ -1080,6 +1185,16 @@ const AVATAR_COLORS = ['#1e4a9a','#4a1a0a','#1a3a2a','#0a2a3a','#2a2a1a','#3a1a1
 // species/gender/variant portrait — used everywhere a character's image renders.
 function characterPortraitPath(species, appearance, customUrl) {
   return customUrl || speciesImagePath(species, appearance?.gender, appearance?.variant);
+}
+// A combatant's portrait may come from a linked character (species/appearance/custom art),
+// or — for a bare NPC row with no character_id, e.g. one added from the Bestiary — from its
+// own npc_species/npc_gender/npc_variant columns instead. Returns null if neither is set,
+// in which case callers fall back to a plain colored token.
+function resolveCombatantPortraitPath(c) {
+  const species = c.characters?.species || c.npc_species;
+  if (!species) return null;
+  const appearance = c.characters?.appearance || { gender: c.npc_gender, variant: c.npc_variant };
+  return characterPortraitPath(species, appearance, c.characters?.custom_portrait_url);
 }
 
 const params     = new URLSearchParams(location.search);
@@ -4085,6 +4200,271 @@ async function saveCombatant() {
   closeModal('modal-add-init');
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// BESTIARY — reusable GM enemy templates. Saved in this browser's localStorage
+// (per campaign) rather than a new Supabase table/RLS policy — the actual battle
+// data (the initiative_tracker row a template gets turned into) is still fully
+// real/synced/shared like every other combatant; only the reusable TEMPLATE
+// library itself is local to whichever browser the GM is using it from.
+// ══════════════════════════════════════════════════════════════════════════
+function getBestiary() {
+  try { return JSON.parse(localStorage.getItem('sbc-bestiary-' + campaignId)) || []; }
+  catch (e) { return []; }
+}
+function saveBestiaryList(list) {
+  localStorage.setItem('sbc-bestiary-' + campaignId, JSON.stringify(list));
+}
+let bestiaryEditingId = null;
+
+function openBestiary() {
+  if (!isGM) return;
+  bestiaryEditingId = null;
+  document.getElementById('bestiary-title').textContent = 'Bestiary';
+  document.getElementById('bestiary-list-view').style.display = '';
+  document.getElementById('bestiary-editor-view').style.display = 'none';
+  document.getElementById('bestiary-list-footer').style.display = '';
+  document.getElementById('bestiary-editor-footer').style.display = 'none';
+  renderBestiaryList();
+  openModal('modal-bestiary');
+}
+function renderBestiaryList() {
+  const list = getBestiary();
+  document.getElementById('bestiary-list').innerHTML = list.length ? list.map(t => `
+    <div class="combat-cheat-chip" style="display:flex; align-items:center; gap:10px; justify-content:space-between;">
+      <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+        <img src="${speciesImagePath(t.species, t.gender, t.variant)}" style="width:34px; height:34px; border-radius:6px; object-fit:cover; border:1px solid var(--border2);" onerror="this.style.visibility='hidden'">
+        <div style="min-width:0;">
+          <div style="font-weight:700; color:#e0ecff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px;">${esc(t.name)}</div>
+          <div style="font-size:10.5px; color:var(--text-faint);">HP ${t.hp_max} · AD ${t.base_ad} · ${t.weapon_name ? esc(t.weapon_name) : 'Unarmed'}</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:6px; flex-shrink:0;">
+        <button class="btn-secondary" style="font-size:11px; padding:5px 10px;" onclick="addBestiaryToFight('${t.id}')">➕ Add</button>
+        <button class="btn-ghost" style="font-size:11px; padding:5px 8px;" onclick="openBestiaryEditor('${t.id}')">✏</button>
+        <button class="btn-ghost" style="font-size:11px; padding:5px 8px; color:#ff8888;" onclick="deleteBestiaryEntry('${t.id}')">🗑</button>
+      </div>
+    </div>`).join('') : `<p style="font-size:12px; color:var(--text-faint); text-align:center; padding:20px 0;">No saved enemies yet — build one below.</p>`;
+}
+function refreshBestiarySpeciesOptions() {
+  const sel = document.getElementById('bestiary-species-inp');
+  sel.innerHTML = Object.keys(SPECIES_VARIANTS).map(s => `<option value="${s}">${s[0].toUpperCase()+s.slice(1)}</option>`).join('');
+}
+function onBestiarySpeciesChange() {
+  const species = document.getElementById('bestiary-species-inp').value;
+  const genders = Object.keys(SPECIES_VARIANTS[species] || { M: [0] });
+  document.getElementById('bestiary-gender-inp').innerHTML = genders.map(g => `<option value="${g}">${g==='M'?'Male':'Female'}</option>`).join('');
+  onBestiaryGenderChange();
+}
+function onBestiaryGenderChange() {
+  const species = document.getElementById('bestiary-species-inp').value;
+  const gender = document.getElementById('bestiary-gender-inp').value;
+  const variants = (SPECIES_VARIANTS[species] || {})[gender] || [0];
+  document.getElementById('bestiary-variant-inp').innerHTML = variants.map(v => `<option value="${v}">${v}</option>`).join('');
+}
+function openBestiaryEditor(id) {
+  if (!isGM) return;
+  bestiaryEditingId = id;
+  refreshBestiarySpeciesOptions();
+  const tpl = id ? getBestiary().find(t => t.id === id) : null;
+  document.getElementById('bestiary-title').textContent = tpl ? `Edit ${tpl.name}` : 'New Enemy';
+  document.getElementById('bestiary-name-inp').value = tpl?.name || '';
+  document.getElementById('bestiary-species-inp').value = tpl?.species || 'kragol';
+  onBestiarySpeciesChange();
+  if (tpl?.gender) document.getElementById('bestiary-gender-inp').value = tpl.gender;
+  onBestiaryGenderChange();
+  if (tpl?.variant != null) document.getElementById('bestiary-variant-inp').value = tpl.variant;
+  document.getElementById('bestiary-hp-inp').value = tpl?.hp_max ?? 20;
+  document.getElementById('bestiary-ad-inp').value = tpl?.base_ad ?? 8;
+  document.getElementById('bestiary-fight-inp').value = tpl?.fight_mod ?? 1;
+  document.getElementById('bestiary-armor-inp').value = tpl?.armor ?? 0;
+  document.getElementById('bestiary-speed-inp').value = tpl?.speed ?? 30;
+  document.getElementById('bestiary-color-inp').value = tpl?.token_color || '#c84040';
+  document.getElementById('bestiary-weaponname-inp').value = tpl?.weapon_name || '';
+  document.getElementById('bestiary-weapontype-inp').value = tpl?.weapon_type || '';
+  document.getElementById('bestiary-dice-inp').value = tpl?.damage_dice || '';
+  document.getElementById('bestiary-acc-inp').value = tpl?.accuracy_mod ?? 0;
+  showError('bestiary-error', '');
+  document.getElementById('bestiary-list-view').style.display = 'none';
+  document.getElementById('bestiary-editor-view').style.display = '';
+  document.getElementById('bestiary-list-footer').style.display = 'none';
+  document.getElementById('bestiary-editor-footer').style.display = '';
+}
+function saveBestiaryEntry() {
+  const name = document.getElementById('bestiary-name-inp').value.trim();
+  if (!name) return showError('bestiary-error', 'Enter a name.');
+  const entry = {
+    id: bestiaryEditingId || (crypto.randomUUID ? crypto.randomUUID() : 'b' + Date.now() + Math.random().toString(36).slice(2)),
+    name,
+    species: document.getElementById('bestiary-species-inp').value,
+    gender: document.getElementById('bestiary-gender-inp').value,
+    variant: parseInt(document.getElementById('bestiary-variant-inp').value) || 0,
+    hp_max: parseInt(document.getElementById('bestiary-hp-inp').value) || 10,
+    base_ad: parseInt(document.getElementById('bestiary-ad-inp').value) || 8,
+    fight_mod: parseInt(document.getElementById('bestiary-fight-inp').value) || 0,
+    armor: parseInt(document.getElementById('bestiary-armor-inp').value) || 0,
+    speed: parseInt(document.getElementById('bestiary-speed-inp').value) || 30,
+    token_color: document.getElementById('bestiary-color-inp').value || '#c84040',
+    weapon_name: document.getElementById('bestiary-weaponname-inp').value.trim() || null,
+    weapon_type: document.getElementById('bestiary-weapontype-inp').value || null,
+    damage_dice: document.getElementById('bestiary-dice-inp').value.trim() || '1d6',
+    accuracy_mod: parseInt(document.getElementById('bestiary-acc-inp').value) || 0,
+  };
+  const list = getBestiary();
+  const idx = list.findIndex(t => t.id === entry.id);
+  if (idx >= 0) list[idx] = entry; else list.push(entry);
+  saveBestiaryList(list);
+  openBestiary();
+}
+function deleteBestiaryEntry(id) {
+  if (!confirm('Delete this saved enemy?')) return;
+  saveBestiaryList(getBestiary().filter(t => t.id !== id));
+  renderBestiaryList();
+}
+// Drops a fresh instance of a saved template straight into the Initiative tracker — same
+// insert shape saveCombatant() uses for a bare (unlinked) NPC, plus the weapon/species
+// columns from schema-v28 so it shows up armed and looking right in the 3D view too.
+async function addBestiaryToFight(id) {
+  const tpl = getBestiary().find(t => t.id === id);
+  if (!tpl) return;
+  const { error } = await db.from('initiative_tracker').insert({
+    campaign_id: campaignId, combatant: tpl.name, initiative: 0, is_npc: true, character_id: null,
+    hp_max: tpl.hp_max, hp_current: tpl.hp_max, base_ad: tpl.base_ad, fight_mod: tpl.fight_mod,
+    armor: tpl.armor, speed: tpl.speed, token_color: tpl.token_color,
+    weapon_name: tpl.weapon_name, weapon_type: tpl.weapon_type, damage_dice: tpl.damage_dice, accuracy_mod: tpl.accuracy_mod,
+    npc_species: tpl.species, npc_gender: tpl.gender, npc_variant: tpl.variant,
+  });
+  if (error) { alert('Failed to add — has schema-v28.sql been run in Supabase yet?\n\n' + error.message); return; }
+  await loadInitiative();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// MAP EDITOR — GM-authored on-foot battlefields. Also localStorage-backed, same
+// reasoning as the Bestiary above: no new Supabase table needed, and the saved
+// {w, h, theme3d, obstacles} shape plugs directly into the same combat_state
+// structure every other battlefield already produces (see getMapPreset() and
+// startCombat()'s preset.customObstacles branch) — nothing downstream (3D
+// rendering, cover/AD math, movement blocking) needs to know a map was hand-drawn
+// instead of generated.
+// ══════════════════════════════════════════════════════════════════════════
+function getCustomMaps() {
+  try { return JSON.parse(localStorage.getItem('sbc-custommaps-' + campaignId)) || []; }
+  catch (e) { return []; }
+}
+function saveCustomMapsList(list) {
+  localStorage.setItem('sbc-custommaps-' + campaignId, JSON.stringify(list));
+}
+let mapEditorEditingId = null;
+let mapEditorObstacles = new Set(); // "x,y" strings
+let mapEditorW = 26, mapEditorH = 18;
+const MAP_EDITOR_CELL_PX = 22;
+
+function openMapEditor() {
+  if (!isGM) return;
+  document.getElementById('map-editor-title').textContent = 'Map Editor';
+  document.getElementById('map-editor-list-view').style.display = '';
+  document.getElementById('map-editor-canvas-view').style.display = 'none';
+  document.getElementById('map-editor-list-footer').style.display = '';
+  document.getElementById('map-editor-canvas-footer').style.display = 'none';
+  renderMapEditorList();
+  openModal('modal-map-editor');
+}
+function renderMapEditorList() {
+  const list = getCustomMaps();
+  document.getElementById('map-editor-list').innerHTML = list.length ? list.map(m => `
+    <div class="combat-cheat-chip" style="display:flex; align-items:center; gap:10px; justify-content:space-between;">
+      <div>
+        <div style="font-weight:700; color:#e0ecff;">${esc(m.label)}</div>
+        <div style="font-size:10.5px; color:var(--text-faint);">${m.w}×${m.h} · ${esc(m.theme3d)} · ${m.obstacles.length} obstacle cells</div>
+      </div>
+      <div style="display:flex; gap:6px; flex-shrink:0;">
+        <button class="btn-ghost" style="font-size:11px; padding:5px 10px;" onclick="openMapEditorCanvas('${m.id}')">✏ Edit</button>
+        <button class="btn-ghost" style="font-size:11px; padding:5px 8px; color:#ff8888;" onclick="deleteCustomMap('${m.id}')">🗑</button>
+      </div>
+    </div>`).join('') : `<p style="font-size:12px; color:var(--text-faint); text-align:center; padding:20px 0;">No custom battlefields yet — build one below.</p>`;
+}
+function openMapEditorCanvas(id) {
+  if (!isGM) return;
+  mapEditorEditingId = id;
+  const cm = id ? getCustomMaps().find(m => m.id === id) : null;
+  document.getElementById('map-editor-title').textContent = cm ? `Edit ${cm.label}` : 'New Battlefield';
+  document.getElementById('mapeditor-name-inp').value = cm?.label || '';
+  document.getElementById('mapeditor-theme-inp').value = cm?.theme3d || 'arena';
+  mapEditorW = cm?.w || 26;
+  mapEditorH = cm?.h || 18;
+  document.getElementById('mapeditor-w-inp').value = mapEditorW;
+  document.getElementById('mapeditor-h-inp').value = mapEditorH;
+  mapEditorObstacles = new Set((cm?.obstacles || []).map(o => o[0] + ',' + o[1]));
+  showError('mapeditor-error', '');
+  document.getElementById('map-editor-list-view').style.display = 'none';
+  document.getElementById('map-editor-canvas-view').style.display = '';
+  document.getElementById('map-editor-list-footer').style.display = 'none';
+  document.getElementById('map-editor-canvas-footer').style.display = '';
+  drawMapEditorCanvas();
+}
+function resizeMapEditorGrid() {
+  mapEditorW = Math.max(10, Math.min(60, parseInt(document.getElementById('mapeditor-w-inp').value) || 26));
+  mapEditorH = Math.max(8, Math.min(40, parseInt(document.getElementById('mapeditor-h-inp').value) || 18));
+  document.getElementById('mapeditor-w-inp').value = mapEditorW;
+  document.getElementById('mapeditor-h-inp').value = mapEditorH;
+  // Drop any obstacles that fell outside the new (possibly smaller) grid.
+  mapEditorObstacles = new Set([...mapEditorObstacles].filter(k => {
+    const [x, y] = k.split(',').map(Number);
+    return x < mapEditorW && y < mapEditorH;
+  }));
+  drawMapEditorCanvas();
+}
+function clearMapEditorGrid() {
+  mapEditorObstacles.clear();
+  drawMapEditorCanvas();
+}
+function drawMapEditorCanvas() {
+  const canvas = document.getElementById('map-editor-canvas');
+  const cell = MAP_EDITOR_CELL_PX;
+  canvas.width = mapEditorW * cell;
+  canvas.height = mapEditorH * cell;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#0b111d';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = 'rgba(90,120,160,.18)';
+  for (let x = 0; x <= mapEditorW; x++) { ctx.beginPath(); ctx.moveTo(x*cell, 0); ctx.lineTo(x*cell, mapEditorH*cell); ctx.stroke(); }
+  for (let y = 0; y <= mapEditorH; y++) { ctx.beginPath(); ctx.moveTo(0, y*cell); ctx.lineTo(mapEditorW*cell, y*cell); ctx.stroke(); }
+  ctx.fillStyle = '#c84040';
+  mapEditorObstacles.forEach(k => {
+    const [x, y] = k.split(',').map(Number);
+    ctx.fillRect(x*cell + 1, y*cell + 1, cell - 2, cell - 2);
+  });
+  document.getElementById('mapeditor-count').textContent = mapEditorObstacles.size;
+}
+document.getElementById('map-editor-canvas').addEventListener('click', e => {
+  const rect = e.target.getBoundingClientRect();
+  const cell = MAP_EDITOR_CELL_PX;
+  const x = Math.floor((e.clientX - rect.left) / cell), y = Math.floor((e.clientY - rect.top) / cell);
+  if (x < 0 || y < 0 || x >= mapEditorW || y >= mapEditorH) return;
+  const key = x + ',' + y;
+  if (mapEditorObstacles.has(key)) mapEditorObstacles.delete(key); else mapEditorObstacles.add(key);
+  drawMapEditorCanvas();
+});
+function saveMapEditorEntry() {
+  const name = document.getElementById('mapeditor-name-inp').value.trim();
+  if (!name) return showError('mapeditor-error', 'Enter a name.');
+  const entry = {
+    id: mapEditorEditingId || (crypto.randomUUID ? crypto.randomUUID() : 'm' + Date.now() + Math.random().toString(36).slice(2)),
+    label: name, w: mapEditorW, h: mapEditorH,
+    theme3d: document.getElementById('mapeditor-theme-inp').value,
+    obstacles: [...mapEditorObstacles].map(k => k.split(',').map(Number)),
+  };
+  const list = getCustomMaps();
+  const idx = list.findIndex(m => m.id === entry.id);
+  if (idx >= 0) list[idx] = entry; else list.push(entry);
+  saveCustomMapsList(list);
+  openMapEditor();
+}
+function deleteCustomMap(id) {
+  if (!confirm('Delete this battlefield?')) return;
+  saveCustomMapsList(getCustomMaps().filter(m => m.id !== id));
+  renderMapEditorList();
+}
+
 async function adjHP(id, sign) {
   const c = combatants.find(x => x.id === id); if (!c) return;
   const input = document.getElementById('hp-amt-' + id);
@@ -4326,6 +4706,7 @@ function openStartCombat() {
   document.querySelectorAll('.combat-type-btn').forEach(b => b.classList.toggle('active', b.dataset.ctype === 'outside'));
   document.querySelectorAll('.combat-density-btn').forEach(b => b.classList.toggle('active', b.dataset.density === '1'));
   document.getElementById('combat-density-group').style.display = '';
+  document.getElementById('combat-map-editor-link').style.display = '';
   renderMapPicker();
   showError('combat-error','');
   openModal('modal-start-combat');
@@ -4333,8 +4714,10 @@ function openStartCombat() {
 function selectCombatType(t) {
   selectedCombatType = t; selectedCombatMap = 'open';
   document.querySelectorAll('.combat-type-btn').forEach(b => b.classList.toggle('active', b.dataset.ctype === t));
-  // Density only applies to on-foot's procedural scatter — space maps use fixed, hand-placed layouts.
+  // Density and the custom Map Editor only apply to on-foot's procedural scatter — space
+  // maps use fixed, hand-placed layouts.
   document.getElementById('combat-density-group').style.display = t === 'outside' ? '' : 'none';
+  document.getElementById('combat-map-editor-link').style.display = t === 'outside' ? '' : 'none';
   renderMapPicker();
 }
 function selectCombatDensity(mult) {
@@ -4343,27 +4726,51 @@ function selectCombatDensity(mult) {
 }
 function renderMapPicker() {
   const maps = COMBAT_MAPS[selectedCombatType];
-  document.getElementById('combat-map-picker').innerHTML = Object.entries(maps).map(([key, m]) =>
+  let html = Object.entries(maps).map(([key, m]) =>
     `<div class="combat-map-opt ${key===selectedCombatMap?'active':''}" onclick="selectCombatMap('${key}')">${esc(m.label)}</div>`).join('');
+  // Custom, GM-authored battlefields (see Map Editor) only apply to on-foot — they're stored
+  // locally in this browser (getCustomMaps()), tagged with a custom_ prefixed key so
+  // getMapPreset()/startCombat() know to use the hand-placed obstacles instead of generating any.
+  if (selectedCombatType === 'outside') {
+    html += getCustomMaps().map(m => {
+      const key = 'custom_' + m.id;
+      return `<div class="combat-map-opt ${key===selectedCombatMap?'active':''}" style="border-color:#7dffb8;" onclick="selectCombatMap('${key}')">✏ ${esc(m.label)}</div>`;
+    }).join('');
+  }
+  document.getElementById('combat-map-picker').innerHTML = html;
 }
 function selectCombatMap(k) {
   selectedCombatMap = k;
-  document.querySelectorAll('.combat-map-opt').forEach((el,i) => el.classList.toggle('active', Object.keys(COMBAT_MAPS[selectedCombatType])[i] === k));
+  renderMapPicker();
+}
+// Resolves either a built-in COMBAT_MAPS preset or a custom map saved in the Map Editor into
+// the same {label, w, h, theme3d, density, obstacles?} shape startCombat() expects.
+function getMapPreset(type, key) {
+  if (type === 'outside' && key.startsWith('custom_')) {
+    const cm = getCustomMaps().find(m => m.id === key.slice(7));
+    if (cm) return { label: cm.label, w: cm.w, h: cm.h, theme3d: cm.theme3d, density: 0.05, biome: null, customObstacles: cm.obstacles };
+  }
+  return COMBAT_MAPS[type][key];
 }
 
 async function startCombat() {
   if (!isGM) return;
-  const preset = COMBAT_MAPS[selectedCombatType][selectedCombatMap];
+  const preset = getMapPreset(selectedCombatType, selectedCombatMap);
+  if (!preset) return showError('combat-error', 'That battlefield no longer exists — pick another.');
   // Space maps use their fixed hand-placed layout; outside maps get a fresh random scatter
   // every time (scaled by the GM's chosen Prop Density), so the same "Rocky Canyon" pick
   // never looks identical twice. Either way, an extended ring of hazards gets added beyond
   // the original footprint for the boundless camera (see generateExtendedObstacles). Town
   // gets a different generator entirely — rectangular building footprints with street gaps,
-  // not scattered single-cell props, so the 3D renderer can place whole building models.
+  // not scattered single-cell props, so the 3D renderer can place whole building models. A
+  // custom Map Editor battlefield skips generation for the core entirely — the GM hand-placed
+  // those obstacles already — but still gets the same extended sprawl ring beyond its edges.
   const effDensity = selectedCombatType === 'outside' ? (preset.density || 0) * selectedCombatDensity : preset.density;
   let coreObstacles, buildings = null;
   if (selectedCombatType === 'space') {
     coreObstacles = preset.obstacles;
+  } else if (preset.customObstacles) {
+    coreObstacles = preset.customObstacles;
   } else if (preset.theme3d === 'town') {
     const gen = generateClusteredObstacles(preset.w, preset.h, effDensity);
     coreObstacles = gen.obstacles; buildings = gen.buildings;
@@ -4375,6 +4782,11 @@ async function startCombat() {
     active: true, type: selectedCombatType, map: selectedCombatMap,
     w: preset.w, h: preset.h, obstacles, biome: preset.biome || null, activeTurn: 0,
     buildings: buildings || undefined,
+    // Stored directly instead of re-derived from COMBAT_MAPS[type][map] every time (which
+    // would fail to find a theme/label for a custom_ prefixed map key that isn't a real
+    // COMBAT_MAPS entry) — every reader (build3DEnvironment, refreshCombatUI's status line)
+    // uses these first now, falling back to the old lookup only for pre-existing battles.
+    theme3d: preset.theme3d || null, mapLabel: preset.label || null,
   };
   // Cluster every current combatant near the centre so the GM can drag them out.
   const cx = Math.floor(preset.w / 2), cy = Math.floor(preset.h / 2);
@@ -4431,7 +4843,7 @@ function refreshCombatUI() {
     return;
   }
   const typeLabel = st.type === 'space' ? 'Spacecraft' : 'On-Foot';
-  const mapLabel = COMBAT_MAPS[st.type]?.[st.map]?.label || '';
+  const mapLabel = st.mapLabel || COMBAT_MAPS[st.type]?.[st.map]?.label || '';
   const active = combatants[activeTurn % (combatants.length || 1)];
   status.innerHTML = `<strong style="color:#e0ecff;">${typeLabel} battle</strong> · ${esc(mapLabel)} · Round ${campaign.round_num || 0}` +
     (active ? ` · <span style="color:#ffd23a;">${esc(active.combatant)}'s turn</span>` : '');
@@ -4500,9 +4912,15 @@ async function renderCheatSheet(c) {
     currentTurnWeapon = w || null;
     if (w) weaponHtml = `<div class="combat-cheat-chip" style="display:flex; align-items:center; gap:6px;">${w.icon_path?renderStoredIcon(w.icon_path,18):''}Weapon: <strong>${esc(w.name)}</strong>${w.damage_dice?` · ${esc(w.damage_dice)}`:''}${w.accuracy_mod?` · ${w.accuracy_mod>0?'+':''}${w.accuracy_mod} acc`:''}${w.range_m?` · ${w.range_m}m`:''}</div>`;
     else weaponHtml = `<div class="combat-cheat-chip" style="color:var(--text-faint);">Unarmed — fighting bare-handed</div>`;
+  } else if (c.weapon_type) {
+    // A bare NPC (no linked character) carries its weapon directly on the initiative_tracker
+    // row instead — e.g. one added from the Bestiary with a weapon already configured.
+    currentTurnWeapon = { name: c.weapon_name || 'Weapon', weapon_type: c.weapon_type, damage_dice: c.damage_dice || '1d6', accuracy_mod: c.accuracy_mod || 0, icon_path: c.weapon_icon_path || null };
+    const w = currentTurnWeapon;
+    weaponHtml = `<div class="combat-cheat-chip" style="display:flex; align-items:center; gap:6px;">${w.icon_path?renderStoredIcon(w.icon_path,18):''}Weapon: <strong>${esc(w.name)}</strong> · ${esc(w.damage_dice)}${w.accuracy_mod?` · ${w.accuracy_mod>0?'+':''}${w.accuracy_mod} acc`:''}</div>`;
   }
-  // No weapon equipped (or no character at all, e.g. a GM-added NPC) still gets to fight —
-  // an unarmed/improvised melee strike — instead of the Attack button just being dead.
+  // No weapon equipped (or no character at all, e.g. a GM-added NPC with nothing set) still
+  // gets to fight — an unarmed/improvised melee strike — instead of the Attack button being dead.
   if (!currentTurnWeapon) currentTurnWeapon = UNARMED_WEAPON;
 
   // Default target: the closest combatant on the OTHER side (NPC vs. player-linked is the
@@ -4519,7 +4937,7 @@ async function renderCheatSheet(c) {
 
   // Portrait: the combatant's actual character art when linked to one (same helper the 3D
   // tokens use), otherwise a colored monogram tile matching the same NPC/player convention.
-  const portraitPath = c.characters?.species ? characterPortraitPath(c.characters.species, c.characters.appearance, c.characters.custom_portrait_url) : null;
+  const portraitPath = resolveCombatantPortraitPath(c);
   const tileColor = c.token_color || (c.is_npc ? '#c84040' : '#3a78d4');
   const portraitHtml = portraitPath
     ? `<img class="bg-portrait" src="${portraitPath}" alt="" onerror="this.outerHTML='<div class=&quot;bg-portrait-fallback&quot; style=&quot;background:${tileColor}&quot;>${esc((c.combatant || '?')[0].toUpperCase())}</div>'">`
@@ -5109,7 +5527,7 @@ async function build3DEnvironment(st) {
   document.getElementById('combat-3d-fx-layer').innerHTML = '';
   activeFx3D = []; activeTweens3D = []; activeBursts3D = [];
 
-  const themeKey = (COMBAT_MAPS.outside[st.map] || {}).theme3d || 'arena';
+  const themeKey = st.theme3d || (COMBAT_MAPS.outside[st.map] || {}).theme3d || 'arena';
   const theme = COMBAT_3D_THEMES[themeKey] || COMBAT_3D_THEMES.arena;
   scene3D.fog.color.setHex(theme.fogColor);
   scene3D.userData.sky.material.uniforms.bottomColor.value.setHex(theme.fogColor);
@@ -5273,7 +5691,7 @@ async function create3DToken(c) {
   group.position.set(pos.x, 0, pos.z);
 
   let plane;
-  const portraitPath = c.characters?.species ? characterPortraitPath(c.characters.species, c.characters.appearance, c.characters.custom_portrait_url) : null;
+  const portraitPath = resolveCombatantPortraitPath(c);
   if (portraitPath) {
     try {
       const tex = await loadTexture3D(portraitPath);
@@ -5309,6 +5727,8 @@ async function create3DToken(c) {
         .eq('character_id', c.character_id).eq('is_equipped', true).eq('item_type', 'weapon').limit(1).maybeSingle();
       weaponType = w?.weapon_type || null;
     } catch (err) { /* no equipped weapon on record — token just won't hold a prop */ }
+  } else {
+    weaponType = c.weapon_type || null; // a bare NPC's weapon lives directly on the row (e.g. added from the Bestiary)
   }
   const propPath = WEAPON_3D_PROP[weaponType];
   if (propPath) {
