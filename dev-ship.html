@@ -46,7 +46,13 @@ async function show(size, variant) {
   document.querySelectorAll('#bar button[data-var]').forEach(b => b.classList.toggle('on', +b.dataset.var === curVar));
   if (shipGroup) scene.remove(shipGroup);
   window.__ready = false;
-  shipGroup = await loadRealShip(size, curVar);
+  try {
+    shipGroup = await loadRealShip(size, curVar);
+  } catch (err) {
+    document.getElementById('stat').innerHTML = '⚠ Ship model failed to load: ' + err +
+      (location.protocol === 'file:' ? '<br><b style="color:#ff9">You opened this with file:// — browsers block loading local models. Open it over http (the live site or a local server).</b>' : '');
+    console.error('ship load failed', err); return;
+  }
   scene.add(shipGroup);
   env.bindRealShip(shipGroup);
   const L = shipGroup.userData.length;
