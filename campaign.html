@@ -131,6 +131,7 @@
   background:linear-gradient(135deg, #3a2a10, #1a1006); border:1px solid #ffd23a; color:#ffe9a8;
 }
 .bg-end-turn:hover { box-shadow:0 0 12px rgba(255,210,58,.4); }
+#combat-arrange-btn.active { border-color:#4dff9e; color:#7dffb8; background:var(--surface3); box-shadow:0 0 8px rgba(77,255,158,.35); }
 .combat-shield-ctl { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
 .combat-shield-ctl input { width:56px; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:5px 7px; font-size:12px; }
 
@@ -504,6 +505,7 @@
           <button class="btn-ghost" onclick="cbZoomStep(1.2)" style="padding:4px 10px;">+</button>
           <button class="btn-ghost" onclick="cbZoomStep(1/1.2)" style="padding:4px 10px;">−</button>
           <button class="btn-ghost" onclick="recenterCombatView()" style="padding:4px 10px; font-size:11px;" title="Reset zoom/pan and frame every combatant">🎯 Recenter</button>
+          <button class="btn-ghost" id="combat-arrange-btn" onclick="toggleArrangeMode()" style="padding:4px 10px; font-size:11px; display:none;" title="Freely reposition any combatant without spending movement — for setting up the battlefield">📍 Arrange</button>
           <button class="btn-secondary" id="combat-turn-btn" onclick="nextTurn()" style="padding:4px 12px; font-size:11px; display:none;">Next Turn ▸</button>
           <button class="btn-secondary" id="combat-start-btn" onclick="openStartCombat()" style="padding:4px 12px; font-size:11px; display:none;">Start Combat</button>
           <button class="btn-ghost" id="combat-end-btn" onclick="endCombat()" style="padding:4px 12px; font-size:11px; display:none; color:#ff8888;">End Combat</button>
@@ -4416,6 +4418,7 @@ function refreshCombatUI() {
   // directly in the attack FX instead, and the 2D canvas it draws on is hidden in 3D mode.
   document.getElementById('combat-ruler-btn').style.display = (st.active && st.type === 'space') ? '' : 'none';
   document.getElementById('combat-ruler-btn').classList.toggle('active', rulerActive);
+  document.getElementById('combat-arrange-btn').style.display = (isGM && st.active && st.type !== 'space') ? 'inline-block' : 'none';
   startBtn.style.display = (isGM && !st.active) ? 'inline-block' : 'none';
   endBtn.style.display   = (isGM && st.active) ? 'inline-block' : 'none';
   turnBtn.style.display  = (isGM && st.active) ? 'inline-block' : 'none';
@@ -4454,6 +4457,28 @@ function refreshCombatUI() {
 // the active combatant's id actually changes, not on every incidental re-render.
 let turnActionState = { combatantId: null, coreActionUsed: false, remainingMove: 0 };
 let currentTurnWeapon = null;
+// Fallback for a combatant with no weapon equipped (or no character sheet at all) so the
+// Attack action still works as a bare-handed/improvised strike instead of being dead.
+const UNARMED_WEAPON = { name: 'Unarmed Strike', weapon_type: 'melee', damage_dice: '1d3', accuracy_mod: 0, icon_path: null };
+const MELEE_RANGE_CELLS = 3;
+function meleeOutOfRange(attacker, weapon, targetId) {
+  if (!weapon || weapon.weapon_type !== 'melee') return false;
+  const target = combatants.find(x => x.id === targetId);
+  if (!target || attacker.grid_x == null || target.grid_x == null) return false;
+  const dist = Math.round(Math.hypot(target.grid_x - attacker.grid_x, target.grid_y - attacker.grid_y));
+  return dist > MELEE_RANGE_CELLS;
+}
+// Re-checks just the Attack button's disabled/range state when the target dropdown
+// changes, without re-fetching the equipped weapon or rebuilding the whole action dock.
+function onCombatTargetChange(combatantId) {
+  const c = combatants.find(x => x.id === combatantId);
+  const btn = document.querySelector('#combat-cheatsheet .bg-action-tile[data-role="attack"]');
+  const sel = document.getElementById('combat-target-sel');
+  if (!c || !btn || !sel) return;
+  const outOfRange = meleeOutOfRange(c, currentTurnWeapon, sel.value);
+  btn.disabled = turnActionState.coreActionUsed || !sel.value || !currentTurnWeapon || outOfRange;
+  btn.title = outOfRange ? `Out of melee range (max ${MELEE_RANGE_CELLS} tiles)` : 'Attack';
+}
 
 async function renderCheatSheet(c) {
   const cheat = document.getElementById('combat-cheatsheet');
@@ -4474,11 +4499,23 @@ async function renderCheatSheet(c) {
       .eq('character_id', c.character_id).eq('is_equipped', true).eq('item_type','weapon').limit(1).maybeSingle();
     currentTurnWeapon = w || null;
     if (w) weaponHtml = `<div class="combat-cheat-chip" style="display:flex; align-items:center; gap:6px;">${w.icon_path?renderStoredIcon(w.icon_path,18):''}Weapon: <strong>${esc(w.name)}</strong>${w.damage_dice?` · ${esc(w.damage_dice)}`:''}${w.accuracy_mod?` · ${w.accuracy_mod>0?'+':''}${w.accuracy_mod} acc`:''}${w.range_m?` · ${w.range_m}m`:''}</div>`;
-    else weaponHtml = `<div class="combat-cheat-chip" style="color:var(--text-faint);">No weapon equipped</div>`;
+    else weaponHtml = `<div class="combat-cheat-chip" style="color:var(--text-faint);">Unarmed — fighting bare-handed</div>`;
   }
+  // No weapon equipped (or no character at all, e.g. a GM-added NPC) still gets to fight —
+  // an unarmed/improvised melee strike — instead of the Attack button just being dead.
+  if (!currentTurnWeapon) currentTurnWeapon = UNARMED_WEAPON;
 
+  // Default target: the closest combatant on the OTHER side (NPC vs. player-linked is the
+  // same ally/enemy heuristic used for token coloring elsewhere), not just the first one in
+  // the list — so an attack doesn't default to swinging at your own ally. Still fully
+  // overridable in the dropdown, including targeting an ally on purpose if you really want.
   const targets = combatants.filter(x => x.id !== c.id);
-  const targetOptions = targets.map(t => `<option value="${t.id}">${esc(t.combatant)}</option>`).join('');
+  const enemyTargets = targets.filter(t => !!t.is_npc !== !!c.is_npc);
+  const rankedEnemies = (enemyTargets.length ? enemyTargets : targets).map(t => ({
+    t, d: (t.grid_x != null && c.grid_x != null) ? Math.hypot(t.grid_x - c.grid_x, t.grid_y - c.grid_y) : Infinity,
+  })).sort((a, b) => a.d - b.d);
+  const defaultTargetId = rankedEnemies[0]?.t.id || '';
+  const targetOptions = targets.map(t => `<option value="${t.id}" ${t.id === defaultTargetId ? 'selected' : ''}>${esc(t.combatant)}${!!t.is_npc === !!c.is_npc ? ' (ally)' : ''}</option>`).join('');
 
   // Portrait: the combatant's actual character art when linked to one (same helper the 3D
   // tokens use), otherwise a colored monogram tile matching the same NPC/player convention.
@@ -4489,9 +4526,10 @@ async function renderCheatSheet(c) {
     : `<div class="bg-portrait-fallback" style="background:${tileColor};">${esc((c.combatant || '?')[0].toUpperCase())}</div>`;
   const hpPct = c.hp_max ? Math.max(0, Math.min(1, (c.hp_current ?? 0) / c.hp_max)) * 100 : 100;
 
+  const meleeBlocked = canAct && meleeOutOfRange(c, currentTurnWeapon, defaultTargetId);
   const actionTilesHtml = canAct ? `
-    <select class="form-select" id="combat-target-sel" style="font-size:11px; padding:6px 8px; width:auto; max-width:130px;" title="Attack target">${targetOptions || '<option value="">No targets</option>'}</select>
-    <button class="bg-action-tile" title="Attack" ${turnActionState.coreActionUsed || !targets.length || !currentTurnWeapon ? 'disabled' : ''} onclick="resolveAttack('${c.id}')">⚔<span>Attack</span></button>
+    <select class="form-select" id="combat-target-sel" style="font-size:11px; padding:6px 8px; width:auto; max-width:130px;" title="Attack target" onchange="onCombatTargetChange('${c.id}')">${targetOptions || '<option value="">No targets</option>'}</select>
+    <button class="bg-action-tile" data-role="attack" title="${meleeBlocked ? `Out of melee range (max ${MELEE_RANGE_CELLS} tiles)` : 'Attack'}" ${turnActionState.coreActionUsed || !targets.length || !currentTurnWeapon || meleeBlocked ? 'disabled' : ''} onclick="resolveAttack('${c.id}')">⚔<span>Attack</span></button>
     <button class="bg-action-tile" title="Dash (extra movement)" ${turnActionState.coreActionUsed ? 'disabled' : ''} onclick="performDash('${c.id}')">🏃<span>Dash</span></button>
     ${c.character_id ? `<button class="bg-action-tile" title="Switch weapon" ${turnActionState.coreActionUsed ? 'disabled' : ''} onclick="openSwitchWeapon('${c.id}')">🔄<span>Switch</span></button>` : ''}` : '';
 
@@ -4665,7 +4703,7 @@ const COMBAT_3D_THEMES = {
     base: 'assets/3d/kenney_mini-arena/Models/GLB format/',
     floor: 'floor.glb',
     obstacles: ['block.glb', 'column.glb', 'column-damaged.glb', 'tree.glb', 'statue.glb', 'weapon-rack.glb'],
-    fogColor: 0x05070d,
+    fogColor: 0x05070d, skyTop: 0x142a4a,
   },
   forest: {
     base: 'assets/3d/kenney_retro-urban-kit/Models/GLB format/',
@@ -4681,7 +4719,7 @@ const COMBAT_3D_THEMES = {
         'mushroom_redGroup.glb', 'mushroom_tanGroup.glb', 'flower_purpleA.glb', 'grass_leafsLarge.glb',
       ],
     },
-    fogColor: 0x0a1a0d,
+    fogColor: 0x0a1a0d, skyTop: 0x1c3a24,
   },
   town: {
     base: 'assets/3d/kenney_retro-urban-kit/Models/GLB format/',
@@ -4691,22 +4729,22 @@ const COMBAT_3D_THEMES = {
       'detail-bench.glb', 'detail-light-single.glb', 'pallet.glb', 'pallet-small.glb', 'tree-small.glb',
       'tree-park-large.glb', 'tree-shrub.glb', 'truck-grey.glb', 'truck-green-cargo.glb', 'wall-a-column.glb',
     ],
-    fogColor: 0x0d0f16,
+    fogColor: 0x0d0f16, skyTop: 0x24283a,
   },
   dungeon: {
     base: 'assets/3d/kenney_mini-dungeon/Models/GLB format/',
     floor: 'floor.glb',
     obstacles: ['column.glb', 'barrel.glb', 'chest.glb', 'rocks.glb', 'stones.glb', 'wood-structure.glb', 'wood-support.glb', 'wall-half.glb', 'banner.glb'],
-    fogColor: 0x08060a,
+    fogColor: 0x08060a, skyTop: 0x180e1a,
   },
   factory: {
     base: 'assets/3d/kenney_factory-kit_3.0/Models/GLB format/',
     floor: 'floor.glb',
     obstacles: ['box-large.glb', 'box-long.glb', 'box-small.glb', 'box-wide.glb', 'machine.glb', 'machine-bed.glb', 'machine-fortified.glb', 'pipe-glass-large-long.glb', 'pipe-glass-large-bend.glb'],
-    fogColor: 0x0a0c10,
+    fogColor: 0x0a0c10, skyTop: 0x1c2028,
   },
 };
-const COMBAT_3D_FLOOR_MARGIN = 22; // extra cells of floor sprawling past the battle footprint on every side
+const COMBAT_3D_FLOOR_MARGIN = 34; // extra cells of floor sprawling past the battle footprint on every side — kept comfortably beyond the fog's far distance so its edge is never visible
 // One held prop per weapon archetype (same weapon_type tags as WEAPON_BOLT_COLOR/
 // WEAPON_SFX_FILES) so a combatant's token actually shows what they're carrying instead of
 // only flashing a weapon icon briefly on a hit.
@@ -4734,8 +4772,24 @@ const COMBAT_3D_BUILDINGS = [
 ];
 
 let scene3D = null, camera3D = null, renderer3D = null, controls3D = null, world3D = null;
-let hover3D = null, raf3D = null, cell3D = 2, built3DKey = null;
+let hover3D = null, raf3D = null, cell3D = 2, built3DKey = null, dustParticles3D = null;
 const token3DIndex = new Map(); // combatant id -> { group, ring, label, hpFill, plane, gx, gy }
+// create3DToken() is async (awaits texture/model loads), and sync3DTokens() can be
+// re-entered concurrently — every realtime event (HP change, position change, someone
+// else's move) triggers a fresh sync while an earlier one may still be mid-flight. Without
+// this, two overlapping syncs for the same brand-new combatant would both see nothing in
+// token3DIndex yet (it's only populated once creation FINISHES) and both call
+// create3DToken(), leaving a duplicate token behind — the "copy of the character" that
+// stays wherever the combatant started until the page reloads. Concurrent callers now
+// await the SAME in-flight creation promise instead of starting a second one.
+const token3DCreating = new Map();
+async function getOrCreate3DToken(c) {
+  if (token3DIndex.has(c.id)) return token3DIndex.get(c.id);
+  if (token3DCreating.has(c.id)) return token3DCreating.get(c.id);
+  const p = create3DToken(c).finally(() => token3DCreating.delete(c.id));
+  token3DCreating.set(c.id, p);
+  return p;
+}
 let selected3DId = null;
 let activeFx3D = [], activeTweens3D = [], activeBursts3D = [];
 const loader3D = new THREE.GLTFLoader();
@@ -4805,8 +4859,9 @@ function init3D() {
   holder.appendChild(renderer3D.domElement);
 
   scene3D = new THREE.Scene();
-  scene3D.background = new THREE.Color(0x05070d);
-  scene3D.fog = new THREE.Fog(0x05070d, 26, 74);
+  // No flat background color — a gradient sky dome (below) shows through instead, so the
+  // horizon isn't just a hard black void past the fog.
+  scene3D.fog = new THREE.Fog(0x05070d, 30, 92);
 
   camera3D = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
   controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
@@ -4818,6 +4873,8 @@ function init3D() {
 
   const hemi = new THREE.HemisphereLight(0x8fb4ff, 0x1a1a22, 0.9);
   scene3D.add(hemi);
+  const ambient = new THREE.AmbientLight(0xffffff, 0.35); // fills in shadow-side detail the hemisphere/sun alone leave too dark
+  scene3D.add(ambient);
   const sun = new THREE.DirectionalLight(0xffffff, 1.4);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -4826,6 +4883,28 @@ function init3D() {
   sun.shadow.bias = -0.0015;
   scene3D.add(sun); scene3D.add(sun.target);
   scene3D.userData.sun = sun;
+
+  // Gradient sky dome instead of a flat color — a big BackSide sphere shaded from a dark
+  // zenith to a lighter horizon tint, retinted per-theme in build3DEnvironment. Explicitly
+  // excluded from scene fog (it's meant to be the backdrop fog fades INTO, not something
+  // fog itself darkens).
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(300, 16, 16),
+    new THREE.ShaderMaterial({
+      uniforms: {
+        topColor: { value: new THREE.Color(0x0a1428) },
+        bottomColor: { value: new THREE.Color(0x05070d) },
+      },
+      vertexShader: `varying vec3 vPos; void main() { vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `
+        uniform vec3 topColor; uniform vec3 bottomColor; varying vec3 vPos;
+        void main() { float h = normalize(vPos).y; gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), 0.6), 0.0)), 1.0); }
+      `,
+      side: THREE.BackSide, depthWrite: false, fog: false,
+    })
+  );
+  scene3D.add(sky);
+  scene3D.userData.sky = sky;
 
   world3D = new THREE.Group();
   scene3D.add(world3D);
@@ -4910,13 +4989,22 @@ function resize3D() {
 // being moved is whoever's turn it currently is — so the GM can freely reposition any
 // OTHER combatant (corrections, NPC placement, "actually stand over here") without
 // being budgeted, while the active combatant's own move (by the GM or the player)
-// still spends their movement for the turn.
+// still spends their movement for the turn. The one exception is GM Arrange mode
+// (toggleArrangeMode) — a dedicated "set up the battlefield" toggle that skips the budget
+// check entirely, since even a GM moving whoever's turn it currently is would otherwise eat
+// into that combatant's very first turn just from initial placement.
+let gmArrangeMode = false;
+function toggleArrangeMode() {
+  gmArrangeMode = !gmArrangeMode;
+  document.getElementById('combat-arrange-btn').classList.toggle('active', gmArrangeMode);
+}
 async function move3DToken(tok, gx, gy) {
   const st = combatState();
   if ((st.obstacles || []).some(o => o[0] === gx && o[1] === gy)) return;
   const isActiveToken = combatants.length > 0 && tok.id === combatants[activeTurn % combatants.length]?.id;
+  const skipBudget = isGM && gmArrangeMode;
   let moveCells = 0;
-  if (isActiveToken && tok.grid_x != null) {
+  if (isActiveToken && tok.grid_x != null && !skipBudget) {
     moveCells = Math.round(Math.hypot(gx - tok.grid_x, gy - tok.grid_y));
     if (moveCells > turnActionState.remainingMove) {
       alert(`Not enough movement left (${turnActionState.remainingMove} square${turnActionState.remainingMove === 1 ? '' : 's'} remaining).`);
@@ -4969,7 +5057,11 @@ function updateMoveRangeHighlight() {
   for (let dy = -reach; dy <= reach; dy++) {
     for (let dx = -reach; dx <= reach; dx++) {
       if (dx === 0 && dy === 0) continue;
-      if (Math.abs(dx) + Math.abs(dy) > reach) continue;
+      // Must match move3DToken's actual budget check EXACTLY (rounded Euclidean, not a
+      // Manhattan diamond) — otherwise a cell shown as "reachable" could cost more than
+      // remainingMove once you actually moved there, or vice versa, which read as the
+      // highlight just being wrong ("I used my whole diagonal and still had squares left").
+      if (Math.round(Math.hypot(dx, dy)) > reach) continue;
       const gx = active.grid_x + dx, gy = active.grid_y + dy;
       if ((st.obstacles || []).some(o => o[0] === gx && o[1] === gy)) continue;
       const mat = new THREE.MeshBasicMaterial({ color: 0x4dff9e, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false });
@@ -5012,13 +5104,16 @@ async function build3DCombatMap(st) {
 
 async function build3DEnvironment(st) {
   while (world3D.children.length) world3D.remove(world3D.children[0]);
-  token3DIndex.clear(); selected3DId = null; moveRangeGroup = null; lastAutoSelected3DTurnId = null;
+  token3DIndex.clear(); token3DCreating.clear(); selected3DId = null; moveRangeGroup = null; lastAutoSelected3DTurnId = null;
+  gmArrangeMode = false; document.getElementById('combat-arrange-btn').classList.remove('active');
   document.getElementById('combat-3d-fx-layer').innerHTML = '';
   activeFx3D = []; activeTweens3D = []; activeBursts3D = [];
 
   const themeKey = (COMBAT_MAPS.outside[st.map] || {}).theme3d || 'arena';
   const theme = COMBAT_3D_THEMES[themeKey] || COMBAT_3D_THEMES.arena;
   scene3D.fog.color.setHex(theme.fogColor);
+  scene3D.userData.sky.material.uniforms.bottomColor.value.setHex(theme.fogColor);
+  scene3D.userData.sky.material.uniforms.topColor.value.setHex(theme.skyTop || 0x142a4a);
 
   const floorSrc = await cloneModel3D(theme.base + theme.floor);
   const { size: floorSize } = centerAndBox3D(floorSrc);
@@ -5094,6 +5189,48 @@ async function build3DEnvironment(st) {
       world3D.add(obj);
     } catch (err) { console.warn('3D obstacle failed to load', pick, err); }
   }
+
+  dustParticles3D = createDustParticles3D(st);
+}
+
+// A soft radial-gradient dot, generated once at runtime (no image asset needed) and reused
+// for every dust mote.
+let dustTexture3D = null;
+function getDustTexture3D() {
+  if (dustTexture3D) return dustTexture3D;
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,.85)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  dustTexture3D = new THREE.CanvasTexture(canvas);
+  return dustTexture3D;
+}
+// Faint drifting motes across the battlefield so the air doesn't feel dead — purely
+// decorative, animated (slow rise + wrap) in tick3D.
+function createDustParticles3D(st) {
+  const count = 220;
+  const positions = new Float32Array(count * 3);
+  const centerX = (st.w / 2) * cell3D, centerZ = (st.h / 2) * cell3D;
+  const radiusX = (st.w / 2 + 8) * cell3D, radiusZ = (st.h / 2 + 8) * cell3D;
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = centerX + (Math.random() - 0.5) * 2 * radiusX;
+    positions[i * 3 + 1] = Math.random() * cell3D * 4;
+    positions[i * 3 + 2] = centerZ + (Math.random() - 0.5) * 2 * radiusZ;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({
+    size: cell3D * 0.07, map: getDustTexture3D(), transparent: true, opacity: 0.35,
+    depthWrite: false, color: 0xffffff, sizeAttenuation: true,
+  });
+  const dust = new THREE.Points(geo, mat);
+  world3D.add(dust);
+  return dust;
 }
 
 async function sync3DTokens(st) {
@@ -5101,11 +5238,12 @@ async function sync3DTokens(st) {
   for (const c of combatants) {
     if (c.grid_x == null || c.grid_y == null) continue;
     seen.add(c.id);
-    let entry = token3DIndex.get(c.id);
-    if (!entry) entry = await create3DToken(c);
+    const entry = await getOrCreate3DToken(c);
     if (entry.gx !== c.grid_x || entry.gy !== c.grid_y) animate3DMove(entry, c.grid_x, c.grid_y);
     updateHpBar3D(entry, c);
-    entry.label.querySelector('.name3d').textContent = c.combatant || ''; // .textContent already escapes; esc() is for innerHTML contexts
+    const nameEl = entry.label.querySelector('.name3d');
+    const name = c.combatant || '';
+    nameEl.textContent = name.length > 14 ? name.slice(0, 13) + '…' : name; // .textContent already escapes; esc() is for innerHTML contexts
   }
   for (const [id, entry] of [...token3DIndex.entries()]) {
     if (!seen.has(id)) { world3D.remove(entry.group); entry.label.remove(); token3DIndex.delete(id); }
@@ -5203,6 +5341,12 @@ function find3DTokenAt(gx, gy) {
   return null;
 }
 function updateHpBar3D(entry, c) {
+  // Same visibility rule as the Initiative tracker's own canSeeStats check — a combatant's
+  // HP is only shown if it's your own character, you're the GM, or the GM has explicitly
+  // revealed that combatant. Otherwise the bar track stays but empty, not a free health read.
+  const canSeeStats = isGM || (c.character_id && c.character_id === myCharacterId) || c.revealed;
+  entry.label.querySelector('.hp3d-track').style.visibility = canSeeStats ? 'visible' : 'hidden';
+  if (!canSeeStats) return;
   const pct = c.hp_max ? Math.max(0, Math.min(1, (c.hp_current ?? 0) / c.hp_max)) * 100 : 100;
   entry.hpFill.style.width = pct + '%';
   entry.hpFill.style.background = pct > 50 ? '#4acc7a' : pct > 25 ? '#d4af37' : '#cc4444';
@@ -5319,7 +5463,10 @@ async function playAttackFx3D({ attackerX, attackerY, targetX, targetY, weaponTy
   const d20 = document.createElement('div');
   d20.className = 'fx-d20-3d spinning';
   document.getElementById('combat-3d-fx-layer').appendChild(d20);
-  const d20Entry = { el: d20, pos: t.clone(), yOffset: cell3D * 2.6 };
+  // Well above the AD chip (which sits at ~2.5 cells) so the two never overlap — they used
+  // to sit almost exactly on top of each other (2.5 vs 2.6 cells), making both unreadable
+  // right when it mattered most.
+  const d20Entry = { el: d20, pos: t.clone(), yOffset: cell3D * 4.2 };
   activeFx3D.push(d20Entry);
   await combatSleep(350);
   await spinDiceChip3D(d20Entry, roll, 900, 70);
@@ -5411,6 +5558,17 @@ function tick3D() {
     b.mesh.material.opacity = (b.maxOpacity ?? 0.9) * (1 - t);
     return t < 1;
   });
+
+  if (dustParticles3D) {
+    const pos = dustParticles3D.geometry.attributes.position;
+    const ceiling = cell3D * 4;
+    for (let i = 0; i < pos.count; i++) {
+      let y = pos.getY(i) + cell3D * 0.0025;
+      if (y > ceiling) y = 0;
+      pos.setY(i, y);
+    }
+    pos.needsUpdate = true;
+  }
 
   const tmpV = new THREE.Vector3();
   function projectToScreen(pos) {
