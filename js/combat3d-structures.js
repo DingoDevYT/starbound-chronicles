@@ -344,7 +344,13 @@ function buildStructureGroup(structure, themeKey, cell, floorH, opts) {
       props.push(p);
     } else if (p.m === 'terrain' || p.m === 'wall' || p.m === 'window' || p.m === 'railing' || p.m === 'stairs' || p.m === 'slope' || p.m === 'post') {
       const mesh = scBuildPieceMesh(p, themeKey, cell, floorH, { faded: p.z > fadeZ });
-      mesh.position.set(p.x * cell, p.z * floorH, p.y * cell);
+      // ADD the level height — don't overwrite Y. scBuildPieceMesh bakes a local Y offset into
+      // solid pieces (terrain sits at -hgt/2, floor at -slab/2, post below the deck) so their
+      // TOP lands exactly at the piece height; overwriting Y here floated tall terrain blocks
+      // half their height off the ground.
+      mesh.position.x = p.x * cell;
+      mesh.position.z = p.y * cell;
+      mesh.position.y += p.z * floorH;
       group.add(mesh);
     }
     if (opts.picks !== false && (p.m === 'floor' || p.m === 'terrain' || p.m === 'stairs' || p.m === 'slope')) {
