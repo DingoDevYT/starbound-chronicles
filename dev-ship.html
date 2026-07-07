@@ -10,7 +10,7 @@
 <script src="js/ship3d.js"></script>
 <style>
   body { margin:0; background:#03040a; font-family:system-ui,sans-serif; overflow:hidden; }
-  #bar { position:fixed; top:10px; left:10px; z-index:5; display:flex; gap:6px; flex-wrap:wrap; max-width:60vw; }
+  #bar { position:fixed; top:10px; left:10px; z-index:5; display:flex; gap:6px; flex-wrap:wrap; max-width:70vw; }
   #bar button { padding:6px 12px; border-radius:6px; border:1px solid #35507a; background:#101a2c; color:#cfe0ff; cursor:pointer; font-size:12px; }
   #bar button.on { background:#1c3a66; border-color:#4dc0ff; color:#fff; }
   #stat { position:fixed; bottom:10px; left:10px; color:#8fa8cc; font-size:12px; z-index:5; }
@@ -20,7 +20,7 @@
 <div id="bar"></div>
 <div id="stat"></div>
 <script>
-let renderer, scene, camera, controls, world, env, curSize = 'medium';
+let renderer, scene, camera, controls, world, env, curSize = 'medium', curTier = 1;
 function init() {
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -29,34 +29,40 @@ function init() {
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   document.body.appendChild(renderer.domElement);
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 2000);
+  camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 2500);
   controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.92;
+  controls.enableDamping = true;
   env = createShipEnvironment(scene);
   world = new THREE.Group(); scene.add(world);
   addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
   let last = performance.now();
   (function tick() { requestAnimationFrame(tick); const now = performance.now(); const dt = Math.min(0.05, (now - last) / 1000); last = now; controls.update(); env.update(dt); renderer.render(scene, camera); })();
 }
-function show(size) {
-  curSize = size;
+let lightGroup = null;
+function show(size, tier) {
+  curSize = size; curTier = tier ?? curTier;
   document.querySelectorAll('#bar button[data-size]').forEach(b => b.classList.toggle('on', b.dataset.size === size));
+  document.querySelectorAll('#bar button[data-tier]').forEach(b => b.classList.toggle('on', +b.dataset.tier === curTier));
   while (world.children.length) world.remove(world.children[0]);
-  const built = buildShipInterior(size);
+  if (lightGroup) scene.remove(lightGroup);
+  const built = buildShip3D(size, { wingTier: curTier, thrusterTier: curTier, reactorTier: curTier, gunCount: 1 + curTier, gunTier: curTier });
   world.add(built.group);
-  addShipLighting(world, built.layout);
-  const cx = (built.layout.w - 1) * 2 / 2, cz = (built.layout.h - 1) * 2 / 2;
-  camera.position.set(cx, Math.max(built.layout.w, built.layout.h) * 1.4, cz + built.layout.h * 2.0);
-  controls.target.set(cx, 0.5, cz); controls.update();
-  document.getElementById('stat').textContent = `${size} — ${built.layout.w}x${built.layout.h}, ${built.picks.length} deck tiles · mode: ${env.mode}`;
+  lightGroup = new THREE.Group();
+  addShipLighting(lightGroup, built);
+  scene.add(lightGroup);
+  env.bindShip(built, world);
+  const o = built.outline;
+  camera.position.set(o.cx - o.maxHalf * 1.4, o.maxHalf * 1.7, o.zStern + o.maxHalf * 1.6);
+  controls.target.set(o.cx, 0.5, (o.zNose + o.zStern) / 2); controls.update();
+  document.getElementById('stat').textContent = `${size} t${curTier} — ${built.picks.length} walkable tiles · mode: ${env.mode}`;
   window.__built = built; window.__ready = true;
 }
-function setMode(m) { env.setMode(m); document.querySelectorAll('#bar button[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m)); document.getElementById('stat').textContent = document.getElementById('stat').textContent.replace(/mode: \w+/, 'mode: ' + m); }
+function setMode(m) { env.setMode(m); document.querySelectorAll('#bar button[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m)); }
 const bar = document.getElementById('bar');
 ['small','medium','large','capital'].forEach(s => { const b = document.createElement('button'); b.textContent = s; b.dataset.size = s; b.onclick = () => show(s); bar.appendChild(b); });
-const sep = document.createElement('span'); sep.style.width = '12px'; bar.appendChild(sep);
+[1,2,3].forEach(t => { const b = document.createElement('button'); b.textContent = 'tier ' + t; b.dataset.tier = t; b.onclick = () => show(curSize, t); bar.appendChild(b); });
 ['travel','dock','planet'].forEach(m => { const b = document.createElement('button'); b.textContent = m; b.dataset.mode = m; b.onclick = () => setMode(m); bar.appendChild(b); });
-init(); show('medium'); setMode('travel');
+init(); show('medium', 1); setMode('travel');
 </script>
 </body>
 </html>
